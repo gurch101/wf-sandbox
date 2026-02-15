@@ -1,0 +1,4 @@
+interface:
+  display_name: "Spring Boot TDD Spec Loop"
+  short_description: "TDD loops for Spring Data JDBC specs"
+  default_prompt: "Implement specs in strict red-green-refactor loops with Testcontainers integration tests and Spring Data JDBC conventions."

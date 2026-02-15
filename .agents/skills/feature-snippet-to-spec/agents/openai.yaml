@@ -1,0 +1,4 @@
+interface:
+  display_name: "Feature Snippet To Spec"
+  short_description: "Turns snippets into build-ready specs."
+  default_prompt: "Turn this feature snippet into a detailed, test-ready implementation spec."
