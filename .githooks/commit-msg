@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+commit_msg_file="${1:?commit message file is required}"
+repo_root="$(git rev-parse --show-toplevel)"
+header="$(grep -E -m1 -v '^\s*#' "$commit_msg_file" || true)"
+
+if [[ -z "${header// }" ]]; then
+  echo "ERROR: Commit message is empty."
+  exit 1
+fi
+
+# Allow auto-generated revert and merge messages.
+if [[ "$header" =~ ^(Merge|Revert)\  ]]; then
+  exit 0
+fi
+
+conventional_regex='^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test|wip)(\([a-z0-9._/-]+\))?(!)?: .+$'
+
+if ! [[ "$header" =~ $conventional_regex ]]; then
+  cat <<'EOF'
+ERROR: Commit message does not follow Conventional Commits.
+
+Expected:
+  <type>[optional(scope)][!]: <description>
+
+Examples:
+  feat(auth): add token refresh endpoint
+  fix: handle null username in login flow
+  refactor!: remove legacy payment adapter
+
+Allowed <type> values:
+  build, chore, ci, docs, feat, fix, perf, refactor, revert, style, test, wip
+EOF
+  exit 1
+fi
+
+commit_type="${BASH_REMATCH[1]}"
+
+if ((${#header} > 72)); then
+  echo "ERROR: Commit subject must be at most 72 characters."
+  exit 1
+fi
+
+if [[ "$header" =~ [[:upper:]] ]]; then
+  echo "ERROR: Commit subject must be all lowercase."
+  exit 1
+fi
+
+if [[ "$header" =~ \.$ ]]; then
+  echo "ERROR: Commit subject must not end with a period."
+  exit 1
+fi
+
+if [[ "$commit_type" == "wip" ]]; then
+  echo "Skipping Gradle checks for wip commit type."
+  exit 0
+fi
+
+if [[ -x "$repo_root/backend/gradlew" ]]; then
+  echo "Running Gradle checks from backend/..."
+  (
+    cd "$repo_root/backend"
+    GRADLE_USER_HOME=/tmp/gradle-cache ./gradlew --no-daemon check
+  )
+elif [[ -x "$repo_root/gradlew" ]]; then
+  echo "Running Gradle checks..."
+  (
+    cd "$repo_root"
+    GRADLE_USER_HOME=/tmp/gradle-cache ./gradlew --no-daemon check
+  )
+else
+  echo "ERROR: No executable Gradle wrapper found."
+  exit 1
+fi

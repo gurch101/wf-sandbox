@@ -1,0 +1,8 @@
+spring:  
+  application:
+    name: sandbox
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:sandboxdb}
+    username: ${POSTGRES_USER:sandbox}
+    password: ${POSTGRES_PASSWORD:sandboxpass}
+    driver-class-name: org.postgresql.Driver

@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+branch_name="$(git rev-parse --abbrev-ref HEAD)"
+
+# Skip validation in detached HEAD state.
+if [[ "$branch_name" == "HEAD" ]]; then
+  exit 0
+fi
+
+# Long-lived/shared branches that should not be blocked.
+if [[ "$branch_name" =~ ^(main|master|develop|development)$ ]]; then
+  exit 0
+fi
+
+branch_regex='^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test|wip)/([a-z0-9]+(-[a-z0-9]+)*)(/[a-z0-9]+(-[a-z0-9]+)*)*$'
+
+if ! [[ "$branch_name" =~ $branch_regex ]]; then
+  cat <<'EOF'
+ERROR: Branch name does not match required format.
+
+Expected:
+  <type>/<description>
+  or
+  <type>/<scope>/<description>
+
+Examples:
+  feat/add-user-search
+  fix/auth/refresh-token-expiry
+
+Allowed <type> values:
+  build, chore, ci, docs, feat, fix, perf, refactor, revert, style, test, wip
+EOF
+  exit 1
+fi

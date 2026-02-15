@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ruleset name="Custom Ruleset"
+    xmlns="http://pmd.sourceforge.net/ruleset/2.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0
+    http://pmd.sourceforge.net/ruleset_2_0_0.xsd">
+
+    <description>Custom PMD ruleset for Sandbox project</description>
+
+    <!-- Error Prone Rules -->
+    <rule ref="category/java/errorprone.xml"/>
+
+    <!-- Best Practices Rules -->
+    <rule ref="category/java/bestpractices.xml"/>
+
+    <!-- Code Style Rules -->
+    <rule ref="category/java/codestyle.xml"/>
+
+    <!-- Design Rules with LoosePackageCoupling configured -->
+    <rule ref="category/java/design.xml">
+        <exclude name="LoosePackageCoupling"/>
+    </rule>
+
+    <!-- Configure LoosePackageCoupling for the sandbox application -->
+    <rule ref="category/java/design.xml/LoosePackageCoupling">
+        <properties>
+            <property name="packages" value="com.gurch.sandbox"/>
+        </properties>
+    </rule>
+
+    <!-- Performance Rules -->
+    <rule ref="category/java/performance.xml"/>
+
+    <!-- Security Rules -->
+    <rule ref="category/java/security.xml"/>
+
+</ruleset>
