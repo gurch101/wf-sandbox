@@ -48,7 +48,7 @@ checkstyle {
 spotless {
 	java {
 		target 'src/**/*.java'
-		googleJavaFormat('1.23.0')
+		googleJavaFormat('1.27.0')
 		removeUnusedImports()
 		trimTrailingWhitespace()
 		endWithNewline()

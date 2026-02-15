@@ -23,6 +23,8 @@ Use this work item template:
   - Production touchpoints: <service/repository/module boundaries>
 ```
 
+Before you start coding, create a git branch off of the main branch using the pre-commit hook format for naming the branch.
+
 ## 2. Enforce Red-Green-Refactor Gates
 
 For each work item, execute exactly:
@@ -80,3 +82,11 @@ Do not batch multiple work items into one loop.
 5. Repeat for the next work item until the spec slice is done.
 
 Prefer small, auditable commits of progress over large mixed changes.
+
+## 6. Final Review and Commit
+
+1. After all work items for the spec are complete, review the full change set for correctness, clarity, and adherence to conventions.
+2. Create `implementation/<feature_name>.md` documentation summarizing the implementation and any important design decisions, trade-offs, future considerations & nice-to-haves, or changes from the spec.
+3. Run spotlessApply to ensure code style is consistent.
+4. Run gradle check to ensure all tests pass and code quality checks are satisfied.
+5. Create a commit in the conventional commit style. The body should provide a concise summary of the changes made.
