@@ -57,6 +57,11 @@ if [[ "$commit_type" == "wip" ]]; then
   exit 0
 fi
 
+if ! git -C "$repo_root" diff --cached --name-only -- backend | grep -q .; then
+  echo "Skipping Gradle checks (no staged changes in backend/)."
+  exit 0
+fi
+
 if [[ -x "$repo_root/backend/gradlew" ]]; then
   echo "Running Gradle checks from backend/..."
   (
