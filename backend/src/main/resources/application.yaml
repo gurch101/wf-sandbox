@@ -1,6 +1,9 @@
 spring:  
   application:
     name: sandbox
+  mvc:
+    problemdetails:
+      enabled: true
   datasource:
     url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:sandboxdb}
     username: ${POSTGRES_USER:sandbox}

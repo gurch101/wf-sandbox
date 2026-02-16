@@ -71,8 +71,5 @@
     <module name="ParenPad"/>
     <module name="TypecastParenPad"/>
     <module name="WhitespaceAfter"/>
-    <module name="WhitespaceAround">
-      <property name="allowEmptyMethods" value="true"/>
-    </module>
   </module>
 </module>
