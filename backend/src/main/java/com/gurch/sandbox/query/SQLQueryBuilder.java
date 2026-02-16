@@ -240,6 +240,9 @@ public final class SQLQueryBuilder {
   private String toParameterizedPredicate(String column, Operator operator, Object value) {
     String paramName = nextParamName();
     params.put(paramName, value);
+    if (operator == Operator.IN) {
+      return column + " " + operator.token() + " (:" + paramName + ")";
+    }
     return column + " " + operator.token() + " :" + paramName;
   }
 
