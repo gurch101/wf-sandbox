@@ -387,6 +387,22 @@ class SqlQueryBuilderTest extends AbstractJdbcIntegrationTest {
   }
 
   @Test
+  void whereInWithCollectionExecutesWithParentheses() {
+    List<String> statuses = List.of("IN_PROGRESS", "COMPLETED");
+    BuiltQuery query =
+        SQLQueryBuilder.select("r.id")
+            .from("requests", "r")
+            .where("r.status", Operator.IN, statuses)
+            .build();
+
+    assertThat(query.sql()).contains("r.status IN (:p1)");
+    assertThat(query.params()).containsEntry("p1", statuses);
+
+    List<Long> ids = jdbcTemplate.queryForList(query.sql(), query.params(), Long.class);
+    assertThat(ids).hasSize(2);
+  }
+
+  @Test
   void identicalBuilderCallsProduceDeterministicSqlAndParamKeyOrder() {
     BuiltQuery first = createDeterministicFixtureQuery();
     BuiltQuery second = createDeterministicFixtureQuery();
