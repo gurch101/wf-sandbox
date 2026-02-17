@@ -37,3 +37,7 @@ out/
 .vscode/
 
 .env
+
+# Local uploaded form files
+/uploads/
+/backend/uploads/

@@ -1,8 +1,7 @@
 package com.gurch.sandbox.forms.internal;
 
-import com.gurch.sandbox.forms.FormDocumentType;
-import com.gurch.sandbox.forms.FormSignatureStatus;
-import com.gurch.sandbox.forms.FormStorageProviderType;
+import com.gurch.sandbox.forms.DocumentTemplateType;
+import com.gurch.sandbox.storage.StorageProviderType;
 import java.time.Instant;
 import lombok.Builder;
 import lombok.Data;
@@ -14,19 +13,17 @@ import org.springframework.data.relational.core.mapping.Table;
 
 @Data
 @Builder(toBuilder = true)
-@Table("forms_files")
-public class FormFileEntity {
+@Table("forms")
+public class DocumentTemplateEntity {
   @Id private Long id;
   private String name;
   private String description;
   private String mimeType;
   private Long contentSize;
   private String checksumSha256;
-  private FormDocumentType documentType;
-  private FormStorageProviderType storageProvider;
+  private DocumentTemplateType documentType;
+  private StorageProviderType storageProvider;
   private String storagePath;
-  private FormSignatureStatus signatureStatus;
-  private String signatureEnvelopeId;
   @CreatedDate private Instant createdAt;
   @LastModifiedDate private Instant updatedAt;
   @Version private Long version;

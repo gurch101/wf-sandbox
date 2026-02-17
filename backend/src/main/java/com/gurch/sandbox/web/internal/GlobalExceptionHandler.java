@@ -7,6 +7,7 @@ import com.gurch.sandbox.dto.ValidationError;
 import com.gurch.sandbox.idempotency.IdempotencyConflictException;
 import com.gurch.sandbox.idempotency.MissingIdempotencyKeyException;
 import com.gurch.sandbox.web.NotFoundException;
+import com.gurch.sandbox.web.PayloadTooLargeException;
 import com.gurch.sandbox.web.ValidationErrorException;
 import java.net.URI;
 import java.util.List;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 @RestControllerAdvice
@@ -148,6 +150,28 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             "The resource has been updated by another process. Please refresh and try again.");
     problemDetail.setTitle("Optimistic Locking Failure");
     return problemDetail;
+  }
+
+  @ExceptionHandler(PayloadTooLargeException.class)
+  public ProblemDetail handlePayloadTooLargeException(PayloadTooLargeException e) {
+    ProblemDetail problemDetail =
+        ProblemDetail.forStatusAndDetail(HttpStatus.PAYLOAD_TOO_LARGE, e.getMessage());
+    problemDetail.setTitle("Payload Too Large");
+    return problemDetail;
+  }
+
+  @Override
+  @Nullable
+  protected ResponseEntity<Object> handleMaxUploadSizeExceededException(
+      MaxUploadSizeExceededException ex,
+      HttpHeaders headers,
+      HttpStatusCode status,
+      WebRequest request) {
+    ProblemDetail problemDetail =
+        ProblemDetail.forStatusAndDetail(
+            HttpStatus.PAYLOAD_TOO_LARGE, "Uploaded file exceeds configured multipart size limit");
+    problemDetail.setTitle("Payload Too Large");
+    return createResponseEntity(problemDetail, headers, HttpStatus.PAYLOAD_TOO_LARGE, request);
   }
 
   private static String toFieldName(JsonMappingException exception) {
