@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.gurch.sandbox.AbstractJdbcIntegrationTest;
+import com.gurch.sandbox.requests.RequestStatus;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -129,6 +130,26 @@ class SqlQueryBuilderTest extends AbstractJdbcIntegrationTest {
 
     List<Long> ids = jdbcTemplate.queryForList(query.sql(), query.params(), Long.class);
     assertThat(ids).hasSize(1);
+  }
+
+  @Test
+  void pageWithNullPageOrSizeIsOmitted() {
+    BuiltQuery nullPageQuery =
+        SQLQueryBuilder.select("r.id")
+            .from("requests", "r")
+            .where("r.version", Operator.GT, 0L)
+            .page(null, 2)
+            .build();
+
+    BuiltQuery nullSizeQuery =
+        SQLQueryBuilder.select("r.id")
+            .from("requests", "r")
+            .where("r.version", Operator.GT, 0L)
+            .page(0, null)
+            .build();
+
+    assertThat(nullPageQuery.sql()).doesNotContain("LIMIT").doesNotContain("OFFSET");
+    assertThat(nullSizeQuery.sql()).doesNotContain("LIMIT").doesNotContain("OFFSET");
   }
 
   @Test
@@ -397,6 +418,35 @@ class SqlQueryBuilderTest extends AbstractJdbcIntegrationTest {
 
     assertThat(query.sql()).contains("r.status IN (:p1)");
     assertThat(query.params()).containsEntry("p1", statuses);
+
+    List<Long> ids = jdbcTemplate.queryForList(query.sql(), query.params(), Long.class);
+    assertThat(ids).hasSize(2);
+  }
+
+  @Test
+  void whereMapsEnumToPersistedStringValue() {
+    BuiltQuery query =
+        SQLQueryBuilder.select("r.id")
+            .from("requests", "r")
+            .where("r.status", Operator.EQ, RequestStatus.IN_PROGRESS)
+            .build();
+
+    assertThat(query.params()).containsEntry("p1", "IN_PROGRESS");
+
+    List<Long> ids = jdbcTemplate.queryForList(query.sql(), query.params(), Long.class);
+    assertThat(ids).hasSize(1);
+  }
+
+  @Test
+  void whereInMapsEnumCollectionToPersistedStringValues() {
+    List<RequestStatus> statuses = List.of(RequestStatus.IN_PROGRESS, RequestStatus.COMPLETED);
+    BuiltQuery query =
+        SQLQueryBuilder.select("r.id")
+            .from("requests", "r")
+            .where("r.status", Operator.IN, statuses)
+            .build();
+
+    assertThat(query.params()).containsEntry("p1", List.of("IN_PROGRESS", "COMPLETED"));
 
     List<Long> ids = jdbcTemplate.queryForList(query.sql(), query.params(), Long.class);
     assertThat(ids).hasSize(2);
