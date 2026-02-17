@@ -1,14 +1,15 @@
-package com.gurch.sandbox.requests.internal;
+package com.gurch.sandbox.requests;
 
-import com.gurch.sandbox.requests.RequestStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.util.List;
 import lombok.Value;
 
+/** DTOs used by the request HTTP API. */
 public interface RequestDtos {
 
+  /** Request payload for creating a request record. */
   @Value
   @Schema(description = "Request to create a new record")
   class CreateRequest {
@@ -21,6 +22,7 @@ public interface RequestDtos {
     RequestStatus status;
   }
 
+  /** Request payload for updating a request record. */
   @Value
   @Schema(description = "Request to update an existing record")
   class UpdateRequest {
@@ -29,7 +31,7 @@ public interface RequestDtos {
     String name;
 
     @NotNull(message = "status is required")
-    @Schema(description = "Updated status of the request", example = "IN_PROGRESS")
+    @Schema(description = "Updated status of the request", example = "SUBMITTED")
     RequestStatus status;
 
     @NotNull(message = "version is required for optimistic locking")
@@ -37,6 +39,7 @@ public interface RequestDtos {
     Long version;
   }
 
+  /** Response wrapper returned by request search endpoint. */
   @Value
   @Schema(description = "Response wrapper for request search results")
   class SearchResponse {

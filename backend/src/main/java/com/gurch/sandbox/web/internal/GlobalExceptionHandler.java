@@ -7,6 +7,7 @@ import com.gurch.sandbox.dto.ValidationError;
 import com.gurch.sandbox.idempotency.IdempotencyConflictException;
 import com.gurch.sandbox.idempotency.MissingIdempotencyKeyException;
 import com.gurch.sandbox.web.NotFoundException;
+import com.gurch.sandbox.web.ValidationErrorException;
 import java.net.URI;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -30,6 +31,18 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
   @ExceptionHandler(IllegalArgumentException.class)
   public ProblemDetail handleIllegalArgumentException(IllegalArgumentException e) {
     return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
+  }
+
+  @ExceptionHandler(ValidationErrorException.class)
+  public ProblemDetail handleValidationErrorException(
+      ValidationErrorException e, WebRequest request) {
+    ProblemDetail problemDetail =
+        ProblemDetail.forStatusAndDetail(e.getStatus(), "Request has invalid fields");
+    problemDetail.setTitle("Validation Failed");
+    problemDetail.setType(URI.create("https://example.com/probs/validation-failed"));
+    problemDetail.setInstance(URI.create(request.getDescription(false).replace("uri=", "")));
+    problemDetail.setProperty("errors", e.getErrors());
+    return problemDetail;
   }
 
   @ExceptionHandler(IdempotencyConflictException.class)
