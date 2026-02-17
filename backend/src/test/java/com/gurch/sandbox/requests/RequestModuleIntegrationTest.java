@@ -127,7 +127,29 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
                 .header("Idempotency-Key", UUID.randomUUID().toString())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(invalidJson))
-        .andExpect(status().isBadRequest());
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.errors").isArray())
+        .andExpect(jsonPath("$.errors[0].name").value("status"))
+        .andExpect(jsonPath("$.errors[0].code").value("INVALID_VALUE"))
+        .andExpect(jsonPath("$.errors[0].message").exists());
+  }
+
+  @Test
+  void shouldUseValidationMessageForEmptyEnumValue() throws Exception {
+    String invalidJson = "{\"name\":\"Valid Name\", \"status\":\"\"}";
+
+    mockMvc
+        .perform(
+            post("/api/requests")
+                .with(csrf())
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(invalidJson))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.errors").isArray())
+        .andExpect(jsonPath("$.errors[0].name").value("status"))
+        .andExpect(jsonPath("$.errors[0].code").value("NotNull"))
+        .andExpect(jsonPath("$.errors[0].message").value("status is required"));
   }
 
   @Test
@@ -155,15 +177,15 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
     mockMvc
         .perform(get("/api/requests/search").param("nameContains", "an"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.length()").value(1))
-        .andExpect(jsonPath("$[0].name").value("Banana"));
+        .andExpect(jsonPath("$.requests.length()").value(1))
+        .andExpect(jsonPath("$.requests[0].name").value("Banana"));
 
     // Search by status
     mockMvc
         .perform(
             get("/api/requests/search").param("statuses", "DRAFT").param("statuses", "COMPLETED"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.length()").value(2));
+        .andExpect(jsonPath("$.requests.length()").value(2));
 
     // Search by ID
     List<RequestEntity> all = repository.findAll();
@@ -174,17 +196,17 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
         .perform(
             get("/api/requests/search").param("ids", id1.toString()).param("ids", id2.toString()))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.length()").value(2));
+        .andExpect(jsonPath("$.requests.length()").value(2));
 
     // Search with pagination
     mockMvc
         .perform(get("/api/requests/search").param("page", "0").param("size", "2"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.length()").value(2));
+        .andExpect(jsonPath("$.requests.length()").value(2));
 
     mockMvc
         .perform(get("/api/requests/search").param("page", "1").param("size", "2"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.length()").value(1));
+        .andExpect(jsonPath("$.requests.length()").value(1));
   }
 }
