@@ -15,6 +15,7 @@ import com.gurch.sandbox.requests.internal.RequestDtos;
 import com.gurch.sandbox.requests.internal.RequestEntity;
 import com.gurch.sandbox.requests.internal.RequestRepository;
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,6 +50,7 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
             .perform(
                 post("/api/requests")
                     .with(csrf())
+                    .header("Idempotency-Key", UUID.randomUUID().toString())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(createRequest)))
             .andExpect(status().isCreated())
@@ -76,6 +78,7 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
         .perform(
             put("/api/requests/{id}", id)
                 .with(csrf())
+                .header("Idempotency-Key", UUID.randomUUID().toString())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(updateRequest)))
         .andExpect(status().isOk())
@@ -91,6 +94,7 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
         .perform(
             put("/api/requests/{id}", id)
                 .with(csrf())
+                .header("Idempotency-Key", UUID.randomUUID().toString())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(staleUpdateRequest)))
         .andExpect(status().isConflict())
@@ -99,7 +103,10 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
 
     // Delete
     mockMvc
-        .perform(delete("/api/requests/{id}", id).with(csrf()))
+        .perform(
+            delete("/api/requests/{id}", id)
+                .with(csrf())
+                .header("Idempotency-Key", UUID.randomUUID().toString()))
         .andExpect(status().isNoContent());
 
     mockMvc
@@ -117,9 +124,24 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
         .perform(
             post("/api/requests")
                 .with(csrf())
+                .header("Idempotency-Key", UUID.randomUUID().toString())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(invalidJson))
         .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void shouldReturnBadRequestWhenMissingIdempotencyKey() throws Exception {
+    RequestDtos.CreateRequest createRequest =
+        new RequestDtos.CreateRequest("Test Request", RequestStatus.DRAFT);
+    mockMvc
+        .perform(
+            post("/api/requests")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(createRequest)))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.title").value("Missing Idempotency Key"));
   }
 
   @Test

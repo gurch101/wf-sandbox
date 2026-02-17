@@ -1,6 +1,8 @@
 package com.gurch.sandbox.web.internal;
 
 import com.gurch.sandbox.dto.ValidationError;
+import com.gurch.sandbox.idempotency.IdempotencyConflictException;
+import com.gurch.sandbox.idempotency.MissingIdempotencyKeyException;
 import com.gurch.sandbox.web.NotFoundException;
 import java.net.URI;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -22,6 +24,24 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
   @ExceptionHandler(IllegalArgumentException.class)
   public ProblemDetail handleIllegalArgumentException(IllegalArgumentException e) {
     return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
+  }
+
+  @ExceptionHandler(IdempotencyConflictException.class)
+  public ProblemDetail handleIdempotencyConflictException(IdempotencyConflictException e) {
+    ProblemDetail problemDetail =
+        ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, e.getMessage());
+    problemDetail.setTitle("Idempotency Conflict");
+    problemDetail.setType(URI.create("https://example.com/probs/idempotency-conflict"));
+    return problemDetail;
+  }
+
+  @ExceptionHandler(MissingIdempotencyKeyException.class)
+  public ProblemDetail handleMissingIdempotencyKeyException(MissingIdempotencyKeyException e) {
+    ProblemDetail problemDetail =
+        ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
+    problemDetail.setTitle("Missing Idempotency Key");
+    problemDetail.setType(URI.create("https://example.com/probs/missing-idempotency-key"));
+    return problemDetail;
   }
 
   @Override
