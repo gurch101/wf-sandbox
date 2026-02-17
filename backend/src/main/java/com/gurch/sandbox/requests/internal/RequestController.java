@@ -5,7 +5,6 @@ import com.gurch.sandbox.requests.RequestApi;
 import com.gurch.sandbox.requests.RequestResponse;
 import com.gurch.sandbox.requests.RequestSearchCriteria;
 import jakarta.validation.Valid;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -51,7 +50,7 @@ public class RequestController {
   }
 
   @GetMapping("/search")
-  public List<RequestResponse> search(RequestSearchCriteria criteria) {
-    return requestApi.search(criteria);
+  public RequestDtos.SearchResponse search(RequestSearchCriteria criteria) {
+    return new RequestDtos.SearchResponse(requestApi.search(criteria));
   }
 }

@@ -4,6 +4,7 @@ import com.gurch.sandbox.requests.RequestStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import java.util.List;
 import lombok.Value;
 
 public interface RequestDtos {
@@ -34,5 +35,12 @@ public interface RequestDtos {
     @NotNull(message = "version is required for optimistic locking")
     @Schema(description = "Current version of the record for optimistic locking", example = "1")
     Long version;
+  }
+
+  @Value
+  @Schema(description = "Response wrapper for request search results")
+  class SearchResponse {
+    @Schema(description = "Matching requests")
+    List<com.gurch.sandbox.requests.RequestResponse> requests;
   }
 }

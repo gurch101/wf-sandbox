@@ -62,21 +62,13 @@ public class DefaultRequestService implements RequestApi {
 
   @Override
   public List<RequestResponse> search(RequestSearchCriteria criteria) {
-    List<String> statusStrings =
-        Optional.ofNullable(criteria.getStatuses())
-            .map(list -> list.stream().map(Enum::name).toList())
-            .orElse(null);
-
     SQLQueryBuilder builder =
         SQLQueryBuilder.select("*")
             .from("requests", "r")
             .where("upper(r.name)", Operator.LIKE, criteria.getNamePattern())
-            .where("r.status", Operator.IN, statusStrings)
-            .where("r.id", Operator.IN, criteria.getIds());
-
-    if (criteria.getPage() != null && criteria.getSize() != null) {
-      builder.page(criteria.getPage(), criteria.getSize());
-    }
+            .where("r.status", Operator.IN, criteria.getStatuses())
+            .where("r.id", Operator.IN, criteria.getIds())
+            .page(criteria.getPage(), criteria.getSize());
 
     BuiltQuery query = builder.build();
 
