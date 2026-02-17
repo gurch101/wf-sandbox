@@ -3,9 +3,8 @@ package com.gurch.sandbox.forms;
 import com.gurch.sandbox.dto.CreateResponse;
 import com.gurch.sandbox.idempotency.NotIdempotent;
 import com.gurch.sandbox.web.NotFoundException;
+import java.io.InputStream;
 import lombok.RequiredArgsConstructor;
-import org.springframework.core.io.ByteArrayResource;
-import org.springframework.core.io.Resource;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -21,51 +20,56 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
-/** REST controller for form-file upload, metadata lookup, download, search, and deletion. */
+/**
+ * REST controller for document-template upload, metadata lookup, download, search, and deletion.
+ */
 @RestController
-@RequestMapping("/api/forms/files")
+@RequestMapping("/api/document-templates")
 @RequiredArgsConstructor
-public class FormFileController {
+public class DocumentTemplateController {
 
-  private final FormFileApi formFileApi;
+  private final DocumentTemplateApi documentTemplateApi;
 
-  /** Uploads a PDF or Word form file. */
+  /** Uploads a PDF or Word document template. */
   @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  // Multipart uploads are excluded from idempotency replay because the request body is streamed.
   @NotIdempotent
   @ResponseStatus(HttpStatus.CREATED)
   public CreateResponse upload(
       @RequestPart("file") MultipartFile file,
       @RequestParam(value = "name", required = false) String name,
       @RequestParam(value = "description", required = false) String description) {
-    FormFileUploadRequest request;
+    DocumentTemplateUploadRequest request;
     try {
       request =
-          new FormFileUploadRequest(
+          new DocumentTemplateUploadRequest(
               name,
               description,
               file.getOriginalFilename(),
               file.getContentType(),
-              file.getBytes());
+              file.getSize(),
+              file.getInputStream());
     } catch (Exception e) {
       throw new IllegalArgumentException("Could not read uploaded file content");
     }
 
-    return new CreateResponse(formFileApi.upload(request).getId());
+    return new CreateResponse(documentTemplateApi.upload(request).getId());
   }
 
   /** Gets file metadata by ID. */
   @GetMapping("/{id}")
-  public FormFileResponse getById(@PathVariable Long id) {
-    return formFileApi
+  public DocumentTemplateResponse getById(@PathVariable Long id) {
+    return documentTemplateApi
         .findById(id)
-        .orElseThrow(() -> new NotFoundException("Form file not found with id: " + id));
+        .orElseThrow(() -> new NotFoundException("Document template not found with id: " + id));
   }
 
   /** Downloads stored file bytes by ID. */
   @GetMapping("/{id}/download")
-  public ResponseEntity<Resource> download(@PathVariable Long id) {
-    FormFileDownload download = formFileApi.download(id);
+  public ResponseEntity<StreamingResponseBody> download(@PathVariable Long id) {
+    DocumentTemplateDownload download = documentTemplateApi.download(id);
     MediaType mediaType = MediaType.APPLICATION_OCTET_STREAM;
     try {
       mediaType = MediaType.parseMediaType(download.getMimeType());
@@ -73,25 +77,32 @@ public class FormFileController {
       // Fall back to octet-stream when media type is invalid or not parseable.
     }
 
+    StreamingResponseBody body =
+        outputStream -> {
+          try (InputStream inputStream = download.getContentStream()) {
+            inputStream.transferTo(outputStream);
+          }
+        };
+
     return ResponseEntity.ok()
         .contentType(mediaType)
         .header(
             HttpHeaders.CONTENT_DISPOSITION,
             ContentDisposition.attachment().filename(download.getName()).build().toString())
         .contentLength(download.getContentSize())
-        .body(new ByteArrayResource(download.getContent()));
+        .body(body);
   }
 
-  /** Searches files using optional filters and pagination. */
+  /** Searches document templates using optional filters and pagination. */
   @GetMapping("/search")
-  public FormFileDtos.SearchResponse search(FormFileSearchCriteria criteria) {
-    return new FormFileDtos.SearchResponse(formFileApi.search(criteria));
+  public DocumentTemplateSearchResponse search(DocumentTemplateSearchCriteria criteria) {
+    return new DocumentTemplateSearchResponse(documentTemplateApi.search(criteria));
   }
 
   /** Deletes file metadata and stored bytes by ID. */
   @DeleteMapping("/{id}")
   @ResponseStatus(HttpStatus.NO_CONTENT)
   public void delete(@PathVariable Long id) {
-    formFileApi.deleteById(id);
+    documentTemplateApi.deleteById(id);
   }
 }

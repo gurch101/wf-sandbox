@@ -9,6 +9,5 @@ camunda:
     metrics:
       enabled: false
 
-forms:
-  storage:
-    local-root: ./build/test-uploads/forms
+storage:
+  local-root: ./build/test-uploads

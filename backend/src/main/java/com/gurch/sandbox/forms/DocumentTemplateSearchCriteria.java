@@ -8,23 +8,17 @@ import lombok.Builder;
 import lombok.Value;
 import lombok.extern.jackson.Jacksonized;
 
-/** Criteria object for filtering uploaded form files. */
+/** Criteria object for filtering uploaded document templates. */
 @Value
 @Builder
 @Jacksonized
-@Schema(description = "Criteria for searching form-file metadata")
-public class FormFileSearchCriteria {
+@Schema(description = "Criteria for searching document-template metadata")
+public class DocumentTemplateSearchCriteria {
   @Schema(description = "Partial name match (case-insensitive)", example = "intake")
   String nameContains;
 
-  @Schema(description = "Partial MIME type match (case-insensitive)", example = "pdf")
-  String mimeTypeContains;
-
   @Schema(description = "Optional document type filters")
-  List<FormDocumentType> documentTypes;
-
-  @Schema(description = "Optional signature status filters")
-  List<FormSignatureStatus> signatureStatuses;
+  List<DocumentTemplateType> documentTypes;
 
   @Schema(description = "Zero-indexed page number", example = "0")
   Integer page;
@@ -34,13 +28,6 @@ public class FormFileSearchCriteria {
 
   public String getNamePattern() {
     return Optional.ofNullable(nameContains)
-        .filter(s -> !s.isBlank())
-        .map(s -> "%" + s.trim().toUpperCase(Locale.ROOT) + "%")
-        .orElse(null);
-  }
-
-  public String getMimeTypePattern() {
-    return Optional.ofNullable(mimeTypeContains)
         .filter(s -> !s.isBlank())
         .map(s -> "%" + s.trim().toUpperCase(Locale.ROOT) + "%")
         .orElse(null);

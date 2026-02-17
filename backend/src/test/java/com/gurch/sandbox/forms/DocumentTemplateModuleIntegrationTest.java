@@ -12,7 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gurch.sandbox.AbstractJdbcIntegrationTest;
 import com.gurch.sandbox.dto.CreateResponse;
-import com.gurch.sandbox.forms.internal.FormFileRepository;
+import com.gurch.sandbox.forms.internal.DocumentTemplateRepository;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -28,18 +28,25 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 @AutoConfigureMockMvc
 @WithMockUser
-class FormFileModuleIntegrationTest extends AbstractJdbcIntegrationTest {
+@TestPropertySource(
+    properties = {
+      "spring.servlet.multipart.max-file-size=2KB",
+      "spring.servlet.multipart.max-request-size=2KB",
+      "documenttemplates.upload.max-size-bytes=1024"
+    })
+class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest {
 
   @Autowired private MockMvc mockMvc;
   @Autowired private ObjectMapper objectMapper;
-  @Autowired private FormFileRepository repository;
+  @Autowired private DocumentTemplateRepository repository;
 
-  @Value("${forms.storage.local-root}")
+  @Value("${storage.local-root}")
   private String storageRoot;
 
   @BeforeEach
@@ -55,7 +62,7 @@ class FormFileModuleIntegrationTest extends AbstractJdbcIntegrationTest {
   }
 
   @Test
-  void shouldUploadDownloadSearchAndDeleteFormFile() throws Exception {
+  void shouldUploadDownloadSearchAndDeleteDocumentTemplate() throws Exception {
     byte[] payload = "sample pdf bytes".getBytes(StandardCharsets.UTF_8);
     MockMultipartFile file =
         new MockMultipartFile("file", "Client Intake Form.pdf", "application/pdf", payload);
@@ -63,7 +70,7 @@ class FormFileModuleIntegrationTest extends AbstractJdbcIntegrationTest {
     MvcResult uploadResult =
         mockMvc
             .perform(
-                multipart("/api/forms/files")
+                multipart("/api/document-templates")
                     .file(file)
                     .param("description", "Onboarding package")
                     .with(csrf()))
@@ -77,15 +84,14 @@ class FormFileModuleIntegrationTest extends AbstractJdbcIntegrationTest {
             .getId();
 
     mockMvc
-        .perform(get("/api/forms/files/{id}", id))
+        .perform(get("/api/document-templates/{id}", id))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.name").value("Client Intake Form.pdf"))
         .andExpect(jsonPath("$.description").value("Onboarding package"))
-        .andExpect(jsonPath("$.documentType").value("PDF_FORM"))
-        .andExpect(jsonPath("$.signatureStatus").value("NOT_REQUESTED"));
+        .andExpect(jsonPath("$.documentType").value("PDF_FORM"));
 
     mockMvc
-        .perform(get("/api/forms/files/{id}/download", id))
+        .perform(get("/api/document-templates/{id}/download", id))
         .andExpect(status().isOk())
         .andExpect(header().string("Content-Type", "application/pdf"))
         .andExpect(
@@ -94,22 +100,22 @@ class FormFileModuleIntegrationTest extends AbstractJdbcIntegrationTest {
         .andExpect(content().bytes(payload));
 
     mockMvc
-        .perform(get("/api/forms/files/search").param("nameContains", "intake"))
+        .perform(get("/api/document-templates/search").param("nameContains", "intake"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.files.length()").value(1))
-        .andExpect(jsonPath("$.files[0].id").value(id));
+        .andExpect(jsonPath("$.documentTemplates.length()").value(1))
+        .andExpect(jsonPath("$.documentTemplates[0].id").value(id));
 
     mockMvc
         .perform(
-            delete("/api/forms/files/{id}", id)
+            delete("/api/document-templates/{id}", id)
                 .header("Idempotency-Key", UUID.randomUUID().toString())
                 .with(csrf()))
         .andExpect(status().isNoContent());
 
     mockMvc
-        .perform(get("/api/forms/files/{id}", id))
+        .perform(get("/api/document-templates/{id}", id))
         .andExpect(status().isNotFound())
-        .andExpect(jsonPath("$.detail").value("Form file not found with id: " + id));
+        .andExpect(jsonPath("$.detail").value("Document template not found with id: " + id));
   }
 
   @Test
@@ -122,10 +128,36 @@ class FormFileModuleIntegrationTest extends AbstractJdbcIntegrationTest {
             "bad".getBytes(StandardCharsets.UTF_8));
 
     mockMvc
-        .perform(multipart("/api/forms/files").file(file).with(csrf()))
+        .perform(multipart("/api/document-templates").file(file).with(csrf()))
         .andExpect(status().isBadRequest())
         .andExpect(
             jsonPath("$.detail")
                 .value("Unsupported file type. Only PDF and Word documents are allowed"));
+  }
+
+  @Test
+  void shouldRejectUploadLargerThanConfiguredServiceLimit() throws Exception {
+    byte[] oversized = new byte[1500];
+    MockMultipartFile file =
+        new MockMultipartFile("file", "too-large.pdf", "application/pdf", oversized);
+
+    mockMvc
+        .perform(multipart("/api/document-templates").file(file).with(csrf()))
+        .andExpect(status().isPayloadTooLarge())
+        .andExpect(jsonPath("$.title").value("Payload Too Large"))
+        .andExpect(jsonPath("$.detail").exists());
+  }
+
+  @Test
+  void shouldRejectUploadLargerThanMultipartLimit() throws Exception {
+    byte[] oversized = new byte[3000];
+    MockMultipartFile file =
+        new MockMultipartFile("file", "too-large-for-multipart.pdf", "application/pdf", oversized);
+
+    mockMvc
+        .perform(multipart("/api/document-templates").file(file).with(csrf()))
+        .andExpect(status().isPayloadTooLarge())
+        .andExpect(jsonPath("$.title").value("Payload Too Large"))
+        .andExpect(jsonPath("$.detail").exists());
   }
 }

@@ -9,7 +9,14 @@ spring:
     username: ${POSTGRES_USER:sandbox}
     password: ${POSTGRES_PASSWORD:sandboxpass}
     driver-class-name: org.postgresql.Driver
+  servlet:
+    multipart:
+      max-file-size: ${FORMS_UPLOAD_MAX_FILE_SIZE:25MB}
+      max-request-size: ${FORMS_UPLOAD_MAX_REQUEST_SIZE:25MB}
 
-forms:
-  storage:
-    local-root: ${FORMS_STORAGE_LOCAL_ROOT:./uploads/forms}
+documenttemplates:
+  upload:
+    max-size-bytes: ${FORMS_UPLOAD_MAX_SIZE_BYTES:26214400}
+
+storage:
+  local-root: ${FORMS_STORAGE_LOCAL_ROOT:./uploads}

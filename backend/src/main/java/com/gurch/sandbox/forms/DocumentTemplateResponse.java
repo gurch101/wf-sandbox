@@ -5,11 +5,11 @@ import java.time.Instant;
 import lombok.Builder;
 import lombok.Value;
 
-/** Response representing persisted metadata for an uploaded form file. */
+/** Response representing persisted metadata for an uploaded document template. */
 @Value
 @Builder
-@Schema(description = "Response representing form-file metadata")
-public class FormFileResponse {
+@Schema(description = "Response representing document-template metadata")
+public class DocumentTemplateResponse {
   @Schema(description = "Unique identifier of the file", example = "123")
   Long id;
 
@@ -29,16 +29,7 @@ public class FormFileResponse {
   String checksumSha256;
 
   @Schema(description = "Document type classification")
-  FormDocumentType documentType;
-
-  @Schema(description = "Storage provider used for persisted bytes")
-  FormStorageProviderType storageProvider;
-
-  @Schema(description = "Current e-signature lifecycle status")
-  FormSignatureStatus signatureStatus;
-
-  @Schema(description = "Future e-signature envelope identifier when available")
-  String signatureEnvelopeId;
+  DocumentTemplateType documentType;
 
   @Schema(description = "Timestamp when this record was created")
   Instant createdAt;
