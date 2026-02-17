@@ -1,5 +1,6 @@
 package com.gurch.sandbox.query;
 
+/** Supported SQL operators for WHERE clauses. */
 public enum Operator {
   EQ("="),
   NE("!="),
@@ -17,6 +18,11 @@ public enum Operator {
     this.token = token;
   }
 
+  /**
+   * Returns the SQL token for this operator.
+   *
+   * @return the SQL string
+   */
   public String token() {
     return token;
   }

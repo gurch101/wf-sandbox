@@ -9,6 +9,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.StringJoiner;
 
+/**
+ * A fluent builder for constructing SQL queries with named parameters. Supports CTEs, joins, where
+ * clauses, grouping, ordering, and pagination.
+ */
 public final class SQLQueryBuilder {
   private final String selectClause;
   private String fromTable;
@@ -26,16 +30,36 @@ public final class SQLQueryBuilder {
     this.selectClause = selectClause;
   }
 
+  /**
+   * Starts a new query with the specified SELECT clause.
+   *
+   * @param selectClause the raw SELECT fragment (e.g., "*", "id, name")
+   * @return a new builder instance
+   */
   public static SQLQueryBuilder select(String selectClause) {
     return new SQLQueryBuilder(selectClause);
   }
 
+  /**
+   * Starts a new query with the specified columns.
+   *
+   * @param columns the columns to select
+   * @return a new builder instance
+   */
   public static SQLQueryBuilder select(String... columns) {
     StringJoiner joiner = new StringJoiner(", ");
     Arrays.stream(columns).forEach(joiner::add);
     return new SQLQueryBuilder(joiner.toString());
   }
 
+  /**
+   * Adds a FROM clause to the query.
+   *
+   * @param table the table name
+   * @param alias the table alias (required)
+   * @return this builder
+   * @throws IllegalArgumentException if alias is blank
+   */
   public SQLQueryBuilder from(String table, String alias) {
     if (alias == null || alias.isBlank()) {
       throw new IllegalArgumentException("FROM alias must not be blank");
@@ -45,6 +69,16 @@ public final class SQLQueryBuilder {
     return this;
   }
 
+  /**
+   * Adds a JOIN clause to the query.
+   *
+   * @param type the type of join
+   * @param table the table to join
+   * @param alias the alias for the joined table
+   * @param onClause the raw ON condition
+   * @return this builder
+   * @throws IllegalArgumentException if alias is blank
+   */
   public SQLQueryBuilder join(JoinType type, String table, String alias, String onClause) {
     if (alias == null || alias.isBlank()) {
       throw new IllegalArgumentException("JOIN alias must not be blank");
@@ -53,6 +87,14 @@ public final class SQLQueryBuilder {
     return this;
   }
 
+  /**
+   * Adds a Common Table Expression (CTE) to the query.
+   *
+   * @param cteName the name of the CTE
+   * @param cteBuilder the builder for the CTE query
+   * @return this builder
+   * @throws IllegalArgumentException if name is blank or duplicate
+   */
   public SQLQueryBuilder with(String cteName, SQLQueryBuilder cteBuilder) {
     if (cteName == null || cteName.isBlank()) {
       throw new IllegalArgumentException("CTE name must not be blank");
@@ -64,6 +106,14 @@ public final class SQLQueryBuilder {
     return this;
   }
 
+  /**
+   * Adds a WHERE clause with a single condition. If value is null, the condition is skipped.
+   *
+   * @param column the column name
+   * @param operator the operator
+   * @param value the value to compare against
+   * @return this builder
+   */
   public SQLQueryBuilder where(String column, Operator operator, Object value) {
     if (column == null || column.isBlank()) {
       throw new IllegalArgumentException("where column must not be blank");
@@ -80,6 +130,12 @@ public final class SQLQueryBuilder {
     return this;
   }
 
+  /**
+   * Adds a grouped OR condition. Each non-null clause is OR-ed together inside parentheses.
+   *
+   * @param clauses the clauses to combine
+   * @return this builder
+   */
   public SQLQueryBuilder whereOr(WhereClause... clauses) {
     List<String> orPredicates = new ArrayList<>();
     for (WhereClause clause : clauses) {
@@ -96,6 +152,13 @@ public final class SQLQueryBuilder {
     return this;
   }
 
+  /**
+   * Adds an IN subquery condition.
+   *
+   * @param column the column name
+   * @param subqueryBuilder the builder for the subquery
+   * @return this builder
+   */
   public SQLQueryBuilder whereInSubquery(String column, SQLQueryBuilder subqueryBuilder) {
     BuiltQuery subquery = subqueryBuilder.build();
     String rewrittenSubquerySql =
@@ -104,16 +167,36 @@ public final class SQLQueryBuilder {
     return this;
   }
 
+  /**
+   * Adds an IS NULL condition.
+   *
+   * @param column the column name
+   * @return this builder
+   */
   public SQLQueryBuilder whereNull(String column) {
     whereClauses.add(column + " IS NULL");
     return this;
   }
 
+  /**
+   * Adds an IS NOT NULL condition.
+   *
+   * @param column the column name
+   * @return this builder
+   */
   public SQLQueryBuilder whereNotNull(String column) {
     whereClauses.add(column + " IS NOT NULL");
     return this;
   }
 
+  /**
+   * Configures pagination for the query.
+   *
+   * @param page the zero-indexed page number
+   * @param size the number of records per page
+   * @return this builder
+   * @throws IllegalArgumentException if page is negative or size is non-positive
+   */
   public SQLQueryBuilder page(int page, int size) {
     if (page < 0) {
       throw new IllegalArgumentException("page must be >= 0");
@@ -126,11 +209,23 @@ public final class SQLQueryBuilder {
     return this;
   }
 
+  /**
+   * Adds GROUP BY expressions.
+   *
+   * @param expressions the expressions to group by
+   * @return this builder
+   */
   public SQLQueryBuilder groupBy(String... expressions) {
     groupByClauses.addAll(Arrays.asList(expressions));
     return this;
   }
 
+  /**
+   * Adds an ORDER BY clause. Supports "-" prefix for DESC and "+" prefix for ASC.
+   *
+   * @param sortExpressionToken the sort token
+   * @return this builder
+   */
   public SQLQueryBuilder orderBy(String sortExpressionToken) {
     if (sortExpressionToken == null || sortExpressionToken.isBlank()) {
       throw new IllegalArgumentException("Sort token must not be blank");
@@ -150,6 +245,12 @@ public final class SQLQueryBuilder {
     return this;
   }
 
+  /**
+   * Adds a LIMIT clause.
+   *
+   * @param limitValue the maximum number of records to return
+   * @return this builder
+   */
   public SQLQueryBuilder limit(int limitValue) {
     if (limitValue < 0) {
       throw new IllegalArgumentException("limit must be >= 0");
@@ -158,6 +259,12 @@ public final class SQLQueryBuilder {
     return this;
   }
 
+  /**
+   * Adds an OFFSET clause.
+   *
+   * @param offsetValue the number of records to skip
+   * @return this builder
+   */
   public SQLQueryBuilder offset(int offsetValue) {
     if (offsetValue < 0) {
       throw new IllegalArgumentException("offset must be >= 0");
@@ -166,6 +273,13 @@ public final class SQLQueryBuilder {
     return this;
   }
 
+  /**
+   * Adds an ORDER BY clause using a whitelist for safety.
+   *
+   * @param sortToken the sort token from the client
+   * @param whitelist the whitelist of allowed sort fields
+   * @return this builder
+   */
   public SQLQueryBuilder safeOrderBy(String sortToken, SortWhitelist whitelist) {
     if (sortToken == null || sortToken.isBlank()) {
       throw new IllegalArgumentException("Sort token must not be blank");
@@ -189,6 +303,13 @@ public final class SQLQueryBuilder {
     return this;
   }
 
+  /**
+   * Adds a raw WHERE fragment with parameters. Parameters are merged collision-safely.
+   *
+   * @param fragment the raw SQL fragment
+   * @param rawParams the parameters for the fragment
+   * @return this builder
+   */
   public SQLQueryBuilder rawWhere(String fragment, Map<String, Object> rawParams) {
     if (fragment.contains(";") || fragment.contains("--") || fragment.contains("/*")) {
       throw new IllegalArgumentException("Invalid raw where fragment");
@@ -197,6 +318,12 @@ public final class SQLQueryBuilder {
     return this;
   }
 
+  /**
+   * Builds the final query.
+   *
+   * @return the built query containing SQL and parameters
+   * @throws IllegalStateException if FROM clause is missing
+   */
   public BuiltQuery build() {
     if (fromTable == null || fromAlias == null) {
       throw new IllegalStateException("FROM clause is required");

@@ -3,6 +3,7 @@ package com.gurch.sandbox.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Value;
 
+/** Response containing the ID of a newly created resource. */
 @Value
 @Schema(description = "Response containing the ID of a newly created resource")
 public class CreateResponse {

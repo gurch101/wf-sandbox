@@ -1,5 +1,6 @@
 package com.gurch.sandbox.query;
 
+/** Supported SQL join types. */
 public enum JoinType {
   INNER("INNER JOIN"),
   LEFT("LEFT JOIN"),
@@ -12,6 +13,11 @@ public enum JoinType {
     this.sql = sql;
   }
 
+  /**
+   * Returns the SQL fragment for this join type.
+   *
+   * @return the SQL string
+   */
   public String sql() {
     return sql;
   }

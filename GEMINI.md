@@ -1,4 +1,4 @@
-# wf-sandbox Project Learnings
+# WF-Sandbox
 
 ## Architectural Decisions
 
@@ -20,11 +20,9 @@
     *   **Operator Support**: Specifically refined `IN` operator support to handle collection expansion correctly.
 
 ### 4. Automated Documentation & Quality
-*   **OpenAPI/Swagger**: Integrated `springdoc-openapi` for automatic API documentation available at `/swagger-ui.html`.
 *   **Documentation Enforcement**: An **ArchUnit** test (`OpenApiDocumentationTest`) ensures that all DTOs used in controllers are fully documented with OpenAPI `@Schema` annotations.
-*   **Strict Linting**: Checkstyle and Spotless are configured to enforce consistent formatting. Checkstyle was specifically adjusted to be compatible with Spotless regarding empty types and whitespace.
-
-## Tech Stack
+*   **Strict Linting**: Checkstyle and Spotless are configured to enforce consistent formatting. 
+    *   Javadoc is strictly enforced for all public types and methods in the root of each module (excluding internal packages and the base application package).
 *   **Runtime**: Java 25 (OpenJDK)
 *   **Framework**: Spring Boot 3.5.x
 *   **Persistence**: Spring Data JDBC, PostgreSQL, Flyway

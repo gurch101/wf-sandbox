@@ -2,6 +2,13 @@ package com.gurch.sandbox.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
+/**
+ * Details about a validation failure for a specific field.
+ *
+ * @param name the field name
+ * @param code the error code
+ * @param reason the human-readable reason
+ */
 @Schema(description = "Validation error details")
 public record ValidationError(
     @Schema(description = "Name of the invalid field", example = "name") String name,
