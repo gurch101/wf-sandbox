@@ -200,14 +200,17 @@ public final class SQLQueryBuilder {
    * @throws IllegalArgumentException if page is negative or size is non-positive when provided
    */
   public SQLQueryBuilder page(Integer page, Integer size) {
-    if (page == null || size == null) {
-      return this;
-    }
-    if (page < 0) {
-      throw new IllegalArgumentException("page must be >= 0");
+    if (size == null) {
+      return this; // Cannot paginate without a size
     }
     if (size <= 0) {
       throw new IllegalArgumentException("size must be > 0");
+    }
+    if (page == null) {
+      page = 0; // Default page to 0 if null, size is already validated to be > 0
+    }
+    if (page < 0) {
+      throw new IllegalArgumentException("page must be >= 0");
     }
     this.limit = size;
     this.offset = page * size;
