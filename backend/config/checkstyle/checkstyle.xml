@@ -7,6 +7,10 @@
   <property name="charset" value="UTF-8"/>
   <property name="severity" value="warning"/>
 
+  <module name="SuppressionFilter">
+    <property name="file" value="${config_loc}/suppressions.xml"/>
+  </module>
+
 
   <!-- File Properties -->
   <module name="FileLength">
@@ -59,6 +63,18 @@
     <module name="ParameterName"/>
     <module name="StaticVariableName"/>
     <module name="TypeName"/>
+
+    <!-- Javadoc Checks -->
+    <module name="JavadocType">
+      <property name="scope" value="public"/>
+    </module>
+    <module name="MissingJavadocType">
+      <property name="scope" value="public"/>
+    </module>
+    <module name="MissingJavadocMethod">
+      <property name="scope" value="public"/>
+      <property name="allowMissingPropertyJavadoc" value="true"/>
+    </module>
 
     <!-- Whitespace -->
     <module name="EmptyForInitializerPad"/>

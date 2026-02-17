@@ -8,6 +8,10 @@ import lombok.Builder;
 import lombok.Value;
 import lombok.extern.jackson.Jacksonized;
 
+/**
+ * Criteria object for searching request records. Supports filtering by name, status, and ID, as
+ * well as pagination.
+ */
 @Value
 @Builder
 @Jacksonized

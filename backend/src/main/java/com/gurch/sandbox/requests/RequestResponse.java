@@ -5,6 +5,7 @@ import java.time.Instant;
 import lombok.Builder;
 import lombok.Value;
 
+/** Data transfer object representing a request record in API responses. */
 @Value
 @Builder
 @Schema(description = "Response representing a request record")
