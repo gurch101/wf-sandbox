@@ -118,15 +118,16 @@ public final class SQLQueryBuilder {
     if (column == null || column.isBlank()) {
       throw new IllegalArgumentException("where column must not be blank");
     }
-    if (value == null) {
+    Object normalizedValue = normalizeParameterValue(value);
+    if (normalizedValue == null) {
       return this;
     }
     if (operator == Operator.IN
-        && value instanceof Collection<?> collection
+        && normalizedValue instanceof Collection<?> collection
         && collection.isEmpty()) {
       return this;
     }
-    whereClauses.add(toParameterizedPredicate(column, operator, value));
+    whereClauses.add(toParameterizedPredicate(column, operator, normalizedValue));
     return this;
   }
 
@@ -139,11 +140,12 @@ public final class SQLQueryBuilder {
   public SQLQueryBuilder whereOr(WhereClause... clauses) {
     List<String> orPredicates = new ArrayList<>();
     for (WhereClause clause : clauses) {
-      if (clause.value() == null) {
+      Object normalizedValue = normalizeParameterValue(clause.value());
+      if (normalizedValue == null) {
         continue;
       }
       orPredicates.add(
-          toParameterizedPredicate(clause.column(), clause.operator(), clause.value()));
+          toParameterizedPredicate(clause.column(), clause.operator(), normalizedValue));
     }
     if (orPredicates.isEmpty()) {
       return this;
@@ -195,9 +197,12 @@ public final class SQLQueryBuilder {
    * @param page the zero-indexed page number
    * @param size the number of records per page
    * @return this builder
-   * @throws IllegalArgumentException if page is negative or size is non-positive
+   * @throws IllegalArgumentException if page is negative or size is non-positive when provided
    */
-  public SQLQueryBuilder page(int page, int size) {
+  public SQLQueryBuilder page(Integer page, Integer size) {
+    if (page == null || size == null) {
+      return this;
+    }
     if (page < 0) {
       throw new IllegalArgumentException("page must be >= 0");
     }
@@ -371,6 +376,19 @@ public final class SQLQueryBuilder {
       return column + " " + operator.token() + " (:" + paramName + ")";
     }
     return column + " " + operator.token() + " :" + paramName;
+  }
+
+  private static Object normalizeParameterValue(Object value) {
+    if (value == null) {
+      return null;
+    }
+    if (value instanceof Enum<?> enumValue) {
+      return enumValue.name();
+    }
+    if (value instanceof Collection<?> collection) {
+      return collection.stream().map(SQLQueryBuilder::normalizeParameterValue).toList();
+    }
+    return value;
   }
 
   private String nextParamName() {
