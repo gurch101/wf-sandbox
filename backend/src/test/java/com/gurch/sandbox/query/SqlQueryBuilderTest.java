@@ -148,7 +148,7 @@ class SqlQueryBuilderTest extends AbstractJdbcIntegrationTest {
             .page(0, null)
             .build();
 
-    assertThat(nullPageQuery.sql()).doesNotContain("LIMIT").doesNotContain("OFFSET");
+    assertThat(nullPageQuery.sql()).contains("LIMIT 2").contains("OFFSET 0");
     assertThat(nullSizeQuery.sql()).doesNotContain("LIMIT").doesNotContain("OFFSET");
   }
 
