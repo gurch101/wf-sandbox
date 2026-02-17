@@ -11,7 +11,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gurch.sandbox.AbstractJdbcIntegrationTest;
 import com.gurch.sandbox.dto.CreateResponse;
-import com.gurch.sandbox.requests.internal.RequestDtos;
 import com.gurch.sandbox.requests.internal.RequestEntity;
 import com.gurch.sandbox.requests.internal.RequestRepository;
 import java.util.List;
@@ -73,7 +72,7 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
 
     // Update
     RequestDtos.UpdateRequest updateRequest =
-        new RequestDtos.UpdateRequest("Updated Request", RequestStatus.IN_PROGRESS, 0L);
+        new RequestDtos.UpdateRequest("Updated Request", RequestStatus.DRAFT, 0L);
     mockMvc
         .perform(
             put("/api/requests/{id}", id)
@@ -83,13 +82,13 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
                 .content(objectMapper.writeValueAsString(updateRequest)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.name").value("Updated Request"))
-        .andExpect(jsonPath("$.status").value("IN_PROGRESS"))
+        .andExpect(jsonPath("$.status").value("DRAFT"))
         .andExpect(jsonPath("$.updatedAt").exists())
         .andExpect(jsonPath("$.version").value(1L));
 
     // Conflict (using stale version 0L instead of new version 1L)
     RequestDtos.UpdateRequest staleUpdateRequest =
-        new RequestDtos.UpdateRequest("Stale Update", RequestStatus.IN_PROGRESS, 0L);
+        new RequestDtos.UpdateRequest("Stale Update", RequestStatus.DRAFT, 0L);
     mockMvc
         .perform(
             put("/api/requests/{id}", id)
@@ -132,6 +131,56 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
         .andExpect(jsonPath("$.errors[0].name").value("status"))
         .andExpect(jsonPath("$.errors[0].code").value("INVALID_VALUE"))
         .andExpect(jsonPath("$.errors[0].message").exists());
+  }
+
+  @Test
+  void shouldReturnBadRequestForDisallowedCreateStatus() throws Exception {
+    RequestDtos.CreateRequest createRequest =
+        new RequestDtos.CreateRequest("Test Request", RequestStatus.IN_PROGRESS);
+
+    mockMvc
+        .perform(
+            post("/api/requests")
+                .with(csrf())
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(createRequest)))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.detail").value("Request has invalid fields"))
+        .andExpect(jsonPath("$.errors").isArray())
+        .andExpect(jsonPath("$.errors[0].name").value("status"))
+        .andExpect(jsonPath("$.errors[0].code").value("INVALID_CREATE_STATUS"))
+        .andExpect(
+            jsonPath("$.errors[0].message")
+                .value("status must be one of [DRAFT, SUBMITTED] for create requests"));
+  }
+
+  @Test
+  void shouldReturnBadRequestForInvalidUpdateStatusTransition() throws Exception {
+    RequestEntity saved =
+        repository.save(
+            RequestEntity.builder().name("Test Request").status(RequestStatus.DRAFT).build());
+
+    RequestDtos.UpdateRequest updateRequest =
+        new RequestDtos.UpdateRequest(
+            "Updated Request", RequestStatus.IN_PROGRESS, saved.getVersion());
+
+    mockMvc
+        .perform(
+            put("/api/requests/{id}", saved.getId())
+                .with(csrf())
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(updateRequest)))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.detail").value("Request has invalid fields"))
+        .andExpect(jsonPath("$.errors").isArray())
+        .andExpect(jsonPath("$.errors[0].name").value("status"))
+        .andExpect(jsonPath("$.errors[0].code").value("INVALID_UPDATE_STATUS_TRANSITION"))
+        .andExpect(
+            jsonPath("$.errors[0].message")
+                .value(
+                    "status transition must remain DRAFT or move DRAFT -> SUBMITTED for update requests"));
   }
 
   @Test

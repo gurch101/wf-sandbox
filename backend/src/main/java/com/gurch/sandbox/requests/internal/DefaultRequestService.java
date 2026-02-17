@@ -4,10 +4,13 @@ import com.gurch.sandbox.query.BuiltQuery;
 import com.gurch.sandbox.query.Operator;
 import com.gurch.sandbox.query.SQLQueryBuilder;
 import com.gurch.sandbox.requests.RequestApi;
+import com.gurch.sandbox.requests.RequestCreateErrorCode;
 import com.gurch.sandbox.requests.RequestResponse;
 import com.gurch.sandbox.requests.RequestSearchCriteria;
 import com.gurch.sandbox.requests.RequestStatus;
+import com.gurch.sandbox.requests.RequestUpdateErrorCode;
 import com.gurch.sandbox.web.NotFoundException;
+import com.gurch.sandbox.web.ValidationErrorException;
 import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +39,7 @@ public class DefaultRequestService implements RequestApi {
   @Override
   @Transactional
   public RequestResponse create(String name, RequestStatus status) {
+    validateCreateStatus(status);
     RequestEntity entity = RequestEntity.builder().name(name).status(status).build();
     return toResponse(repository.save(entity));
   }
@@ -47,6 +51,7 @@ public class DefaultRequestService implements RequestApi {
         .findById(id)
         .map(
             existing -> {
+              validateUpdateStatusTransition(existing.getStatus(), status);
               RequestEntity toSave =
                   existing.toBuilder().name(name).status(status).version(version).build();
               return toResponse(repository.save(toSave));
@@ -88,5 +93,22 @@ public class DefaultRequestService implements RequestApi {
         .updatedAt(entity.getUpdatedAt())
         .version(entity.getVersion())
         .build();
+  }
+
+  private static void validateCreateStatus(RequestStatus status) {
+    if (status != RequestStatus.DRAFT && status != RequestStatus.SUBMITTED) {
+      throw ValidationErrorException.of(RequestCreateErrorCode.INVALID_CREATE_STATUS);
+    }
+  }
+
+  private static void validateUpdateStatusTransition(
+      RequestStatus currentStatus, RequestStatus newStatus) {
+    if (currentStatus != RequestStatus.DRAFT) {
+      throw ValidationErrorException.of(RequestUpdateErrorCode.INVALID_UPDATE_STATUS_TRANSITION);
+    }
+
+    if (newStatus != RequestStatus.DRAFT && newStatus != RequestStatus.SUBMITTED) {
+      throw ValidationErrorException.of(RequestUpdateErrorCode.INVALID_UPDATE_STATUS_TRANSITION);
+    }
   }
 }
