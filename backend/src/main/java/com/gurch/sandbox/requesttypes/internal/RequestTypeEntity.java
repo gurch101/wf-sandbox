@@ -1,7 +1,5 @@
-package com.gurch.sandbox.requests.internal;
+package com.gurch.sandbox.requesttypes.internal;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.gurch.sandbox.requests.RequestStatus;
 import java.time.Instant;
 import lombok.Builder;
 import lombok.Data;
@@ -13,15 +11,14 @@ import org.springframework.data.relational.core.mapping.Table;
 
 @Data
 @Builder(toBuilder = true)
-@Table("requests")
-public class RequestEntity {
+@Table("request_types")
+public class RequestTypeEntity {
   @Id private Long id;
+  private String typeKey;
   private String name;
-  private String requestTypeKey;
-  private Integer requestTypeVersion;
-  private JsonNode payloadJson;
-  private RequestStatus status;
-  private String processInstanceId;
+  private String description;
+  private Long activeVersionId;
+  private boolean active;
   @CreatedDate private Instant createdAt;
   @LastModifiedDate private Instant updatedAt;
   @Version private Long version;

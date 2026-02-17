@@ -12,6 +12,7 @@ import java.nio.file.StandardOpenOption;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.util.HexFormat;
+import java.util.Objects;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -37,7 +38,7 @@ public class LocalFilesystemStorageService implements StorageApi {
     String storagePath = namespace + "/" + UUID.randomUUID() + "-" + sanitizedFilename;
     Path target = resolvePath(storagePath);
 
-    Files.createDirectories(target.getParent());
+    Files.createDirectories(Objects.requireNonNull(target.getParent()));
 
     MessageDigest messageDigest = newSha256Digest();
     long contentSize;

@@ -1,19 +1,25 @@
 package com.gurch.sandbox.requests.internal;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.gurch.sandbox.query.BuiltQuery;
 import com.gurch.sandbox.query.JoinType;
 import com.gurch.sandbox.query.Operator;
 import com.gurch.sandbox.query.QueryLoggingHelper;
 import com.gurch.sandbox.query.SQLQueryBuilder;
+import com.gurch.sandbox.requests.CreateRequestCommand;
 import com.gurch.sandbox.requests.RequestApi;
 import com.gurch.sandbox.requests.RequestDraftErrorCode;
 import com.gurch.sandbox.requests.RequestResponse;
 import com.gurch.sandbox.requests.RequestSearchCriteria;
+import com.gurch.sandbox.requests.RequestSearchResponse;
 import com.gurch.sandbox.requests.RequestStatus;
 import com.gurch.sandbox.requests.RequestTaskResponse;
 import com.gurch.sandbox.requests.TaskAction;
+import com.gurch.sandbox.requesttypes.RequestTypeApi;
+import com.gurch.sandbox.requesttypes.ResolvedRequestTypeVersion;
 import com.gurch.sandbox.web.NotFoundException;
 import com.gurch.sandbox.web.ValidationErrorException;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -34,75 +40,84 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class DefaultRequestService implements RequestApi {
 
-  private static final String REQUEST_PROCESS_KEY = "simpleUserTaskProcess";
-
   private final RequestRepository repository;
   private final RequestTaskRepository requestTaskRepository;
   private final NamedParameterJdbcTemplate jdbcTemplate;
   private final RuntimeService runtimeService;
   private final TaskService taskService;
-
-  @Override
-  public List<RequestResponse> findAll() {
-    return repository.findAll().stream().map(entity -> toResponse(entity, false)).toList();
-  }
+  private final RequestTypeApi requestTypeApi;
+  private final RequestPayloadHandlerRegistry payloadHandlerRegistry;
 
   @Override
   public Optional<RequestResponse> findById(Long id) {
-    return repository.findById(id).map(entity -> toResponse(entity, true));
+    return repository.findById(id).map(entity -> toResponse(entity, true, true));
   }
 
   @Override
   @Transactional
-  public RequestResponse createDraft(String name) {
+  public Long createDraft(CreateRequestCommand command) {
+    requestTypeApi.resolveLatestActive(command.getRequestTypeKey());
+
     RequestEntity saved =
-        repository.save(RequestEntity.builder().name(name).status(RequestStatus.DRAFT).build());
-    return toResponse(saved, false);
+        repository.save(
+            RequestEntity.builder()
+                .name(command.getRequestTypeKey())
+                .requestTypeKey(command.getRequestTypeKey())
+                .payloadJson(command.getPayload())
+                .status(RequestStatus.DRAFT)
+                .build());
+    return saved.getId();
   }
 
   @Override
   @Transactional
-  public RequestResponse createAndSubmit(String name) {
-    RequestEntity saved =
-        repository.save(RequestEntity.builder().name(name).status(RequestStatus.DRAFT).build());
-    return submit(saved);
-  }
-
-  @Override
-  @Transactional
-  public RequestResponse updateDraft(Long id, String name, Long version) {
-    return repository
-        .findById(id)
-        .map(
-            existing -> {
-              if (existing.getStatus() != RequestStatus.DRAFT) {
-                throw ValidationErrorException.of(
-                    RequestDraftErrorCode.INVALID_DRAFT_UPDATE_STATUS);
-              }
-              RequestEntity toSave = existing.toBuilder().name(name).version(version).build();
-              return toResponse(repository.save(toSave), false);
-            })
-        .orElseThrow(() -> new NotFoundException("Request not found with id: " + id));
-  }
-
-  @Override
-  @Transactional
-  public RequestResponse submitDraft(Long id, String name, Long version) {
+  public Long updateDraft(Long id, JsonNode payload, Long version) {
     RequestEntity draft =
         repository
             .findById(id)
             .orElseThrow(() -> new NotFoundException("Request not found with id: " + id));
-
-    if (name != null || version != null) {
-      if (name == null || version == null) {
-        throw ValidationErrorException.of(RequestDraftErrorCode.INVALID_DRAFT_UPDATE_STATUS);
-      }
-      if (draft.getStatus() != RequestStatus.DRAFT) {
-        throw ValidationErrorException.of(RequestDraftErrorCode.INVALID_DRAFT_UPDATE_STATUS);
-      }
-      draft = repository.save(draft.toBuilder().name(name).version(version).build());
+    if (draft.getStatus() != RequestStatus.DRAFT) {
+      throw ValidationErrorException.of(RequestDraftErrorCode.INVALID_DRAFT_UPDATE_STATUS);
     }
-    return submit(draft);
+
+    RequestEntity updated =
+        repository.save(draft.toBuilder().payloadJson(payload).version(version).build());
+
+    return updated.getId();
+  }
+
+  @Override
+  @Transactional
+  public RequestResponse submitDraft(Long id) {
+    RequestEntity draft =
+        repository
+            .findById(id)
+            .orElseThrow(() -> new NotFoundException("Request not found with id: " + id));
+    if (draft.getStatus() != RequestStatus.DRAFT) {
+      throw ValidationErrorException.of(RequestDraftErrorCode.INVALID_DRAFT_SUBMIT_STATUS);
+    }
+
+    ResolvedRequestTypeVersion resolved =
+        requestTypeApi.resolveLatestActive(draft.getRequestTypeKey());
+    return submitPersistedRequest(draft, resolved, draft.getPayloadJson());
+  }
+
+  @Override
+  @Transactional
+  public RequestResponse createAndSubmit(CreateRequestCommand command) {
+    ResolvedRequestTypeVersion resolved =
+        requestTypeApi.resolveLatestActive(command.getRequestTypeKey());
+
+    RequestEntity saved =
+        repository.save(
+            RequestEntity.builder()
+                .name(command.getRequestTypeKey())
+                .requestTypeKey(command.getRequestTypeKey())
+                .payloadJson(command.getPayload())
+                .status(RequestStatus.SUBMITTED)
+                .build());
+
+    return submitPersistedRequest(saved, resolved, command.getPayload());
   }
 
   @Override
@@ -131,23 +146,30 @@ public class DefaultRequestService implements RequestApi {
     if (task == null) {
       throw new NotFoundException("Task not found with id: " + taskId);
     }
-
     if (!task.getProcessInstanceId().equals(request.getProcessInstanceId())) {
       throw new NotFoundException("Task " + taskId + " does not belong to request " + requestId);
     }
 
-    taskService.complete(
-        requestTask.getTaskId(), Map.of("action", action.name(), "comment", comment));
+    Map<String, Object> variables = new HashMap<>();
+    variables.put("action", action.name());
+    if (comment != null) {
+      variables.put("comment", comment);
+    }
+    taskService.complete(requestTask.getTaskId(), variables);
   }
 
   @Override
-  public List<RequestResponse> search(RequestSearchCriteria criteria) {
+  public List<RequestSearchResponse> search(RequestSearchCriteria criteria) {
     SQLQueryBuilder builder =
-        SQLQueryBuilder.select("DISTINCT r.*")
+        SQLQueryBuilder.select(
+                "DISTINCT r.id, r.request_type_key AS requestTypeKey, "
+                    + "r.request_type_version AS requestTypeVersion, "
+                    + "r.status, r.created_at AS createdAt, r.updated_at AS updatedAt, r.version")
             .from("requests", "r")
             .where("upper(r.name)", Operator.LIKE, criteria.getNamePattern())
             .where("r.status", Operator.IN, criteria.getStatuses())
             .where("r.id", Operator.IN, criteria.getIds())
+            .where("r.request_type_key", Operator.IN, criteria.getNormalizedRequestTypeKeys())
             .page(criteria.getPage(), criteria.getSize());
     if (criteria.getNormalizedTaskAssignees() != null) {
       builder
@@ -158,40 +180,23 @@ public class DefaultRequestService implements RequestApi {
     BuiltQuery query = builder.build();
     log.info(QueryLoggingHelper.format("requests.search", query, Set.of()));
 
-    return jdbcTemplate
-        .query(query.sql(), query.params(), new DataClassRowMapper<>(RequestEntity.class))
-        .stream()
-        .map(entity -> toResponse(entity, false))
-        .toList();
+    return jdbcTemplate.query(
+        query.sql(), query.params(), new DataClassRowMapper<>(RequestSearchResponse.class));
   }
 
-  private RequestResponse toResponse(RequestEntity entity, boolean includeUserTasks) {
+  private RequestResponse toResponse(
+      RequestEntity entity, boolean includeUserTasks, boolean includePayload) {
     return RequestResponse.builder()
         .id(entity.getId())
-        .name(entity.getName())
+        .requestTypeKey(entity.getRequestTypeKey())
+        .requestTypeVersion(entity.getRequestTypeVersion())
         .status(entity.getStatus())
+        .payload(includePayload ? entity.getPayloadJson() : null)
         .createdAt(entity.getCreatedAt())
         .updatedAt(entity.getUpdatedAt())
         .version(entity.getVersion())
         .userTasks(includeUserTasks ? findUserTasks(entity.getId()) : List.of())
         .build();
-  }
-
-  private ProcessInstance startWorkflow(Long requestId) {
-    return runtimeService.startProcessInstanceByKey(REQUEST_PROCESS_KEY, requestId.toString());
-  }
-
-  private RequestResponse submit(RequestEntity draft) {
-    if (draft.getStatus() != RequestStatus.DRAFT) {
-      throw ValidationErrorException.of(RequestDraftErrorCode.INVALID_DRAFT_SUBMIT_STATUS);
-    }
-    ProcessInstance processInstance = startWorkflow(draft.getId());
-    RequestEntity inProgress =
-        draft.toBuilder()
-            .status(RequestStatus.IN_PROGRESS)
-            .processInstanceId(processInstance.getProcessInstanceId())
-            .build();
-    return toResponse(repository.save(inProgress), false);
   }
 
   private List<RequestTaskResponse> findUserTasks(Long requestId) {
@@ -207,5 +212,32 @@ public class DefaultRequestService implements RequestApi {
         .status(task.getStatus().name())
         .assignee(task.getAssignee())
         .build();
+  }
+
+  private RequestResponse submitPersistedRequest(
+      RequestEntity baseEntity, ResolvedRequestTypeVersion resolved, JsonNode payload) {
+    payloadHandlerRegistry.validate(resolved.getPayloadHandlerId(), payload);
+
+    RequestEntity submitted =
+        repository.save(
+            repository.findById(baseEntity.getId()).orElse(baseEntity).toBuilder()
+                .requestTypeKey(resolved.getTypeKey())
+                .requestTypeVersion(resolved.getVersion())
+                .payloadJson(payload)
+                .status(RequestStatus.SUBMITTED)
+                .build());
+
+    ProcessInstance processInstance =
+        runtimeService.startProcessInstanceByKey(
+            resolved.getProcessDefinitionKey(), submitted.getId().toString());
+
+    RequestEntity inProgress =
+        repository.save(
+            repository.findById(submitted.getId()).orElse(submitted).toBuilder()
+                .status(RequestStatus.IN_PROGRESS)
+                .processInstanceId(processInstance.getProcessInstanceId())
+                .build());
+
+    return toResponse(inProgress, false, false);
   }
 }

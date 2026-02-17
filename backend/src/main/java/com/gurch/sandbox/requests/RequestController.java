@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/** REST controller for request CRUD and search endpoints. */
+/** REST controller for request create/read/search operations. */
 @RestController
 @RequestMapping("/api/requests")
 @RequiredArgsConstructor
@@ -23,21 +23,49 @@ public class RequestController {
 
   private final RequestApi requestApi;
 
-  /** Creates a draft request record. */
+  /** Creates a new draft request without workflow start. */
   @PostMapping("/drafts")
   @ResponseStatus(HttpStatus.CREATED)
-  public CreateResponse createDraft(@Valid @RequestBody RequestDtos.CreateDraftRequest request) {
-    return new CreateResponse(requestApi.createDraft(request.getName()).getId());
+  public CreateResponse createDraft(@Valid @RequestBody RequestDtos.CreateRequest request) {
+    return new CreateResponse(
+        requestApi.createDraft(
+            CreateRequestCommand.builder()
+                .requestTypeKey(request.getRequestTypeKey())
+                .payload(request.getPayload())
+                .build()));
   }
 
-  /** Creates and submits a request record. */
-  @PostMapping("/submit")
+  /** Updates an existing draft request. */
+  @PutMapping("/{id}")
+  @ApiErrorEnum({RequestDraftErrorCode.class})
+  public CreateResponse updateDraft(
+      @PathVariable Long id, @Valid @RequestBody RequestDtos.UpdateDraftRequest request) {
+    return new CreateResponse(
+        requestApi.updateDraft(id, request.getPayload(), request.getVersion()));
+  }
+
+  /** Submits a draft request and starts workflow. */
+  @PostMapping("/{id}/submit")
+  @ApiErrorEnum({RequestDraftErrorCode.class})
+  public RequestResponse submitDraft(@PathVariable Long id) {
+    return requestApi.submitDraft(id);
+  }
+
+  /** Creates and submits a new request. */
+  @PostMapping
   @ResponseStatus(HttpStatus.CREATED)
-  public CreateResponse submitNew(@Valid @RequestBody RequestDtos.SubmitRequest request) {
-    return new CreateResponse(requestApi.createAndSubmit(request.getName()).getId());
+  public CreateResponse create(@Valid @RequestBody RequestDtos.CreateRequest request) {
+    return new CreateResponse(
+        requestApi
+            .createAndSubmit(
+                CreateRequestCommand.builder()
+                    .requestTypeKey(request.getRequestTypeKey())
+                    .payload(request.getPayload())
+                    .build())
+            .getId());
   }
 
-  /** Gets one request by ID. */
+  /** Returns a request by id. */
   @GetMapping("/{id}")
   public RequestResponse getById(@PathVariable Long id) {
     return requestApi
@@ -45,28 +73,7 @@ public class RequestController {
         .orElseThrow(() -> new com.gurch.sandbox.web.NotFoundException("Request not found"));
   }
 
-  /** Updates an existing draft request record. */
-  @PutMapping("/{id}")
-  @ApiErrorEnum({RequestDraftErrorCode.class})
-  public RequestResponse updateDraft(
-      @PathVariable Long id, @Valid @RequestBody RequestDtos.UpdateDraftRequest request) {
-    return requestApi.updateDraft(id, request.getName(), request.getVersion());
-  }
-
-  /** Submits an existing draft request. */
-  @PostMapping("/{id}/submit")
-  @ResponseStatus(HttpStatus.OK)
-  @ApiErrorEnum({RequestDraftErrorCode.class})
-  public RequestResponse submitDraft(
-      @PathVariable Long id,
-      @Valid @RequestBody(required = false) RequestDtos.UpdateDraftRequest request) {
-    if (request == null) {
-      return requestApi.submitDraft(id, null, null);
-    }
-    return requestApi.submitDraft(id, request.getName(), request.getVersion());
-  }
-
-  /** Deletes a request by ID. */
+  /** Deletes a request by id. */
   @DeleteMapping("/{id}")
   @ResponseStatus(HttpStatus.NO_CONTENT)
   public void delete(@PathVariable Long id) {
@@ -83,7 +90,7 @@ public class RequestController {
     requestApi.completeTask(requestId, taskId, request.getAction(), request.getComment());
   }
 
-  /** Searches requests using optional filters and pagination. */
+  /** Searches requests by optional filters. */
   @GetMapping("/search")
   public RequestDtos.SearchResponse search(RequestSearchCriteria criteria) {
     return new RequestDtos.SearchResponse(requestApi.search(criteria));

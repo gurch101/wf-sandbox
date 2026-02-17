@@ -3,80 +3,92 @@ package com.gurch.sandbox.config.internal;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+import com.gurch.sandbox.idempotency.NotIdempotent;
 import com.gurch.sandbox.requests.RequestApi;
 import com.gurch.sandbox.requests.RequestController;
-import com.gurch.sandbox.requests.RequestDtos;
+import com.gurch.sandbox.requests.RequestSubmissionErrorCode;
+import com.gurch.sandbox.web.ApiErrorEnum;
 import io.swagger.v3.oas.models.Operation;
-import io.swagger.v3.oas.models.responses.ApiResponse;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.method.HandlerMethod;
 
 class OpenApiConfigTest {
 
   @Test
-  @SuppressWarnings("unchecked")
-  void shouldDocumentDraftUpdateValidationErrorCodesFromApiErrorEnum() throws Exception {
+  void shouldLeaveOperationUnchangedWhenApiErrorEnumIsMissing() throws Exception {
     OpenApiConfig config = new OpenApiConfig();
     RequestController controller = new RequestController(mock(RequestApi.class));
-    Method updateMethod =
+    Method method =
         RequestController.class.getMethod(
-            "updateDraft", Long.class, RequestDtos.UpdateDraftRequest.class);
-    HandlerMethod handlerMethod = new HandlerMethod(controller, updateMethod);
+            "create", com.gurch.sandbox.requests.RequestDtos.CreateRequest.class);
+    HandlerMethod handlerMethod = new HandlerMethod(controller, method);
 
     Operation operation = new Operation();
-    operation = config.apiErrorEnumCustomizer().customize(operation, handlerMethod);
+    Operation customized = config.apiErrorEnumCustomizer().customize(operation, handlerMethod);
 
-    ApiResponse response400 = operation.getResponses().get("400");
-    assertThat(response400).isNotNull();
-    assertThat(response400.getDescription()).contains("INVALID_DRAFT_UPDATE_STATUS");
-    assertThat(response400.getContent()).containsKey("application/problem+json");
-    assertThat(response400.getExtensions()).containsKey("x-error-codes");
+    assertThat(customized.getResponses()).isNull();
+  }
 
-    List<Map<String, Object>> errorCodes =
-        (List<Map<String, Object>>) response400.getExtensions().get("x-error-codes");
-    assertThat(errorCodes)
-        .contains(
-            Map.of(
-                "fieldName",
-                "status",
-                "code",
-                "INVALID_DRAFT_UPDATE_STATUS",
-                "message",
-                "only DRAFT requests can be updated"));
+  @Test
+  void shouldAddIdempotencyHeaderForPostMappings() throws Exception {
+    OpenApiConfig config = new OpenApiConfig();
+    HandlerMethod handlerMethod =
+        new HandlerMethod(new DummyController(), DummyController.class.getMethod("idempotent"));
+
+    Operation customized =
+        config.idempotencyKeyHeaderCustomizer().customize(new Operation(), handlerMethod);
+
+    assertThat(customized.getParameters()).isNotEmpty();
+    assertThat(customized.getParameters().getFirst().getName()).isEqualTo("Idempotency-Key");
+  }
+
+  @Test
+  void shouldSkipIdempotencyHeaderForNotIdempotentMethods() throws Exception {
+    OpenApiConfig config = new OpenApiConfig();
+    HandlerMethod handlerMethod =
+        new HandlerMethod(new DummyController(), DummyController.class.getMethod("notIdempotent"));
+
+    Operation customized =
+        config.idempotencyKeyHeaderCustomizer().customize(new Operation(), handlerMethod);
+
+    assertThat(customized.getParameters()).isNull();
   }
 
   @Test
   @SuppressWarnings("unchecked")
-  void shouldDocumentDraftSubmitValidationErrorCodesFromApiErrorEnum() throws Exception {
+  void shouldDocumentApiErrorEnumCodes() throws Exception {
     OpenApiConfig config = new OpenApiConfig();
-    RequestController controller = new RequestController(mock(RequestApi.class));
-    Method submitMethod =
-        RequestController.class.getMethod(
-            "submitDraft", Long.class, RequestDtos.UpdateDraftRequest.class);
-    HandlerMethod handlerMethod = new HandlerMethod(controller, submitMethod);
+    HandlerMethod handlerMethod =
+        new HandlerMethod(new DummyController(), DummyController.class.getMethod("withErrors"));
 
-    Operation operation = new Operation();
-    operation = config.apiErrorEnumCustomizer().customize(operation, handlerMethod);
+    Operation customized =
+        config.apiErrorEnumCustomizer().customize(new Operation(), handlerMethod);
 
-    ApiResponse response400 = operation.getResponses().get("400");
-    assertThat(response400).isNotNull();
-    assertThat(response400.getDescription()).contains("INVALID_DRAFT_SUBMIT_STATUS");
-    assertThat(response400.getContent()).containsKey("application/problem+json");
-    assertThat(response400.getExtensions()).containsKey("x-error-codes");
+    var response = customized.getResponses().get("400");
+    assertThat(response).isNotNull();
+    assertThat(response.getDescription()).contains("INVALID_REQUEST_PAYLOAD");
 
-    List<Map<String, Object>> errorCodes =
-        (List<Map<String, Object>>) response400.getExtensions().get("x-error-codes");
+    List<Map<String, String>> errorCodes =
+        (List<Map<String, String>>) response.getExtensions().get("x-error-codes");
     assertThat(errorCodes)
-        .contains(
-            Map.of(
-                "fieldName",
-                "status",
-                "code",
-                "INVALID_DRAFT_SUBMIT_STATUS",
-                "message",
-                "only DRAFT requests can be submitted"));
+        .extracting(map -> map.get("code"))
+        .contains("INVALID_REQUEST_PAYLOAD", "MISSING_PAYLOAD_HANDLER");
+  }
+
+  private static final class DummyController {
+    @PostMapping("/idempotent")
+    public void idempotent() {}
+
+    @PostMapping("/not-idempotent")
+    @NotIdempotent
+    public void notIdempotent() {}
+
+    @PostMapping("/with-errors")
+    @ApiErrorEnum({RequestSubmissionErrorCode.class})
+    public void withErrors() {}
   }
 }

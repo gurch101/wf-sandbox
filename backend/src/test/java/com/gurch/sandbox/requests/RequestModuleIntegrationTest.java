@@ -1,5 +1,6 @@
 package com.gurch.sandbox.requests;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -8,6 +9,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gurch.sandbox.AbstractJdbcIntegrationTest;
 import com.gurch.sandbox.dto.CreateResponse;
@@ -16,37 +18,91 @@ import com.gurch.sandbox.requests.internal.RequestRepository;
 import com.gurch.sandbox.requests.internal.RequestTaskEntity;
 import com.gurch.sandbox.requests.internal.RequestTaskRepository;
 import com.gurch.sandbox.requests.internal.RequestTaskStatus;
+import com.gurch.sandbox.requesttypes.RequestTypeDtos;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import org.finos.fluxnova.bpm.engine.ExternalTaskService;
+import org.finos.fluxnova.bpm.engine.externaltask.LockedExternalTask;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
-import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
-@AutoConfigureMockMvc
-@WithMockUser
 class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
 
   @Autowired private MockMvc mockMvc;
-
   @Autowired private ObjectMapper objectMapper;
-
-  @Autowired private RequestRepository repository;
+  @Autowired private RequestRepository requestRepository;
   @Autowired private RequestTaskRepository requestTaskRepository;
+  @Autowired private ExternalTaskService externalTaskService;
+  @Autowired private JdbcTemplate jdbcTemplate;
 
   @BeforeEach
   void setUp() {
-    repository.deleteAll();
+    requestRepository.deleteAll();
+    jdbcTemplate.update("DELETE FROM request_types");
   }
 
   @Test
-  void shouldPerformCrudOperations() throws Exception {
-    RequestDtos.CreateDraftRequest createRequest =
-        new RequestDtos.CreateDraftRequest("Test Request");
+  void shouldAutoResolveLatestActiveVersionAndPinExistingRequests() throws Exception {
+    createType("loan", "Loan", "amount-positive", "requestTypeV1Process");
+
+    Long firstRequestId = createRequest("loan", Map.of("amount", 100));
+    RequestEntity first = requestRepository.findById(firstRequestId).orElseThrow();
+    assertThat(first.getRequestTypeVersion()).isEqualTo(1);
+
+    updateType("loan", "Loan V2", "amount-positive", "requestTypeV2Process");
+
+    Long secondRequestId = createRequest("loan", Map.of("amount", 250));
+    RequestEntity second = requestRepository.findById(secondRequestId).orElseThrow();
+    assertThat(second.getRequestTypeVersion()).isEqualTo(2);
+
+    RequestEntity firstAfterUpdate = requestRepository.findById(firstRequestId).orElseThrow();
+    assertThat(firstAfterUpdate.getRequestTypeVersion()).isEqualTo(1);
+  }
+
+  @Test
+  void shouldIgnoreClientProvidedVersionAndUseLatestActive() throws Exception {
+    createType("loan", "Loan", "amount-positive", "requestTypeV1Process");
+
+    String rawPayload =
+        """
+        {
+          "requestTypeKey": "loan",
+          "requestTypeVersion": 999,
+          "payload": { "amount": 42 }
+        }
+        """;
+
+    MvcResult result =
+        mockMvc
+            .perform(
+                post("/api/requests")
+                    .with(csrf())
+                    .header("Idempotency-Key", UUID.randomUUID().toString())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(rawPayload))
+            .andExpect(status().isCreated())
+            .andReturn();
+
+    Long id =
+        objectMapper
+            .readValue(result.getResponse().getContentAsString(), CreateResponse.class)
+            .getId();
+    RequestEntity saved = requestRepository.findById(id).orElseThrow();
+    assertThat(saved.getRequestTypeVersion()).isEqualTo(1);
+  }
+
+  @Test
+  void shouldKeepDraftUnvalidatedUntilSubmit() throws Exception {
+    createType("loan", "Loan", "amount-positive", "requestTypeV1Process");
+
     MvcResult createResult =
         mockMvc
             .perform(
@@ -54,35 +110,69 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
                     .with(csrf())
                     .header("Idempotency-Key", UUID.randomUUID().toString())
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content(objectMapper.writeValueAsString(createRequest)))
+                    .content(
+                        objectMapper.writeValueAsString(
+                            new RequestDtos.CreateRequest(
+                                "loan", objectMapper.readTree("{\"amount\":0}")))))
             .andExpect(status().isCreated())
-            .andExpect(jsonPath("$.id").exists())
             .andReturn();
 
-    CreateResponse createResponse =
-        objectMapper.readValue(
-            createResult.getResponse().getContentAsString(), CreateResponse.class);
-    Long id = createResponse.getId();
+    Long id =
+        objectMapper
+            .readValue(createResult.getResponse().getContentAsString(), CreateResponse.class)
+            .getId();
+    RequestEntity draft = requestRepository.findById(id).orElseThrow();
+    assertThat(draft.getStatus()).isEqualTo(RequestStatus.DRAFT);
+    assertThat(draft.getRequestTypeVersion()).isNull();
+    assertThat(draft.getProcessInstanceId()).isNull();
 
     mockMvc
-        .perform(get("/api/requests/{id}", id))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.name").value("Test Request"))
-        .andExpect(jsonPath("$.status").value("DRAFT"));
+        .perform(
+            post("/api/requests/{id}/submit", id)
+                .with(csrf())
+                .header("Idempotency-Key", UUID.randomUUID().toString()))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.errors[0].code").value("INVALID_REQUEST_PAYLOAD"));
 
-    RequestDtos.UpdateDraftRequest updateRequest =
-        new RequestDtos.UpdateDraftRequest("Updated Request", 0L);
+    RequestEntity stillDraft = requestRepository.findById(id).orElseThrow();
+    assertThat(stillDraft.getStatus()).isEqualTo(RequestStatus.DRAFT);
+    assertThat(stillDraft.getProcessInstanceId()).isNull();
+  }
+
+  @Test
+  void shouldUpdateAndSubmitDraft() throws Exception {
+    createType("loan", "Loan", "amount-positive", "requestTypeV1Process");
+
+    MvcResult createResult =
+        mockMvc
+            .perform(
+                post("/api/requests/drafts")
+                    .with(csrf())
+                    .header("Idempotency-Key", UUID.randomUUID().toString())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        objectMapper.writeValueAsString(
+                            new RequestDtos.CreateRequest(
+                                "loan", objectMapper.readTree("{\"amount\":0}")))))
+            .andExpect(status().isCreated())
+            .andReturn();
+    Long id =
+        objectMapper
+            .readValue(createResult.getResponse().getContentAsString(), CreateResponse.class)
+            .getId();
+
     mockMvc
         .perform(
             put("/api/requests/{id}", id)
                 .with(csrf())
                 .header("Idempotency-Key", UUID.randomUUID().toString())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(updateRequest)))
+                .content(
+                    objectMapper.writeValueAsString(
+                        new RequestDtos.UpdateDraftRequest(
+                            objectMapper.readTree("{\"amount\":25}"), 0L))))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.name").value("Updated Request"))
-        .andExpect(jsonPath("$.status").value("DRAFT"))
-        .andExpect(jsonPath("$.version").value(1L));
+        .andExpect(jsonPath("$.id").value(id));
 
     mockMvc
         .perform(
@@ -91,222 +181,395 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
                 .header("Idempotency-Key", UUID.randomUUID().toString()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.status").value("IN_PROGRESS"));
+  }
+
+  @Test
+  void shouldFailSyncValidationWithoutStartingWorkflow() throws Exception {
+    createType("loan", "Loan", "amount-positive", "requestTypeV1Process");
 
     mockMvc
         .perform(
-            delete("/api/requests/{id}", id)
+            post("/api/requests")
+                .with(csrf())
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        new RequestDtos.CreateRequest(
+                            "loan", objectMapper.readTree("{\"amount\":0}")))))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.errors[0].code").value("INVALID_REQUEST_PAYLOAD"));
+
+    assertThat(requestRepository.count()).isZero();
+  }
+
+  @Test
+  void shouldRejectCreateWithInvalidRequestTypeKey() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/requests")
+                .with(csrf())
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        new RequestDtos.CreateRequest(
+                            "missing-type", objectMapper.readTree("{\"amount\":25}")))))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.errors[0].code").value("REQUEST_TYPE_NOT_FOUND"));
+
+    assertThat(requestRepository.count()).isZero();
+  }
+
+  @Test
+  void shouldRejectDraftCreateWithInvalidRequestTypeKey() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/requests/drafts")
+                .with(csrf())
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        new RequestDtos.CreateRequest(
+                            "missing-type", objectMapper.readTree("{\"amount\":25}")))))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.errors[0].code").value("REQUEST_TYPE_NOT_FOUND"));
+
+    assertThat(requestRepository.count()).isZero();
+  }
+
+  @Test
+  void shouldFailSyncValidationForMissingAmountField() throws Exception {
+    createType("loan", "Loan", "amount-positive", "requestTypeV1Process");
+
+    mockMvc
+        .perform(
+            post("/api/requests")
+                .with(csrf())
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        new RequestDtos.CreateRequest("loan", objectMapper.readTree("{}")))))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.errors[0].code").value("INVALID_REQUEST_PAYLOAD"));
+
+    assertThat(requestRepository.count()).isZero();
+  }
+
+  @Test
+  void shouldSetRejectedWhenAsyncValidationFails() throws Exception {
+    createType("ops", "Ops", "noop", "requestTypeV1Process");
+    Long requestId = createRequest("ops", Map.of("value", "x"));
+
+    LockedExternalTask validationTask = fetchExternalTask("request-async-validation", requestId);
+    externalTaskService.complete(
+        validationTask.getId(),
+        validationTask.getWorkerId(),
+        Map.of("asyncValidationPassed", false));
+
+    assertStatusEventually(requestId, RequestStatus.REJECTED);
+  }
+
+  @Test
+  void shouldProceedToBorTaskWhenAsyncValidationPasses() throws Exception {
+    createType("ops", "Ops", "noop", "requestTypeV1Process");
+    Long requestId = createRequest("ops", Map.of("value", "x"));
+
+    LockedExternalTask validationTask = fetchExternalTask("request-async-validation", requestId);
+    externalTaskService.complete(
+        validationTask.getId(),
+        validationTask.getWorkerId(),
+        Map.of("asyncValidationPassed", true));
+
+    LockedExternalTask borTask = fetchExternalTask("request-bor", requestId);
+    assertThat(borTask).isNotNull();
+  }
+
+  @Test
+  void shouldCompleteRequestWhenBorTaskSucceeds() throws Exception {
+    createType("ops", "Ops", "noop", "requestTypeV1Process");
+    Long requestId = createRequest("ops", Map.of("value", "x"));
+
+    LockedExternalTask validationTask = fetchExternalTask("request-async-validation", requestId);
+    externalTaskService.complete(
+        validationTask.getId(),
+        validationTask.getWorkerId(),
+        Map.of("asyncValidationPassed", true));
+
+    LockedExternalTask borTask = fetchExternalTask("request-bor", requestId);
+    externalTaskService.complete(borTask.getId(), borTask.getWorkerId());
+
+    assertStatusEventually(requestId, RequestStatus.COMPLETED);
+  }
+
+  @Test
+  void shouldKeepRequestInProgressWhenExternalTaskIncidentOccurs() throws Exception {
+    createType("ops", "Ops", "noop", "requestTypeV1Process");
+    Long requestId = createRequest("ops", Map.of("value", "x"));
+
+    LockedExternalTask validationTask = fetchExternalTask("request-async-validation", requestId);
+    externalTaskService.complete(
+        validationTask.getId(),
+        validationTask.getWorkerId(),
+        Map.of("asyncValidationPassed", true));
+
+    LockedExternalTask borTask = fetchExternalTask("request-bor", requestId);
+    externalTaskService.handleFailure(
+        borTask.getId(), borTask.getWorkerId(), "downstream unavailable", "retry exhausted", 0, 0L);
+
+    assertStatusEventually(requestId, RequestStatus.IN_PROGRESS);
+    assertThat(
+            externalTaskService
+                .createExternalTaskQuery()
+                .processInstanceId(borTask.getProcessInstanceId())
+                .noRetriesLeft()
+                .count())
+        .isGreaterThan(0);
+  }
+
+  @Test
+  void detailsShouldIncludePayloadAndSearchShouldOmitPayload() throws Exception {
+    createType("loan", "Loan", "amount-positive", "requestTypeV1Process");
+    Long requestId = createRequest("loan", Map.of("amount", 77));
+
+    mockMvc
+        .perform(get("/api/requests/{id}", requestId))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.payload.amount").value(77))
+        .andExpect(jsonPath("$.requestTypeKey").value("loan"))
+        .andExpect(jsonPath("$.requestTypeVersion").value(1));
+
+    mockMvc
+        .perform(get("/api/requests/search"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.requests[0].payload").doesNotExist());
+  }
+
+  @Test
+  void shouldSearchByListOfRequestTypeKeys() throws Exception {
+    createType("loan", "Loan", "amount-positive", "requestTypeV1Process");
+    createType("mortgage", "Mortgage", "noop", "requestTypeV2Process");
+
+    createRequest("loan", Map.of("amount", 12));
+    createRequest("mortgage", Map.of("value", "x"));
+
+    mockMvc
+        .perform(
+            get("/api/requests/search")
+                .param("requestTypeKeys", "loan")
+                .param("requestTypeKeys", "mortgage"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.requests.length()").value(2));
+  }
+
+  @Test
+  void shouldCompleteUserTaskEndpoint() throws Exception {
+    createType("manual", "Manual", "noop", "simpleUserTaskProcess");
+    Long requestId = createRequest("manual", Map.of("value", "x"));
+
+    RequestTaskEntity task = requestTaskRepository.findByRequestId(requestId).getFirst();
+
+    mockMvc
+        .perform(
+            post("/api/requests/{requestId}/tasks/{taskId}/complete", requestId, task.getId())
+                .with(csrf())
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        new RequestDtos.CompleteTaskRequest(TaskAction.APPROVED, "approved"))))
+        .andExpect(status().isNoContent());
+
+    assertTaskStatusEventually(task.getId(), RequestTaskStatus.COMPLETED);
+  }
+
+  @Test
+  void shouldSearchRequestTypes() throws Exception {
+    createType("loan", "Loan", "amount-positive", "requestTypeV1Process");
+    createType("mortgage", "Mortgage", "noop", "requestTypeV2Process");
+
+    mockMvc
+        .perform(get("/api/internal/request-types/search").param("typeKeyContains", "loa"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].typeKey").value("loan"))
+        .andExpect(jsonPath("$[0].activeVersion").value(1));
+  }
+
+  @Test
+  void shouldDeleteUnusedRequestTypeAndRejectDeleteWhenInUse() throws Exception {
+    createType("unused", "Unused", "noop", "requestTypeV2Process");
+    createType("loan", "Loan", "amount-positive", "requestTypeV1Process");
+    createRequest("loan", Map.of("amount", 10));
+
+    mockMvc
+        .perform(
+            delete("/api/internal/request-types/{typeKey}", "unused")
                 .with(csrf())
                 .header("Idempotency-Key", UUID.randomUUID().toString()))
         .andExpect(status().isNoContent());
 
     mockMvc
-        .perform(get("/api/requests/{id}", id))
-        .andExpect(status().isNotFound())
-        .andExpect(jsonPath("$.detail").value("Request not found"));
-  }
-
-  @Test
-  void shouldReturnBadRequestForInvalidCreateDraftRequest() throws Exception {
-    String invalidJson = "{\"name\":\"\"}";
+        .perform(get("/api/internal/request-types/search").param("typeKeyContains", "unused"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.length()").value(0));
 
     mockMvc
         .perform(
-            post("/api/requests/drafts")
-                .with(csrf())
-                .header("Idempotency-Key", UUID.randomUUID().toString())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(invalidJson))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.errors").isArray())
-        .andExpect(jsonPath("$.errors[0].name").value("name"));
-  }
-
-  @Test
-  void shouldReturnBadRequestWhenUpdatingNonDraft() throws Exception {
-    RequestDtos.SubmitRequest submitRequest = new RequestDtos.SubmitRequest("Submitted");
-    MvcResult createResult =
-        mockMvc
-            .perform(
-                post("/api/requests/submit")
-                    .with(csrf())
-                    .header("Idempotency-Key", UUID.randomUUID().toString())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(objectMapper.writeValueAsString(submitRequest)))
-            .andExpect(status().isCreated())
-            .andReturn();
-
-    Long id =
-        objectMapper
-            .readValue(createResult.getResponse().getContentAsString(), CreateResponse.class)
-            .getId();
-
-    RequestDtos.UpdateDraftRequest updateRequest =
-        new RequestDtos.UpdateDraftRequest("Should Fail", 0L);
-    mockMvc
-        .perform(
-            put("/api/requests/{id}", id)
-                .with(csrf())
-                .header("Idempotency-Key", UUID.randomUUID().toString())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(updateRequest)))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.errors[0].code").value("INVALID_DRAFT_UPDATE_STATUS"));
-  }
-
-  @Test
-  void shouldReturnBadRequestWhenSubmittingNonDraft() throws Exception {
-    RequestDtos.SubmitRequest submitRequest = new RequestDtos.SubmitRequest("Submitted");
-    MvcResult createResult =
-        mockMvc
-            .perform(
-                post("/api/requests/submit")
-                    .with(csrf())
-                    .header("Idempotency-Key", UUID.randomUUID().toString())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(objectMapper.writeValueAsString(submitRequest)))
-            .andExpect(status().isCreated())
-            .andReturn();
-
-    Long id =
-        objectMapper
-            .readValue(createResult.getResponse().getContentAsString(), CreateResponse.class)
-            .getId();
-
-    mockMvc
-        .perform(
-            post("/api/requests/{id}/submit", id)
+            delete("/api/internal/request-types/{typeKey}", "loan")
                 .with(csrf())
                 .header("Idempotency-Key", UUID.randomUUID().toString()))
         .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.errors[0].code").value("INVALID_DRAFT_SUBMIT_STATUS"));
+        .andExpect(jsonPath("$.errors[0].code").value("REQUEST_TYPE_IN_USE"));
   }
 
   @Test
-  void shouldSubmitDraftWithAtomicUpdatePayload() throws Exception {
-    RequestDtos.CreateDraftRequest createRequest = new RequestDtos.CreateDraftRequest("Draft Name");
-    MvcResult createResult =
+  void shouldRejectCreateTypeWithInvalidProcessDefinitionKey() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/internal/request-types")
+                .with(csrf())
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        new RequestTypeDtos.CreateTypeRequest(
+                            "bad", "Bad", "desc", "noop", "missing-process-definition-key"))))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.errors[0].code").value("INVALID_PROCESS_DEFINITION_KEY"));
+  }
+
+  @Test
+  void shouldRejectUpdateTypeWithInvalidProcessDefinitionKey() throws Exception {
+    createType("loan", "Loan", "amount-positive", "requestTypeV1Process");
+
+    mockMvc
+        .perform(
+            put("/api/internal/request-types/{typeKey}", "loan")
+                .with(csrf())
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        new RequestTypeDtos.ChangeTypeRequest(
+                            "Loan", "desc", "amount-positive", "missing-process-definition-key"))))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.errors[0].code").value("INVALID_PROCESS_DEFINITION_KEY"));
+  }
+
+  @Test
+  void shouldSearchAndValidateWorkflowDefinitions() throws Exception {
+    mockMvc
+        .perform(
+            get("/api/internal/workflows/process-definitions/search")
+                .param("processDefinitionKeyContains", "requestTypeV1"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].key").value("requestTypeV1Process"));
+
+    mockMvc
+        .perform(
+            get("/api/internal/workflows/process-definitions/{key}/exists", "requestTypeV1Process"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.exists").value(true));
+
+    mockMvc
+        .perform(get("/api/internal/workflows/process-definitions/{key}/exists", "missingKey"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.exists").value(false));
+  }
+
+  private void createType(
+      String typeKey, String name, String payloadHandlerId, String processDefinitionKey)
+      throws Exception {
+    mockMvc
+        .perform(
+            post("/api/internal/request-types")
+                .with(csrf())
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        new RequestTypeDtos.CreateTypeRequest(
+                            typeKey, name, "desc", payloadHandlerId, processDefinitionKey))))
+        .andExpect(status().isCreated());
+  }
+
+  private void updateType(
+      String typeKey, String name, String payloadHandlerId, String processDefinitionKey)
+      throws Exception {
+    mockMvc
+        .perform(
+            put("/api/internal/request-types/{typeKey}", typeKey)
+                .with(csrf())
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        new RequestTypeDtos.ChangeTypeRequest(
+                            name, "desc", payloadHandlerId, processDefinitionKey))))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.version").value(2));
+  }
+
+  private Long createRequest(String typeKey, Map<String, Object> payload) throws Exception {
+    JsonNode payloadNode = objectMapper.valueToTree(payload);
+    MvcResult result =
         mockMvc
             .perform(
-                post("/api/requests/drafts")
+                post("/api/requests")
                     .with(csrf())
                     .header("Idempotency-Key", UUID.randomUUID().toString())
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content(objectMapper.writeValueAsString(createRequest)))
+                    .content(
+                        objectMapper.writeValueAsString(
+                            new RequestDtos.CreateRequest(typeKey, payloadNode))))
             .andExpect(status().isCreated())
             .andReturn();
-
-    Long id =
-        objectMapper
-            .readValue(createResult.getResponse().getContentAsString(), CreateResponse.class)
-            .getId();
-
-    RequestDtos.UpdateDraftRequest submitWithUpdate =
-        new RequestDtos.UpdateDraftRequest("Updated Before Submit", 0L);
-    mockMvc
-        .perform(
-            post("/api/requests/{id}/submit", id)
-                .with(csrf())
-                .header("Idempotency-Key", UUID.randomUUID().toString())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(submitWithUpdate)))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.name").value("Updated Before Submit"))
-        .andExpect(jsonPath("$.status").value("IN_PROGRESS"))
-        .andExpect(jsonPath("$.version").value(2L));
+    return objectMapper
+        .readValue(result.getResponse().getContentAsString(), CreateResponse.class)
+        .getId();
   }
 
-  @Test
-  void shouldReturnBadRequestWhenMissingIdempotencyKey() throws Exception {
-    RequestDtos.CreateDraftRequest createRequest = new RequestDtos.CreateDraftRequest("Test");
-    mockMvc
-        .perform(
-            post("/api/requests/drafts")
-                .with(csrf())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(createRequest)))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.title").value("Missing Idempotency Key"));
+  private LockedExternalTask fetchExternalTask(String topic, Long requestId) {
+    List<LockedExternalTask> tasks =
+        externalTaskService
+            .fetchAndLock()
+            .workerId("it-worker")
+            .maxTasks(1)
+            .subscribe()
+            .topic(topic, 60_000L)
+            .businessKey(requestId.toString())
+            .execute();
+
+    assertThat(tasks).hasSize(1);
+    return tasks.getFirst();
   }
 
-  @Test
-  void shouldSearchRequests() throws Exception {
-    repository.save(RequestEntity.builder().name("Apple").status(RequestStatus.DRAFT).build());
-    repository.save(
-        RequestEntity.builder().name("Banana").status(RequestStatus.IN_PROGRESS).build());
-    repository.save(RequestEntity.builder().name("Cherry").status(RequestStatus.COMPLETED).build());
+  private void assertStatusEventually(Long requestId, RequestStatus expected) throws Exception {
+    Instant deadline = Instant.now().plus(Duration.ofSeconds(5));
+    while (Instant.now().isBefore(deadline)) {
+      RequestEntity current = requestRepository.findById(requestId).orElseThrow();
+      if (current.getStatus() == expected) {
+        return;
+      }
+      Thread.sleep(100);
+    }
+    RequestEntity latest = requestRepository.findById(requestId).orElseThrow();
+    assertThat(latest.getStatus()).isEqualTo(expected);
+  }
 
-    mockMvc
-        .perform(get("/api/requests/search").param("nameContains", "an"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.requests.length()").value(1))
-        .andExpect(jsonPath("$.requests[0].name").value("Banana"));
-
-    mockMvc
-        .perform(
-            get("/api/requests/search").param("statuses", "DRAFT").param("statuses", "COMPLETED"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.requests.length()").value(2));
-
-    List<RequestEntity> all = repository.findAll();
-    Long id1 = all.get(0).getId();
-    Long id2 = all.get(1).getId();
-
-    mockMvc
-        .perform(
-            get("/api/requests/search").param("ids", id1.toString()).param("ids", id2.toString()))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.requests.length()").value(2));
-
-    mockMvc
-        .perform(get("/api/requests/search").param("page", "0").param("size", "2"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.requests.length()").value(2));
-
-    mockMvc
-        .perform(get("/api/requests/search").param("page", "1").param("size", "2"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.requests.length()").value(1));
-
-    RequestDtos.SubmitRequest submittedRequest =
-        new RequestDtos.SubmitRequest("Search By Assignee");
-    mockMvc
-        .perform(
-            post("/api/requests/submit")
-                .with(csrf())
-                .header("Idempotency-Key", UUID.randomUUID().toString())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(submittedRequest)))
-        .andExpect(status().isCreated());
-
-    RequestEntity assignedRequest =
-        repository.save(
-            RequestEntity.builder()
-                .name("Search By Assignee")
-                .status(RequestStatus.IN_PROGRESS)
-                .build());
-    requestTaskRepository.save(
-        RequestTaskEntity.builder()
-            .requestId(assignedRequest.getId())
-            .processInstanceId("pi-web-search")
-            .taskId("task-web-search")
-            .name("Assigned Task")
-            .status(RequestTaskStatus.ACTIVE)
-            .assignee("demo")
-            .build());
-
-    mockMvc
-        .perform(get("/api/requests/search").param("taskAssignee", "demo"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.requests.length()").value(1))
-        .andExpect(jsonPath("$.requests[0].name").value("Search By Assignee"));
-
-    mockMvc
-        .perform(
-            get("/api/requests/search")
-                .param("taskAssignees", "missing-user")
-                .param("taskAssignees", "demo"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.requests.length()").value(1))
-        .andExpect(jsonPath("$.requests[0].name").value("Search By Assignee"));
+  private void assertTaskStatusEventually(Long taskId, RequestTaskStatus expected)
+      throws Exception {
+    Instant deadline = Instant.now().plus(Duration.ofSeconds(5));
+    while (Instant.now().isBefore(deadline)) {
+      RequestTaskEntity current = requestTaskRepository.findById(taskId).orElseThrow();
+      if (current.getStatus() == expected) {
+        return;
+      }
+      Thread.sleep(100);
+    }
+    RequestTaskEntity latest = requestTaskRepository.findById(taskId).orElseThrow();
+    assertThat(latest.getStatus()).isEqualTo(expected);
   }
 }

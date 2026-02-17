@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions
+  xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+  xmlns:fluxnova="http://camunda.org/schema/1.0/bpmn"
+  id="Definitions_RequestTypeV1"
+  targetNamespace="http://gurch.com/sandbox/process">
+  <bpmn:process
+    id="requestTypeV1Process"
+    name="Request Type V1 Process"
+    isExecutable="true"
+    fluxnova:historyTimeToLive="180">
+    <bpmn:startEvent id="startEvent">
+      <bpmn:outgoing>flow_start_to_async_validation</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:serviceTask
+      id="asyncValidationTask"
+      name="Async Validation"
+      fluxnova:type="external"
+      fluxnova:topic="request-async-validation">
+      <bpmn:incoming>flow_start_to_async_validation</bpmn:incoming>
+      <bpmn:outgoing>flow_validation_to_gateway</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:exclusiveGateway id="validationGateway" name="Validation Passed?">
+      <bpmn:incoming>flow_validation_to_gateway</bpmn:incoming>
+      <bpmn:outgoing>flow_gateway_to_bor</bpmn:outgoing>
+      <bpmn:outgoing>flow_gateway_to_reject</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:serviceTask
+      id="borTask"
+      name="BOR Integration"
+      fluxnova:type="external"
+      fluxnova:topic="request-bor">
+      <bpmn:incoming>flow_gateway_to_bor</bpmn:incoming>
+      <bpmn:outgoing>flow_bor_to_completed</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="completedEndEvent">
+      <bpmn:extensionElements>
+        <fluxnova:executionListener
+          event="end"
+          delegateExpression="${requestProcessCompletionListener}" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>flow_bor_to_completed</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:endEvent id="rejectedEndEvent">
+      <bpmn:extensionElements>
+        <fluxnova:executionListener
+          event="end"
+          delegateExpression="${requestProcessRejectedListener}" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>flow_gateway_to_reject</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="flow_start_to_async_validation" sourceRef="startEvent" targetRef="asyncValidationTask"/>
+    <bpmn:sequenceFlow id="flow_validation_to_gateway" sourceRef="asyncValidationTask" targetRef="validationGateway"/>
+    <bpmn:sequenceFlow id="flow_gateway_to_bor" sourceRef="validationGateway" targetRef="borTask">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">${asyncValidationPassed == true}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="flow_gateway_to_reject" sourceRef="validationGateway" targetRef="rejectedEndEvent"/>
+    <bpmn:sequenceFlow id="flow_bor_to_completed" sourceRef="borTask" targetRef="completedEndEvent"/>
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_RequestTypeV1">
+    <bpmndi:BPMNPlane id="BPMNPlane_RequestTypeV1" bpmnElement="requestTypeV1Process">
+      <bpmndi:BPMNShape id="Shape_Start" bpmnElement="startEvent"><dc:Bounds x="150" y="117" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Validate" bpmnElement="asyncValidationTask"><dc:Bounds x="230" y="95" width="120" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Gateway" bpmnElement="validationGateway" isMarkerVisible="true"><dc:Bounds x="390" y="110" width="50" height="50"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Bor" bpmnElement="borTask"><dc:Bounds x="490" y="95" width="120" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_EndCompleted" bpmnElement="completedEndEvent"><dc:Bounds x="670" y="117" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_EndRejected" bpmnElement="rejectedEndEvent"><dc:Bounds x="500" y="230" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Edge_StartToValidate" bpmnElement="flow_start_to_async_validation"><di:waypoint x="186" y="135"/><di:waypoint x="230" y="135"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ValidateToGateway" bpmnElement="flow_validation_to_gateway"><di:waypoint x="350" y="135"/><di:waypoint x="390" y="135"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_GatewayToBor" bpmnElement="flow_gateway_to_bor"><di:waypoint x="440" y="135"/><di:waypoint x="490" y="135"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_GatewayToReject" bpmnElement="flow_gateway_to_reject"><di:waypoint x="415" y="160"/><di:waypoint x="415" y="248"/><di:waypoint x="500" y="248"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_BorToComplete" bpmnElement="flow_bor_to_completed"><di:waypoint x="610" y="135"/><di:waypoint x="670" y="135"/></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

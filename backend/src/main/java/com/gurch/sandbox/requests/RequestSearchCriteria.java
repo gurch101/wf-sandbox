@@ -21,7 +21,12 @@ public class RequestSearchCriteria {
   @Schema(description = "Partial name to search for (case-insensitive)", example = "feature")
   String nameContains;
 
-  @Schema(description = "List of statuses to filter by", example = "[\"DRAFT\", \"IN_PROGRESS\"]")
+  @Schema(description = "Request type keys filter", example = "[\"loan\", \"mortgage\"]")
+  List<String> requestTypeKeys;
+
+  @Schema(
+      description = "List of statuses to filter by",
+      example = "[\"SUBMITTED\", \"IN_PROGRESS\"]")
   List<RequestStatus> statuses;
 
   @Schema(description = "List of specific IDs to filter by", example = "[1, 2, 3]")
@@ -65,9 +70,27 @@ public class RequestSearchCriteria {
 
     Optional.ofNullable(taskAssignees).stream()
         .flatMap(List::stream)
+        .filter(s -> s != null)
         .map(String::trim)
         .filter(s -> !s.isBlank())
         .map(s -> s.toUpperCase(Locale.ROOT))
+        .forEach(normalized::add);
+
+    return normalized.isEmpty() ? null : normalized;
+  }
+
+  /**
+   * Returns normalized request type key filters for SQL IN matching.
+   *
+   * @return key list, or null when no key filters are provided
+   */
+  public List<String> getNormalizedRequestTypeKeys() {
+    List<String> normalized = new ArrayList<>();
+    Optional.ofNullable(requestTypeKeys).stream()
+        .flatMap(List::stream)
+        .filter(s -> s != null)
+        .map(String::trim)
+        .filter(s -> !s.isBlank())
         .forEach(normalized::add);
 
     return normalized.isEmpty() ? null : normalized;
