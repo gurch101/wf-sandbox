@@ -8,3 +8,7 @@ camunda:
   bpm:
     metrics:
       enabled: false
+
+forms:
+  storage:
+    local-root: ./build/test-uploads/forms
