@@ -23,12 +23,18 @@ public class RequestController {
 
   private final RequestApi requestApi;
 
-  /** Creates a request record. */
-  @PostMapping
+  /** Creates a draft request record. */
+  @PostMapping("/drafts")
   @ResponseStatus(HttpStatus.CREATED)
-  @ApiErrorEnum({RequestCreateErrorCode.class})
-  public CreateResponse create(@Valid @RequestBody RequestDtos.CreateRequest request) {
-    return new CreateResponse(requestApi.create(request.getName(), request.getStatus()).getId());
+  public CreateResponse createDraft(@Valid @RequestBody RequestDtos.CreateDraftRequest request) {
+    return new CreateResponse(requestApi.createDraft(request.getName()).getId());
+  }
+
+  /** Creates and submits a request record. */
+  @PostMapping("/submit")
+  @ResponseStatus(HttpStatus.CREATED)
+  public CreateResponse submitNew(@Valid @RequestBody RequestDtos.SubmitRequest request) {
+    return new CreateResponse(requestApi.createAndSubmit(request.getName()).getId());
   }
 
   /** Gets one request by ID. */
@@ -39,12 +45,25 @@ public class RequestController {
         .orElseThrow(() -> new com.gurch.sandbox.web.NotFoundException("Request not found"));
   }
 
-  /** Updates an existing request record. */
+  /** Updates an existing draft request record. */
   @PutMapping("/{id}")
-  @ApiErrorEnum({RequestUpdateErrorCode.class})
-  public RequestResponse update(
-      @PathVariable Long id, @Valid @RequestBody RequestDtos.UpdateRequest request) {
-    return requestApi.update(id, request.getName(), request.getStatus(), request.getVersion());
+  @ApiErrorEnum({RequestDraftErrorCode.class})
+  public RequestResponse updateDraft(
+      @PathVariable Long id, @Valid @RequestBody RequestDtos.UpdateDraftRequest request) {
+    return requestApi.updateDraft(id, request.getName(), request.getVersion());
+  }
+
+  /** Submits an existing draft request. */
+  @PostMapping("/{id}/submit")
+  @ResponseStatus(HttpStatus.OK)
+  @ApiErrorEnum({RequestDraftErrorCode.class})
+  public RequestResponse submitDraft(
+      @PathVariable Long id,
+      @Valid @RequestBody(required = false) RequestDtos.UpdateDraftRequest request) {
+    if (request == null) {
+      return requestApi.submitDraft(id, null, null);
+    }
+    return requestApi.submitDraft(id, request.getName(), request.getVersion());
   }
 
   /** Deletes a request by ID. */
@@ -52,6 +71,16 @@ public class RequestController {
   @ResponseStatus(HttpStatus.NO_CONTENT)
   public void delete(@PathVariable Long id) {
     requestApi.deleteById(id);
+  }
+
+  /** Completes a request user task. */
+  @PostMapping("/{requestId}/tasks/{taskId}/complete")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  public void completeTask(
+      @PathVariable Long requestId,
+      @PathVariable Long taskId,
+      @Valid @RequestBody RequestDtos.CompleteTaskRequest request) {
+    requestApi.completeTask(requestId, taskId, request.getAction(), request.getComment());
   }
 
   /** Searches requests using optional filters and pagination. */

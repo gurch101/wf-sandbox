@@ -12,7 +12,6 @@ import com.gurch.sandbox.idempotency.internal.IdempotencyRecordEntity;
 import com.gurch.sandbox.idempotency.internal.IdempotencyRepository;
 import com.gurch.sandbox.idempotency.internal.IdempotencyStatus;
 import com.gurch.sandbox.requests.RequestDtos;
-import com.gurch.sandbox.requests.RequestStatus;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
@@ -71,14 +70,13 @@ class IdempotencyIntegrationTest extends AbstractJdbcIntegrationTest {
   @Test
   void shouldReturnSameResponseForSameIdempotencyKey() throws Exception {
     String idempotencyKey = UUID.randomUUID().toString();
-    RequestDtos.CreateRequest request =
-        new RequestDtos.CreateRequest("Test Request", RequestStatus.DRAFT);
+    RequestDtos.CreateDraftRequest request = new RequestDtos.CreateDraftRequest("Test Request");
 
     // First request
     MvcResult firstResult =
         mockMvc
             .perform(
-                post("/api/requests")
+                post("/api/requests/drafts")
                     .with(csrf())
                     .header("Idempotency-Key", idempotencyKey)
                     .contentType(MediaType.APPLICATION_JSON)
@@ -92,7 +90,7 @@ class IdempotencyIntegrationTest extends AbstractJdbcIntegrationTest {
     MvcResult secondResult =
         mockMvc
             .perform(
-                post("/api/requests")
+                post("/api/requests/drafts")
                     .with(csrf())
                     .header("Idempotency-Key", idempotencyKey)
                     .contentType(MediaType.APPLICATION_JSON)
@@ -110,24 +108,22 @@ class IdempotencyIntegrationTest extends AbstractJdbcIntegrationTest {
   void shouldReturnConflictForSameIdempotencyKeyWithDifferentPayload() throws Exception {
     String idempotencyKey = UUID.randomUUID().toString();
 
-    RequestDtos.CreateRequest request1 =
-        new RequestDtos.CreateRequest("Test Request 1", RequestStatus.DRAFT);
+    RequestDtos.CreateDraftRequest request1 = new RequestDtos.CreateDraftRequest("Test Request 1");
 
     mockMvc
         .perform(
-            post("/api/requests")
+            post("/api/requests/drafts")
                 .with(csrf())
                 .header("Idempotency-Key", idempotencyKey)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request1)))
         .andExpect(status().isCreated());
 
-    RequestDtos.CreateRequest request2 =
-        new RequestDtos.CreateRequest("Test Request 2", RequestStatus.DRAFT);
+    RequestDtos.CreateDraftRequest request2 = new RequestDtos.CreateDraftRequest("Test Request 2");
 
     mockMvc
         .perform(
-            post("/api/requests")
+            post("/api/requests/drafts")
                 .with(csrf())
                 .header("Idempotency-Key", idempotencyKey)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -138,10 +134,9 @@ class IdempotencyIntegrationTest extends AbstractJdbcIntegrationTest {
   @Test
   void shouldReturnConflictWhenAlreadyProcessing() throws Exception {
     String idempotencyKey = UUID.randomUUID().toString();
-    String operation = "POST /api/requests";
+    String operation = "POST /api/requests/drafts";
 
-    RequestDtos.CreateRequest request =
-        new RequestDtos.CreateRequest("Test Request", RequestStatus.DRAFT);
+    RequestDtos.CreateDraftRequest request = new RequestDtos.CreateDraftRequest("Test Request");
 
     // Manually insert a PROCESSING record
     repository.save(
@@ -154,7 +149,7 @@ class IdempotencyIntegrationTest extends AbstractJdbcIntegrationTest {
 
     mockMvc
         .perform(
-            post("/api/requests")
+            post("/api/requests/drafts")
                 .with(csrf())
                 .header("Idempotency-Key", idempotencyKey)
                 .contentType(MediaType.APPLICATION_JSON)

@@ -18,42 +18,12 @@ class OpenApiConfigTest {
 
   @Test
   @SuppressWarnings("unchecked")
-  void shouldDocumentCreateValidationErrorCodesFromApiErrorEnum() throws Exception {
-    OpenApiConfig config = new OpenApiConfig();
-    RequestController controller = new RequestController(mock(RequestApi.class));
-    Method createMethod =
-        RequestController.class.getMethod("create", RequestDtos.CreateRequest.class);
-    HandlerMethod handlerMethod = new HandlerMethod(controller, createMethod);
-
-    Operation operation = new Operation();
-    operation = config.apiErrorEnumCustomizer().customize(operation, handlerMethod);
-
-    ApiResponse response400 = operation.getResponses().get("400");
-    assertThat(response400).isNotNull();
-    assertThat(response400.getDescription()).contains("INVALID_CREATE_STATUS");
-    assertThat(response400.getContent()).containsKey("application/problem+json");
-    assertThat(response400.getExtensions()).containsKey("x-error-codes");
-
-    List<Map<String, Object>> errorCodes =
-        (List<Map<String, Object>>) response400.getExtensions().get("x-error-codes");
-    assertThat(errorCodes)
-        .contains(
-            Map.of(
-                "fieldName",
-                "status",
-                "code",
-                "INVALID_CREATE_STATUS",
-                "message",
-                "status must be one of [DRAFT, SUBMITTED] for create requests"));
-  }
-
-  @Test
-  @SuppressWarnings("unchecked")
-  void shouldDocumentUpdateValidationErrorCodesFromApiErrorEnum() throws Exception {
+  void shouldDocumentDraftUpdateValidationErrorCodesFromApiErrorEnum() throws Exception {
     OpenApiConfig config = new OpenApiConfig();
     RequestController controller = new RequestController(mock(RequestApi.class));
     Method updateMethod =
-        RequestController.class.getMethod("update", Long.class, RequestDtos.UpdateRequest.class);
+        RequestController.class.getMethod(
+            "updateDraft", Long.class, RequestDtos.UpdateDraftRequest.class);
     HandlerMethod handlerMethod = new HandlerMethod(controller, updateMethod);
 
     Operation operation = new Operation();
@@ -61,7 +31,7 @@ class OpenApiConfigTest {
 
     ApiResponse response400 = operation.getResponses().get("400");
     assertThat(response400).isNotNull();
-    assertThat(response400.getDescription()).contains("INVALID_UPDATE_STATUS_TRANSITION");
+    assertThat(response400.getDescription()).contains("INVALID_DRAFT_UPDATE_STATUS");
     assertThat(response400.getContent()).containsKey("application/problem+json");
     assertThat(response400.getExtensions()).containsKey("x-error-codes");
 
@@ -73,8 +43,40 @@ class OpenApiConfigTest {
                 "fieldName",
                 "status",
                 "code",
-                "INVALID_UPDATE_STATUS_TRANSITION",
+                "INVALID_DRAFT_UPDATE_STATUS",
                 "message",
-                "status transition must remain DRAFT or move DRAFT -> SUBMITTED for update requests"));
+                "only DRAFT requests can be updated"));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void shouldDocumentDraftSubmitValidationErrorCodesFromApiErrorEnum() throws Exception {
+    OpenApiConfig config = new OpenApiConfig();
+    RequestController controller = new RequestController(mock(RequestApi.class));
+    Method submitMethod =
+        RequestController.class.getMethod(
+            "submitDraft", Long.class, RequestDtos.UpdateDraftRequest.class);
+    HandlerMethod handlerMethod = new HandlerMethod(controller, submitMethod);
+
+    Operation operation = new Operation();
+    operation = config.apiErrorEnumCustomizer().customize(operation, handlerMethod);
+
+    ApiResponse response400 = operation.getResponses().get("400");
+    assertThat(response400).isNotNull();
+    assertThat(response400.getDescription()).contains("INVALID_DRAFT_SUBMIT_STATUS");
+    assertThat(response400.getContent()).containsKey("application/problem+json");
+    assertThat(response400.getExtensions()).containsKey("x-error-codes");
+
+    List<Map<String, Object>> errorCodes =
+        (List<Map<String, Object>>) response400.getExtensions().get("x-error-codes");
+    assertThat(errorCodes)
+        .contains(
+            Map.of(
+                "fieldName",
+                "status",
+                "code",
+                "INVALID_DRAFT_SUBMIT_STATUS",
+                "message",
+                "only DRAFT requests can be submitted"));
   }
 }

@@ -9,34 +9,48 @@ import lombok.Value;
 /** DTOs used by the request HTTP API. */
 public interface RequestDtos {
 
-  /** Request payload for creating a request record. */
+  /** Request payload for creating a draft request. */
   @Value
-  @Schema(description = "Request to create a new record")
-  class CreateRequest {
+  @Schema(description = "Request to create a new draft")
+  class CreateDraftRequest {
     @NotBlank(message = "name is required")
     @Schema(description = "Name of the request", example = "New Feature Implementation")
     String name;
-
-    @NotNull(message = "status is required")
-    @Schema(description = "Initial status of the request", example = "DRAFT")
-    RequestStatus status;
   }
 
-  /** Request payload for updating a request record. */
+  /** Request payload for creating and submitting a new request. */
   @Value
-  @Schema(description = "Request to update an existing record")
-  class UpdateRequest {
+  @Schema(description = "Request to create and submit a request")
+  class SubmitRequest {
     @NotBlank(message = "name is required")
-    @Schema(description = "Updated name of the request", example = "Updated Feature Name")
+    @Schema(description = "Name of the request", example = "Submit New Request")
     String name;
+  }
 
-    @NotNull(message = "status is required")
-    @Schema(description = "Updated status of the request", example = "SUBMITTED")
-    RequestStatus status;
+  /** Request payload for updating a draft request. */
+  @Value
+  @Schema(description = "Request to update an existing draft")
+  class UpdateDraftRequest {
+    @NotBlank(message = "name is required")
+    @Schema(description = "Updated name of the draft request", example = "Updated Feature Name")
+    String name;
 
     @NotNull(message = "version is required for optimistic locking")
     @Schema(description = "Current version of the record for optimistic locking", example = "1")
     Long version;
+  }
+
+  /** Request payload for completing a user task. */
+  @Value
+  @Schema(description = "Request to complete a workflow user task")
+  class CompleteTaskRequest {
+    @NotNull(message = "action is required")
+    @Schema(description = "Action performed for this task", example = "APPROVED")
+    TaskAction action;
+
+    @NotBlank(message = "comment is required")
+    @Schema(description = "Comment captured with the task completion", example = "Looks good")
+    String comment;
   }
 
   /** Response wrapper returned by request search endpoint. */
