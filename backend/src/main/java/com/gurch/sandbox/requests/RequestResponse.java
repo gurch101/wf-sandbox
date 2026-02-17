@@ -1,7 +1,9 @@
 package com.gurch.sandbox.requests;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
+import java.util.List;
 import lombok.Builder;
 import lombok.Value;
 
@@ -27,4 +29,8 @@ public class RequestResponse {
 
   @Schema(description = "Version of the record for optimistic locking", example = "2")
   Long version;
+
+  @Schema(description = "Workflow user tasks linked to this request")
+  @JsonInclude(JsonInclude.Include.NON_EMPTY)
+  List<RequestTaskResponse> userTasks;
 }

@@ -23,26 +23,40 @@ public interface RequestApi {
   Optional<RequestResponse> findById(Long id);
 
   /**
-   * Creates a new request record.
+   * Creates a new draft request.
    *
    * @param name the name of the request
-   * @param status the initial status of the request
    * @return the created request response
    */
-  RequestResponse create(String name, RequestStatus status);
+  RequestResponse createDraft(String name);
 
   /**
-   * Updates an existing request record. Implements optimistic locking via the version field.
+   * Creates and submits a request, starting workflow immediately.
+   *
+   * @param name the name of the request
+   * @return the submitted request response
+   */
+  RequestResponse createAndSubmit(String name);
+
+  /**
+   * Updates an existing draft request. Implements optimistic locking via the version field.
    *
    * @param id the unique identifier of the request to update
    * @param name the new name for the request
-   * @param status the new status for the request
    * @param version the current version of the record for optimistic locking
    * @return the updated request response
-   * @throws com.gurch.sandbox.web.NotFoundException if the request does not exist
-   * @throws org.springframework.dao.OptimisticLockingFailureException if the version is stale
    */
-  RequestResponse update(Long id, String name, RequestStatus status, Long version);
+  RequestResponse updateDraft(Long id, String name, Long version);
+
+  /**
+   * Submits an existing draft request and starts workflow.
+   *
+   * @param id the unique identifier of the request to submit
+   * @param name optional updated name to persist before submit
+   * @param version optional optimistic-lock version for the update-before-submit path
+   * @return the submitted request response
+   */
+  RequestResponse submitDraft(Long id, String name, Long version);
 
   /**
    * Deletes a request record by its unique identifier.
@@ -50,6 +64,16 @@ public interface RequestApi {
    * @param id the unique identifier of the request to delete
    */
   void deleteById(Long id);
+
+  /**
+   * Completes a workflow user task for a request.
+   *
+   * @param requestId request identifier
+   * @param taskId request task identifier
+   * @param action task action selected by the user
+   * @param comment task completion comment
+   */
+  void completeTask(Long requestId, Long taskId, TaskAction action, String comment);
 
   /**
    * Searches for requests matching the provided criteria. Supports partial name match, status

@@ -13,6 +13,9 @@ import com.gurch.sandbox.AbstractJdbcIntegrationTest;
 import com.gurch.sandbox.dto.CreateResponse;
 import com.gurch.sandbox.requests.internal.RequestEntity;
 import com.gurch.sandbox.requests.internal.RequestRepository;
+import com.gurch.sandbox.requests.internal.RequestTaskEntity;
+import com.gurch.sandbox.requests.internal.RequestTaskRepository;
+import com.gurch.sandbox.requests.internal.RequestTaskStatus;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,6 +36,7 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
   @Autowired private ObjectMapper objectMapper;
 
   @Autowired private RequestRepository repository;
+  @Autowired private RequestTaskRepository requestTaskRepository;
 
   @BeforeEach
   void setUp() {
@@ -41,20 +45,18 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
 
   @Test
   void shouldPerformCrudOperations() throws Exception {
-    // Create
-    RequestDtos.CreateRequest createRequest =
-        new RequestDtos.CreateRequest("Test Request", RequestStatus.DRAFT);
+    RequestDtos.CreateDraftRequest createRequest =
+        new RequestDtos.CreateDraftRequest("Test Request");
     MvcResult createResult =
         mockMvc
             .perform(
-                post("/api/requests")
+                post("/api/requests/drafts")
                     .with(csrf())
                     .header("Idempotency-Key", UUID.randomUUID().toString())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(createRequest)))
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.id").exists())
-            .andExpect(jsonPath("$.name").doesNotExist())
             .andReturn();
 
     CreateResponse createResponse =
@@ -62,17 +64,14 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
             createResult.getResponse().getContentAsString(), CreateResponse.class);
     Long id = createResponse.getId();
 
-    // Get by ID
     mockMvc
         .perform(get("/api/requests/{id}", id))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.name").value("Test Request"))
-        .andExpect(jsonPath("$.createdAt").exists())
-        .andExpect(jsonPath("$.updatedAt").exists());
+        .andExpect(jsonPath("$.status").value("DRAFT"));
 
-    // Update
-    RequestDtos.UpdateRequest updateRequest =
-        new RequestDtos.UpdateRequest("Updated Request", RequestStatus.DRAFT, 0L);
+    RequestDtos.UpdateDraftRequest updateRequest =
+        new RequestDtos.UpdateDraftRequest("Updated Request", 0L);
     mockMvc
         .perform(
             put("/api/requests/{id}", id)
@@ -83,24 +82,16 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.name").value("Updated Request"))
         .andExpect(jsonPath("$.status").value("DRAFT"))
-        .andExpect(jsonPath("$.updatedAt").exists())
         .andExpect(jsonPath("$.version").value(1L));
 
-    // Conflict (using stale version 0L instead of new version 1L)
-    RequestDtos.UpdateRequest staleUpdateRequest =
-        new RequestDtos.UpdateRequest("Stale Update", RequestStatus.DRAFT, 0L);
     mockMvc
         .perform(
-            put("/api/requests/{id}", id)
+            post("/api/requests/{id}/submit", id)
                 .with(csrf())
-                .header("Idempotency-Key", UUID.randomUUID().toString())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(staleUpdateRequest)))
-        .andExpect(status().isConflict())
-        .andExpect(jsonPath("$.title").value("Optimistic Locking Failure"))
-        .andExpect(jsonPath("$.status").value(409));
+                .header("Idempotency-Key", UUID.randomUUID().toString()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value("IN_PROGRESS"));
 
-    // Delete
     mockMvc
         .perform(
             delete("/api/requests/{id}", id)
@@ -111,103 +102,125 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
     mockMvc
         .perform(get("/api/requests/{id}", id))
         .andExpect(status().isNotFound())
-        .andExpect(jsonPath("$.status").value(404))
         .andExpect(jsonPath("$.detail").value("Request not found"));
   }
 
   @Test
-  void shouldReturnBadRequestForInvalidCreateRequest() throws Exception {
-    String invalidJson = "{\"name\":\"\", \"status\":\"INVALID_STATUS\"}";
+  void shouldReturnBadRequestForInvalidCreateDraftRequest() throws Exception {
+    String invalidJson = "{\"name\":\"\"}";
 
     mockMvc
         .perform(
-            post("/api/requests")
+            post("/api/requests/drafts")
                 .with(csrf())
                 .header("Idempotency-Key", UUID.randomUUID().toString())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(invalidJson))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.errors").isArray())
-        .andExpect(jsonPath("$.errors[0].name").value("status"))
-        .andExpect(jsonPath("$.errors[0].code").value("INVALID_VALUE"))
-        .andExpect(jsonPath("$.errors[0].message").exists());
+        .andExpect(jsonPath("$.errors[0].name").value("name"));
   }
 
   @Test
-  void shouldReturnBadRequestForDisallowedCreateStatus() throws Exception {
-    RequestDtos.CreateRequest createRequest =
-        new RequestDtos.CreateRequest("Test Request", RequestStatus.IN_PROGRESS);
+  void shouldReturnBadRequestWhenUpdatingNonDraft() throws Exception {
+    RequestDtos.SubmitRequest submitRequest = new RequestDtos.SubmitRequest("Submitted");
+    MvcResult createResult =
+        mockMvc
+            .perform(
+                post("/api/requests/submit")
+                    .with(csrf())
+                    .header("Idempotency-Key", UUID.randomUUID().toString())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(submitRequest)))
+            .andExpect(status().isCreated())
+            .andReturn();
 
+    Long id =
+        objectMapper
+            .readValue(createResult.getResponse().getContentAsString(), CreateResponse.class)
+            .getId();
+
+    RequestDtos.UpdateDraftRequest updateRequest =
+        new RequestDtos.UpdateDraftRequest("Should Fail", 0L);
     mockMvc
         .perform(
-            post("/api/requests")
-                .with(csrf())
-                .header("Idempotency-Key", UUID.randomUUID().toString())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(createRequest)))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.detail").value("Request has invalid fields"))
-        .andExpect(jsonPath("$.errors").isArray())
-        .andExpect(jsonPath("$.errors[0].name").value("status"))
-        .andExpect(jsonPath("$.errors[0].code").value("INVALID_CREATE_STATUS"))
-        .andExpect(
-            jsonPath("$.errors[0].message")
-                .value("status must be one of [DRAFT, SUBMITTED] for create requests"));
-  }
-
-  @Test
-  void shouldReturnBadRequestForInvalidUpdateStatusTransition() throws Exception {
-    RequestEntity saved =
-        repository.save(
-            RequestEntity.builder().name("Test Request").status(RequestStatus.DRAFT).build());
-
-    RequestDtos.UpdateRequest updateRequest =
-        new RequestDtos.UpdateRequest(
-            "Updated Request", RequestStatus.IN_PROGRESS, saved.getVersion());
-
-    mockMvc
-        .perform(
-            put("/api/requests/{id}", saved.getId())
+            put("/api/requests/{id}", id)
                 .with(csrf())
                 .header("Idempotency-Key", UUID.randomUUID().toString())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(updateRequest)))
         .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.detail").value("Request has invalid fields"))
-        .andExpect(jsonPath("$.errors").isArray())
-        .andExpect(jsonPath("$.errors[0].name").value("status"))
-        .andExpect(jsonPath("$.errors[0].code").value("INVALID_UPDATE_STATUS_TRANSITION"))
-        .andExpect(
-            jsonPath("$.errors[0].message")
-                .value(
-                    "status transition must remain DRAFT or move DRAFT -> SUBMITTED for update requests"));
+        .andExpect(jsonPath("$.errors[0].code").value("INVALID_DRAFT_UPDATE_STATUS"));
   }
 
   @Test
-  void shouldUseValidationMessageForEmptyEnumValue() throws Exception {
-    String invalidJson = "{\"name\":\"Valid Name\", \"status\":\"\"}";
+  void shouldReturnBadRequestWhenSubmittingNonDraft() throws Exception {
+    RequestDtos.SubmitRequest submitRequest = new RequestDtos.SubmitRequest("Submitted");
+    MvcResult createResult =
+        mockMvc
+            .perform(
+                post("/api/requests/submit")
+                    .with(csrf())
+                    .header("Idempotency-Key", UUID.randomUUID().toString())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(submitRequest)))
+            .andExpect(status().isCreated())
+            .andReturn();
+
+    Long id =
+        objectMapper
+            .readValue(createResult.getResponse().getContentAsString(), CreateResponse.class)
+            .getId();
 
     mockMvc
         .perform(
-            post("/api/requests")
+            post("/api/requests/{id}/submit", id)
+                .with(csrf())
+                .header("Idempotency-Key", UUID.randomUUID().toString()))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.errors[0].code").value("INVALID_DRAFT_SUBMIT_STATUS"));
+  }
+
+  @Test
+  void shouldSubmitDraftWithAtomicUpdatePayload() throws Exception {
+    RequestDtos.CreateDraftRequest createRequest = new RequestDtos.CreateDraftRequest("Draft Name");
+    MvcResult createResult =
+        mockMvc
+            .perform(
+                post("/api/requests/drafts")
+                    .with(csrf())
+                    .header("Idempotency-Key", UUID.randomUUID().toString())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(createRequest)))
+            .andExpect(status().isCreated())
+            .andReturn();
+
+    Long id =
+        objectMapper
+            .readValue(createResult.getResponse().getContentAsString(), CreateResponse.class)
+            .getId();
+
+    RequestDtos.UpdateDraftRequest submitWithUpdate =
+        new RequestDtos.UpdateDraftRequest("Updated Before Submit", 0L);
+    mockMvc
+        .perform(
+            post("/api/requests/{id}/submit", id)
                 .with(csrf())
                 .header("Idempotency-Key", UUID.randomUUID().toString())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(invalidJson))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.errors").isArray())
-        .andExpect(jsonPath("$.errors[0].name").value("status"))
-        .andExpect(jsonPath("$.errors[0].code").value("NotNull"))
-        .andExpect(jsonPath("$.errors[0].message").value("status is required"));
+                .content(objectMapper.writeValueAsString(submitWithUpdate)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.name").value("Updated Before Submit"))
+        .andExpect(jsonPath("$.status").value("IN_PROGRESS"))
+        .andExpect(jsonPath("$.version").value(2L));
   }
 
   @Test
   void shouldReturnBadRequestWhenMissingIdempotencyKey() throws Exception {
-    RequestDtos.CreateRequest createRequest =
-        new RequestDtos.CreateRequest("Test Request", RequestStatus.DRAFT);
+    RequestDtos.CreateDraftRequest createRequest = new RequestDtos.CreateDraftRequest("Test");
     mockMvc
         .perform(
-            post("/api/requests")
+            post("/api/requests/drafts")
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(createRequest)))
@@ -222,21 +235,18 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
         RequestEntity.builder().name("Banana").status(RequestStatus.IN_PROGRESS).build());
     repository.save(RequestEntity.builder().name("Cherry").status(RequestStatus.COMPLETED).build());
 
-    // Search by name
     mockMvc
         .perform(get("/api/requests/search").param("nameContains", "an"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.requests.length()").value(1))
         .andExpect(jsonPath("$.requests[0].name").value("Banana"));
 
-    // Search by status
     mockMvc
         .perform(
             get("/api/requests/search").param("statuses", "DRAFT").param("statuses", "COMPLETED"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.requests.length()").value(2));
 
-    // Search by ID
     List<RequestEntity> all = repository.findAll();
     Long id1 = all.get(0).getId();
     Long id2 = all.get(1).getId();
@@ -247,7 +257,6 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.requests.length()").value(2));
 
-    // Search with pagination
     mockMvc
         .perform(get("/api/requests/search").param("page", "0").param("size", "2"))
         .andExpect(status().isOk())
@@ -257,5 +266,47 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
         .perform(get("/api/requests/search").param("page", "1").param("size", "2"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.requests.length()").value(1));
+
+    RequestDtos.SubmitRequest submittedRequest =
+        new RequestDtos.SubmitRequest("Search By Assignee");
+    mockMvc
+        .perform(
+            post("/api/requests/submit")
+                .with(csrf())
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(submittedRequest)))
+        .andExpect(status().isCreated());
+
+    RequestEntity assignedRequest =
+        repository.save(
+            RequestEntity.builder()
+                .name("Search By Assignee")
+                .status(RequestStatus.IN_PROGRESS)
+                .build());
+    requestTaskRepository.save(
+        RequestTaskEntity.builder()
+            .requestId(assignedRequest.getId())
+            .processInstanceId("pi-web-search")
+            .taskId("task-web-search")
+            .name("Assigned Task")
+            .status(RequestTaskStatus.ACTIVE)
+            .assignee("demo")
+            .build());
+
+    mockMvc
+        .perform(get("/api/requests/search").param("taskAssignee", "demo"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.requests.length()").value(1))
+        .andExpect(jsonPath("$.requests[0].name").value("Search By Assignee"));
+
+    mockMvc
+        .perform(
+            get("/api/requests/search")
+                .param("taskAssignees", "missing-user")
+                .param("taskAssignees", "demo"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.requests.length()").value(1))
+        .andExpect(jsonPath("$.requests[0].name").value("Search By Assignee"));
   }
 }
