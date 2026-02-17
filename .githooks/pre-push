@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# This hook is called with the following parameters:
+# $1 -- Name of the remote to which the push is being done
+# $2 -- URL to which the push is being done
+
+remote="$1"
+url="$2"
+
+z40=0000000000000000000000000000000000000000
+
+while read local_ref local_sha remote_ref remote_sha
+do
+  if [[ "$remote_ref" =~ ^refs/heads/(main|master|develop|development)$ ]]; then
+    echo "ERROR: Direct pushes to '$remote_ref' are not allowed."
+    exit 1
+  fi
+done
+
+exit 0

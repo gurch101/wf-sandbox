@@ -8,9 +8,10 @@ if [[ "$branch_name" == "HEAD" ]]; then
   exit 0
 fi
 
-# Long-lived/shared branches that should not be blocked.
+# Long-lived/shared branches that should not be committed to directly.
 if [[ "$branch_name" =~ ^(main|master|develop|development)$ ]]; then
-  exit 0
+  echo "ERROR: Direct commits to '$branch_name' are not allowed."
+  exit 1
 fi
 
 branch_regex='^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test|wip)/([a-z0-9]+(-[a-z0-9]+)*)(/[a-z0-9]+(-[a-z0-9]+)*)*$'
