@@ -22,9 +22,7 @@ class OpenApiConfigTest {
   void shouldLeaveOperationUnchangedWhenApiErrorEnumIsMissing() throws Exception {
     OpenApiConfig config = new OpenApiConfig();
     RequestController controller = new RequestController(mock(RequestApi.class));
-    Method method =
-        RequestController.class.getMethod(
-            "create", com.gurch.sandbox.requests.RequestDtos.CreateRequest.class);
+    Method method = RequestController.class.getMethod("getById", Long.class);
     HandlerMethod handlerMethod = new HandlerMethod(controller, method);
 
     Operation operation = new Operation();

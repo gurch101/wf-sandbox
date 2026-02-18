@@ -1,6 +1,7 @@
 package com.gurch.sandbox.requests;
 
 import com.gurch.sandbox.dto.CreateResponse;
+import com.gurch.sandbox.requesttypes.RequestTypeErrorCode;
 import com.gurch.sandbox.web.ApiErrorEnum;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +26,7 @@ public class RequestController {
 
   /** Creates a new draft request without workflow start. */
   @PostMapping("/drafts")
+  @ApiErrorEnum({RequestTypeErrorCode.class})
   @ResponseStatus(HttpStatus.CREATED)
   public CreateResponse createDraft(@Valid @RequestBody RequestDtos.CreateRequest request) {
     return new CreateResponse(
@@ -46,13 +48,18 @@ public class RequestController {
 
   /** Submits a draft request and starts workflow. */
   @PostMapping("/{id}/submit")
-  @ApiErrorEnum({RequestDraftErrorCode.class})
+  @ApiErrorEnum({
+    RequestDraftErrorCode.class,
+    RequestSubmissionErrorCode.class,
+    RequestTypeErrorCode.class
+  })
   public RequestResponse submitDraft(@PathVariable Long id) {
     return requestApi.submitDraft(id);
   }
 
   /** Creates and submits a new request. */
   @PostMapping
+  @ApiErrorEnum({RequestSubmissionErrorCode.class, RequestTypeErrorCode.class})
   @ResponseStatus(HttpStatus.CREATED)
   public CreateResponse create(@Valid @RequestBody RequestDtos.CreateRequest request) {
     return new CreateResponse(

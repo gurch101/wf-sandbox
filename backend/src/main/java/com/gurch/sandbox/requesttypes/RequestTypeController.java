@@ -25,6 +25,7 @@ public class RequestTypeController {
 
   /** Creates a new request type with version 1 active. */
   @PostMapping
+  @ApiErrorEnum({RequestTypeErrorCode.class})
   @ResponseStatus(HttpStatus.CREATED)
   public ResolvedRequestTypeVersion create(
       @Valid @RequestBody RequestTypeDtos.CreateTypeRequest req) {
@@ -40,6 +41,7 @@ public class RequestTypeController {
 
   /** Changes an existing request type by appending and activating a new version. */
   @PutMapping("/{typeKey}")
+  @ApiErrorEnum({RequestTypeErrorCode.class})
   public ResolvedRequestTypeVersion change(
       @PathVariable String typeKey, @Valid @RequestBody RequestTypeDtos.ChangeTypeRequest req) {
     return requestTypeApi.changeType(
