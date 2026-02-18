@@ -1,6 +1,7 @@
 package com.gurch.sandbox.requests;
 
 import com.gurch.sandbox.dto.CreateResponse;
+import com.gurch.sandbox.requesttypes.RequestTypeResolutionErrorCode;
 import com.gurch.sandbox.web.ApiErrorEnum;
 import com.gurch.sandbox.web.NotFoundException;
 import jakarta.validation.Valid;

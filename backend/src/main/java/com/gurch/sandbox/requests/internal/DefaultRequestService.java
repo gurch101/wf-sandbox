@@ -156,8 +156,8 @@ public class DefaultRequestService implements RequestApi {
 
     Map<String, Object> variables = new HashMap<>();
     variables.put("action", action.name());
-    if (comment != null) {
-      variables.put("comment", comment);
+    if (comment != null && !comment.isBlank()) {
+      taskService.createComment(requestTask.getTaskId(), request.getProcessInstanceId(), comment);
     }
     taskService.complete(requestTask.getTaskId(), variables);
   }
@@ -170,7 +170,6 @@ public class DefaultRequestService implements RequestApi {
                     + "r.request_type_version AS requestTypeVersion, "
                     + "r.status, r.created_at AS createdAt, r.updated_at AS updatedAt, r.version")
             .from("requests", "r")
-            .where("upper(r.request_type_key)", Operator.LIKE, criteria.getNamePattern())
             .where("r.status", Operator.IN, criteria.getStatuses())
             .where("r.id", Operator.IN, criteria.getIds())
             .where("r.request_type_key", Operator.IN, criteria.getNormalizedRequestTypeKeys())

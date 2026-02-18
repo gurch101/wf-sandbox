@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -46,148 +45,6 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
   void setUp() {
     requestRepository.deleteAll();
     requestTypeRepository.deleteAll();
-  }
-
-  @Test
-  void shouldAutoResolveLatestActiveVersionAndPinExistingRequests() throws Exception {
-    createType("loan", "Loan", "amount-positive", "requestTypeV1Process");
-
-    Long firstRequestId = createRequest("loan", Map.of("amount", 100));
-    RequestEntity first = requestRepository.findById(firstRequestId).orElseThrow();
-    assertThat(first.getRequestTypeVersion()).isEqualTo(1);
-
-    updateType("loan", "Loan V2", "amount-positive", "requestTypeV2Process");
-
-    Long secondRequestId = createRequest("loan", Map.of("amount", 250));
-    RequestEntity second = requestRepository.findById(secondRequestId).orElseThrow();
-    assertThat(second.getRequestTypeVersion()).isEqualTo(2);
-
-    RequestEntity firstAfterUpdate = requestRepository.findById(firstRequestId).orElseThrow();
-    assertThat(firstAfterUpdate.getRequestTypeVersion()).isEqualTo(1);
-  }
-
-  @Test
-  void shouldKeepDraftUnvalidatedUntilSubmit() throws Exception {
-    createType("loan", "Loan", "amount-positive", "requestTypeV1Process");
-
-    MvcResult createResult =
-        mockMvc
-            .perform(
-                post("/api/requests/drafts")
-                    .with(csrf())
-                    .header("Idempotency-Key", UUID.randomUUID().toString())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(
-                        objectMapper.writeValueAsString(
-                            new RequestDtos.CreateRequest(
-                                "loan", objectMapper.readTree("{\"amount\":0}")))))
-            .andExpect(status().isCreated())
-            .andReturn();
-
-    Long id =
-        objectMapper
-            .readValue(createResult.getResponse().getContentAsString(), CreateResponse.class)
-            .getId();
-    RequestEntity draft = requestRepository.findById(id).orElseThrow();
-    assertThat(draft.getStatus()).isEqualTo(RequestStatus.DRAFT);
-    assertThat(draft.getRequestTypeVersion()).isEqualTo(1);
-    assertThat(draft.getProcessInstanceId()).isNull();
-
-    mockMvc
-        .perform(
-            post("/api/requests/{id}/submit", id)
-                .with(csrf())
-                .header("Idempotency-Key", UUID.randomUUID().toString()))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.errors[0].code").value("INVALID_REQUEST_PAYLOAD"));
-
-    RequestEntity stillDraft = requestRepository.findById(id).orElseThrow();
-    assertThat(stillDraft.getStatus()).isEqualTo(RequestStatus.DRAFT);
-    assertThat(stillDraft.getRequestTypeVersion()).isEqualTo(1);
-    assertThat(stillDraft.getProcessInstanceId()).isNull();
-  }
-
-  @Test
-  void shouldSubmitDraftWithVersionCapturedAtDraftCreationTime() throws Exception {
-    createType("loan", "Loan", "amount-positive", "requestTypeV1Process");
-
-    MvcResult createDraftResult =
-        mockMvc
-            .perform(
-                post("/api/requests/drafts")
-                    .with(csrf())
-                    .header("Idempotency-Key", UUID.randomUUID().toString())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(
-                        objectMapper.writeValueAsString(
-                            new RequestDtos.CreateRequest(
-                                "loan", objectMapper.readTree("{\"amount\":50}")))))
-            .andExpect(status().isCreated())
-            .andReturn();
-
-    Long draftId =
-        objectMapper
-            .readValue(createDraftResult.getResponse().getContentAsString(), CreateResponse.class)
-            .getId();
-    assertThat(requestRepository.findById(draftId).orElseThrow().getRequestTypeVersion())
-        .isEqualTo(1);
-
-    updateType("loan", "Loan V2", "amount-positive", "requestTypeV2Process");
-
-    mockMvc
-        .perform(
-            post("/api/requests/{id}/submit", draftId)
-                .with(csrf())
-                .header("Idempotency-Key", UUID.randomUUID().toString()))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.requestTypeVersion").value(1));
-
-    assertThat(requestRepository.findById(draftId).orElseThrow().getRequestTypeVersion())
-        .isEqualTo(1);
-  }
-
-  @Test
-  void shouldUpdateAndSubmitDraft() throws Exception {
-    createType("loan", "Loan", "amount-positive", "requestTypeV1Process");
-
-    MvcResult createResult =
-        mockMvc
-            .perform(
-                post("/api/requests/drafts")
-                    .with(csrf())
-                    .header("Idempotency-Key", UUID.randomUUID().toString())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(
-                        objectMapper.writeValueAsString(
-                            new RequestDtos.CreateRequest(
-                                "loan", objectMapper.readTree("{\"amount\":0}")))))
-            .andExpect(status().isCreated())
-            .andReturn();
-    Long id =
-        objectMapper
-            .readValue(createResult.getResponse().getContentAsString(), CreateResponse.class)
-            .getId();
-
-    mockMvc
-        .perform(
-            put("/api/requests/{id}", id)
-                .with(csrf())
-                .header("Idempotency-Key", UUID.randomUUID().toString())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(
-                    objectMapper.writeValueAsString(
-                        new RequestDtos.UpdateDraftRequest(
-                            objectMapper.readTree("{\"amount\":25}"), 0L))))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.id").value(id));
-
-    mockMvc
-        .perform(
-            post("/api/requests/{id}/submit", id)
-                .with(csrf())
-                .header("Idempotency-Key", UUID.randomUUID().toString()))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.status").value("IN_PROGRESS"));
   }
 
   @Test
@@ -449,23 +306,6 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
                         new RequestTypeDtos.CreateTypeRequest(
                             typeKey, name, "desc", payloadHandlerId, processDefinitionKey))))
         .andExpect(status().isCreated());
-  }
-
-  private void updateType(
-      String typeKey, String name, String payloadHandlerId, String processDefinitionKey)
-      throws Exception {
-    mockMvc
-        .perform(
-            put("/api/internal/request-types/{typeKey}", typeKey)
-                .with(csrf())
-                .header("Idempotency-Key", UUID.randomUUID().toString())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(
-                    objectMapper.writeValueAsString(
-                        new RequestTypeDtos.ChangeTypeRequest(
-                            name, "desc", payloadHandlerId, processDefinitionKey))))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.version").value(2));
   }
 
   private Long createRequest(String typeKey, Map<String, Object> payload) throws Exception {

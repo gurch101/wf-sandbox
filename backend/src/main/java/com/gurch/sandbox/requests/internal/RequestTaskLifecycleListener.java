@@ -1,9 +1,11 @@
 package com.gurch.sandbox.requests.internal;
 
+import java.util.Comparator;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.finos.fluxnova.bpm.engine.delegate.DelegateTask;
 import org.finos.fluxnova.bpm.engine.delegate.TaskListener;
+import org.finos.fluxnova.bpm.engine.task.Comment;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -53,13 +55,19 @@ public class RequestTaskLifecycleListener implements TaskListener {
     }
 
     Object action = task.getVariable("action");
-    Object comment = task.getVariable("comment");
+    String comment =
+        task.getProcessEngineServices().getTaskService().getTaskComments(task.getId()).stream()
+            .max(
+                Comparator.comparing(
+                    Comment::getTime, Comparator.nullsLast(Comparator.naturalOrder())))
+            .map(Comment::getFullMessage)
+            .orElse(null);
     requestTaskRepository.save(
         existing.get().toBuilder()
             .status(RequestTaskStatus.COMPLETED)
             .assignee(task.getAssignee())
             .action(action == null ? null : action.toString())
-            .comment(comment == null ? null : comment.toString())
+            .comment(comment)
             .build());
   }
 }

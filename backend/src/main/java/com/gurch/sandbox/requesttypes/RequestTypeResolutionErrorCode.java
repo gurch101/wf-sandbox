@@ -1,9 +1,9 @@
-package com.gurch.sandbox.requests;
+package com.gurch.sandbox.requesttypes;
 
 import com.gurch.sandbox.web.ApiErrorCode;
 import org.springframework.http.HttpStatus;
 
-/** Request-type lookup errors exposed by request create/submit APIs. */
+/** Request-type lookup errors used by request create/submit flows. */
 public enum RequestTypeResolutionErrorCode implements ApiErrorCode {
   REQUEST_TYPE_NOT_FOUND("typeKey", "request type not found", HttpStatus.BAD_REQUEST);
 

@@ -7,12 +7,14 @@ import com.gurch.sandbox.requesttypes.PayloadHandlerCatalog;
 import com.gurch.sandbox.requesttypes.RequestTypeApi;
 import com.gurch.sandbox.requesttypes.RequestTypeCommand;
 import com.gurch.sandbox.requesttypes.RequestTypeErrorCode;
+import com.gurch.sandbox.requesttypes.RequestTypeResolutionErrorCode;
 import com.gurch.sandbox.requesttypes.RequestTypeSearchCriteria;
 import com.gurch.sandbox.requesttypes.RequestTypeSearchResponse;
 import com.gurch.sandbox.requesttypes.ResolvedRequestTypeVersion;
 import com.gurch.sandbox.web.ValidationErrorException;
 import com.gurch.sandbox.workflows.WorkflowApi;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.DataClassRowMapper;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -36,18 +38,22 @@ public class DefaultRequestTypeService implements RequestTypeApi {
         requestTypeRepository
             .findByTypeKey(typeKey)
             .orElseThrow(
-                () -> ValidationErrorException.of(RequestTypeErrorCode.REQUEST_TYPE_NOT_FOUND));
+                () ->
+                    ValidationErrorException.of(
+                        RequestTypeResolutionErrorCode.REQUEST_TYPE_NOT_FOUND));
 
     Long activeVersionId = type.getActiveVersionId();
     if (activeVersionId == null) {
-      throw ValidationErrorException.of(RequestTypeErrorCode.REQUEST_TYPE_NOT_FOUND);
+      throw ValidationErrorException.of(RequestTypeResolutionErrorCode.REQUEST_TYPE_NOT_FOUND);
     }
 
     RequestTypeVersionEntity active =
         versionRepository
             .findById(activeVersionId)
             .orElseThrow(
-                () -> ValidationErrorException.of(RequestTypeErrorCode.REQUEST_TYPE_NOT_FOUND));
+                () ->
+                    ValidationErrorException.of(
+                        RequestTypeResolutionErrorCode.REQUEST_TYPE_NOT_FOUND));
 
     return toResolved(type.getTypeKey(), active);
   }
@@ -59,13 +65,17 @@ public class DefaultRequestTypeService implements RequestTypeApi {
         requestTypeRepository
             .findByTypeKey(typeKey)
             .orElseThrow(
-                () -> ValidationErrorException.of(RequestTypeErrorCode.REQUEST_TYPE_NOT_FOUND));
+                () ->
+                    ValidationErrorException.of(
+                        RequestTypeResolutionErrorCode.REQUEST_TYPE_NOT_FOUND));
 
     RequestTypeVersionEntity resolvedVersion =
         versionRepository
             .findByRequestTypeIdAndVersion(type.getId(), version)
             .orElseThrow(
-                () -> ValidationErrorException.of(RequestTypeErrorCode.REQUEST_TYPE_NOT_FOUND));
+                () ->
+                    ValidationErrorException.of(
+                        RequestTypeResolutionErrorCode.REQUEST_TYPE_NOT_FOUND));
 
     return toResolved(type.getTypeKey(), resolvedVersion);
   }
@@ -172,7 +182,7 @@ public class DefaultRequestTypeService implements RequestTypeApi {
     Integer usageCount =
         jdbcTemplate.queryForObject(
             "SELECT COUNT(1) FROM requests WHERE request_type_key = :typeKey",
-            java.util.Map.of("typeKey", typeKey),
+            Map.of("typeKey", typeKey),
             Integer.class);
     if (usageCount != null && usageCount > 0) {
       throw ValidationErrorException.of(RequestTypeErrorCode.REQUEST_TYPE_IN_USE);

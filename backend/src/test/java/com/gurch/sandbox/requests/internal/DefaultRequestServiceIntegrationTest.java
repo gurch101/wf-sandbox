@@ -1,17 +1,21 @@
 package com.gurch.sandbox.requests.internal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gurch.sandbox.AbstractJdbcIntegrationTest;
 import com.gurch.sandbox.requests.CreateRequestCommand;
 import com.gurch.sandbox.requests.RequestApi;
+import com.gurch.sandbox.requests.RequestResponse;
 import com.gurch.sandbox.requests.RequestSearchCriteria;
 import com.gurch.sandbox.requests.RequestSearchResponse;
 import com.gurch.sandbox.requests.RequestStatus;
+import com.gurch.sandbox.requests.RequestSubmissionErrorCode;
 import com.gurch.sandbox.requests.TaskAction;
 import com.gurch.sandbox.requesttypes.RequestTypeApi;
 import com.gurch.sandbox.requesttypes.RequestTypeCommand;
+import com.gurch.sandbox.web.ValidationErrorException;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -73,6 +77,112 @@ class DefaultRequestServiceIntegrationTest extends AbstractJdbcIntegrationTest {
 
     assertThat(results).hasSize(1);
     assertThat(results.getFirst().requestTypeKey()).isEqualTo("loan");
+  }
+
+  @Test
+  void shouldAutoResolveLatestActiveVersionAndPinExistingRequests() {
+    RequestResponse first =
+        requestApi.createAndSubmit(
+            CreateRequestCommand.builder()
+                .requestTypeKey("loan")
+                .payload(objectMapper.valueToTree(Map.of("amount", 100)))
+                .build());
+
+    requestTypeApi.changeType(
+        "loan",
+        RequestTypeCommand.builder()
+            .typeKey("loan")
+            .name("Loan V2")
+            .description("desc")
+            .payloadHandlerId("amount-positive")
+            .processDefinitionKey("requestTypeV2Process")
+            .build());
+
+    RequestResponse second =
+        requestApi.createAndSubmit(
+            CreateRequestCommand.builder()
+                .requestTypeKey("loan")
+                .payload(objectMapper.valueToTree(Map.of("amount", 250)))
+                .build());
+
+    assertThat(requestRepository.findById(first.getId()).orElseThrow().getRequestTypeVersion())
+        .isEqualTo(1);
+    assertThat(requestRepository.findById(second.getId()).orElseThrow().getRequestTypeVersion())
+        .isEqualTo(2);
+  }
+
+  @Test
+  void shouldKeepDraftUnvalidatedUntilSubmit() {
+    Long draftId =
+        requestApi.createDraft(
+            CreateRequestCommand.builder()
+                .requestTypeKey("loan")
+                .payload(objectMapper.valueToTree(Map.of("amount", 0)))
+                .build());
+
+    RequestEntity draft = requestRepository.findById(draftId).orElseThrow();
+    assertThat(draft.getStatus()).isEqualTo(RequestStatus.DRAFT);
+    assertThat(draft.getRequestTypeVersion()).isEqualTo(1);
+    assertThat(draft.getProcessInstanceId()).isNull();
+
+    assertThatThrownBy(() -> requestApi.submitDraft(draftId))
+        .isInstanceOf(ValidationErrorException.class)
+        .satisfies(
+            throwable -> {
+              ValidationErrorException exception = (ValidationErrorException) throwable;
+              assertThat(exception.getErrors()).hasSize(1);
+              assertThat(exception.getErrors().getFirst().code())
+                  .isEqualTo(RequestSubmissionErrorCode.INVALID_REQUEST_PAYLOAD.code());
+            });
+
+    RequestEntity stillDraft = requestRepository.findById(draftId).orElseThrow();
+    assertThat(stillDraft.getStatus()).isEqualTo(RequestStatus.DRAFT);
+    assertThat(stillDraft.getRequestTypeVersion()).isEqualTo(1);
+    assertThat(stillDraft.getProcessInstanceId()).isNull();
+  }
+
+  @Test
+  void shouldSubmitDraftWithVersionCapturedAtDraftCreationTime() {
+    Long draftId =
+        requestApi.createDraft(
+            CreateRequestCommand.builder()
+                .requestTypeKey("loan")
+                .payload(objectMapper.valueToTree(Map.of("amount", 50)))
+                .build());
+    assertThat(requestRepository.findById(draftId).orElseThrow().getRequestTypeVersion())
+        .isEqualTo(1);
+
+    requestTypeApi.changeType(
+        "loan",
+        RequestTypeCommand.builder()
+            .typeKey("loan")
+            .name("Loan V2")
+            .description("desc")
+            .payloadHandlerId("amount-positive")
+            .processDefinitionKey("requestTypeV2Process")
+            .build());
+
+    RequestResponse submitted = requestApi.submitDraft(draftId);
+    assertThat(submitted.getRequestTypeVersion()).isEqualTo(1);
+    assertThat(requestRepository.findById(draftId).orElseThrow().getRequestTypeVersion())
+        .isEqualTo(1);
+  }
+
+  @Test
+  void shouldUpdateAndSubmitDraft() {
+    Long draftId =
+        requestApi.createDraft(
+            CreateRequestCommand.builder()
+                .requestTypeKey("loan")
+                .payload(objectMapper.valueToTree(Map.of("amount", 0)))
+                .build());
+
+    requestApi.updateDraft(draftId, objectMapper.valueToTree(Map.of("amount", 25)), 0L);
+    RequestResponse submitted = requestApi.submitDraft(draftId);
+
+    assertThat(submitted.getStatus()).isEqualTo(RequestStatus.IN_PROGRESS);
+    assertThat(requestRepository.findById(draftId).orElseThrow().getStatus())
+        .isEqualTo(RequestStatus.IN_PROGRESS);
   }
 
   @Test
