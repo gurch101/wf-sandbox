@@ -1,5 +1,6 @@
 package com.gurch.sandbox.requests.internal;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.gurch.sandbox.requests.RequestStatus;
 import java.time.Instant;
 import lombok.Builder;
@@ -15,7 +16,9 @@ import org.springframework.data.relational.core.mapping.Table;
 @Table("requests")
 public class RequestEntity {
   @Id private Long id;
-  private String name;
+  private String requestTypeKey;
+  private Integer requestTypeVersion;
+  private JsonNode payloadJson;
   private RequestStatus status;
   private String processInstanceId;
   @CreatedDate private Instant createdAt;

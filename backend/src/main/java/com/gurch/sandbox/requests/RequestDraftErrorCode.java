@@ -3,7 +3,7 @@ package com.gurch.sandbox.requests;
 import com.gurch.sandbox.web.ApiErrorCode;
 import org.springframework.http.HttpStatus;
 
-/** Validation errors for draft-only operations. */
+/** Validation errors for draft-only request operations. */
 public enum RequestDraftErrorCode implements ApiErrorCode {
   INVALID_DRAFT_UPDATE_STATUS(
       "status", "only DRAFT requests can be updated", HttpStatus.BAD_REQUEST),

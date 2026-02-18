@@ -20,7 +20,6 @@ public class RequestTaskEntity {
   private RequestTaskStatus status;
   private String assignee;
   private String action;
-  private String comment;
   @CreatedDate private Instant createdAt;
   @LastModifiedDate private Instant updatedAt;
 }

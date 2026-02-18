@@ -53,13 +53,11 @@ public class RequestTaskLifecycleListener implements TaskListener {
     }
 
     Object action = task.getVariable("action");
-    Object comment = task.getVariable("comment");
     requestTaskRepository.save(
         existing.get().toBuilder()
             .status(RequestTaskStatus.COMPLETED)
             .assignee(task.getAssignee())
             .action(action == null ? null : action.toString())
-            .comment(comment == null ? null : comment.toString())
             .build());
   }
 }

@@ -1,14 +1,23 @@
 package com.gurch.sandbox.requests.internal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gurch.sandbox.AbstractJdbcIntegrationTest;
+import com.gurch.sandbox.requests.CreateRequestCommand;
 import com.gurch.sandbox.requests.RequestApi;
 import com.gurch.sandbox.requests.RequestResponse;
 import com.gurch.sandbox.requests.RequestSearchCriteria;
+import com.gurch.sandbox.requests.RequestSearchResponse;
 import com.gurch.sandbox.requests.RequestStatus;
 import com.gurch.sandbox.requests.TaskAction;
+import com.gurch.sandbox.requesttypes.RequestTypeApi;
+import com.gurch.sandbox.requesttypes.RequestTypeCommand;
+import com.gurch.sandbox.requesttypes.internal.RequestTypeRepository;
+import com.gurch.sandbox.web.ValidationErrorException;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,71 +27,186 @@ class DefaultRequestServiceIntegrationTest extends AbstractJdbcIntegrationTest {
   @Autowired private RequestApi requestApi;
   @Autowired private RequestRepository requestRepository;
   @Autowired private RequestTaskRepository requestTaskRepository;
+  @Autowired private RequestTypeApi requestTypeApi;
+  @Autowired private RequestTypeRepository requestTypeRepository;
+  @Autowired private ObjectMapper objectMapper;
 
   @BeforeEach
   void setUp() {
     requestRepository.deleteAll();
+    requestTypeRepository.deleteAll();
+
+    requestTypeApi.createType(
+        RequestTypeCommand.builder()
+            .typeKey("loan")
+            .name("Loan")
+            .description("desc")
+            .payloadHandlerId("amount-positive")
+            .processDefinitionKey("requestTypeV1Process")
+            .build());
   }
 
   @Test
-  void shouldCreateProjectionTaskWhenSubmittedRequestStartsWorkflow() {
-    RequestResponse created = requestApi.createAndSubmit("Service Layer Request");
-
-    assertThat(created.getStatus()).isEqualTo(RequestStatus.IN_PROGRESS);
-    RequestEntity saved = requestRepository.findById(created.getId()).orElseThrow();
-    assertThat(saved.getProcessInstanceId()).isNotBlank();
-
-    RequestTaskEntity taskProjection =
-        requestTaskRepository.findByRequestId(created.getId()).getFirst();
-    assertThat(taskProjection.getTaskId()).isNotBlank();
-    assertThat(taskProjection.getName()).isEqualTo("Approve Request");
-    assertThat(taskProjection.getStatus()).isEqualTo(RequestTaskStatus.ACTIVE);
-    assertThat(taskProjection.getAssignee()).isNull();
-  }
-
-  @Test
-  void shouldCompleteWorkflowAndProjectionTaskViaService() {
-    RequestResponse created = requestApi.createAndSubmit("Service Completion");
-    RequestTaskEntity taskProjection =
-        requestTaskRepository.findByRequestId(created.getId()).getFirst();
-
-    requestApi.completeTask(
-        created.getId(), taskProjection.getId(), TaskAction.APPROVED, "approved");
-
-    RequestEntity completed = requestRepository.findById(created.getId()).orElseThrow();
-    assertThat(completed.getStatus()).isEqualTo(RequestStatus.COMPLETED);
-
-    RequestTaskEntity completedTask =
-        requestTaskRepository.findById(taskProjection.getId()).orElseThrow();
-    assertThat(completedTask.getStatus()).isEqualTo(RequestTaskStatus.COMPLETED);
-    assertThat(completedTask.getAction()).isEqualTo(TaskAction.APPROVED.name());
-    assertThat(completedTask.getComment()).isEqualTo("approved");
-  }
-
-  @Test
-  void shouldSearchByTaskAssigneeFromProjectionTable() {
-    RequestEntity owner =
-        requestRepository.save(
-            RequestEntity.builder()
-                .name("Searchable Task Owner")
-                .status(RequestStatus.DRAFT)
+  void shouldCreateSubmittedRequestWithResolvedTypeVersion() {
+    var created =
+        requestApi.createAndSubmit(
+            CreateRequestCommand.builder()
+                .requestTypeKey("loan")
+                .payload(objectMapper.valueToTree(Map.of("amount", 10)))
                 .build());
-    requestRepository.save(
-        RequestEntity.builder().name("No Task Yet").status(RequestStatus.DRAFT).build());
-    requestTaskRepository.save(
-        RequestTaskEntity.builder()
-            .requestId(owner.getId())
-            .processInstanceId("pi-search")
-            .taskId("task-search")
-            .name("Manual Task")
-            .status(RequestTaskStatus.ACTIVE)
-            .assignee("demo")
+
+    assertThat(created.getRequestTypeKey()).isEqualTo("loan");
+    assertThat(created.getRequestTypeVersion()).isEqualTo(1);
+
+    RequestEntity saved = requestRepository.findById(created.getId()).orElseThrow();
+    assertThat(saved.getStatus()).isEqualTo(RequestStatus.IN_PROGRESS);
+    assertThat(saved.getProcessInstanceId()).isNotBlank();
+  }
+
+  @Test
+  void shouldSearchByRequestTypeKeys() {
+    requestApi.createAndSubmit(
+        CreateRequestCommand.builder()
+            .requestTypeKey("loan")
+            .payload(objectMapper.valueToTree(Map.of("amount", 15)))
             .build());
 
-    RequestSearchCriteria criteria =
-        RequestSearchCriteria.builder().taskAssignees(List.of("missing-user", "demo")).build();
-    assertThat(requestApi.search(criteria))
-        .extracting(RequestResponse::getName)
-        .containsExactly("Searchable Task Owner");
+    List<RequestSearchResponse> results =
+        requestApi.search(RequestSearchCriteria.builder().requestTypeKeys(List.of("loan")).build());
+
+    assertThat(results).hasSize(1);
+    assertThat(results.getFirst().requestTypeKey()).isEqualTo("loan");
+  }
+
+  @Test
+  void shouldAutoResolveLatestActiveVersionAndPinExistingRequests() {
+    RequestResponse first =
+        requestApi.createAndSubmit(
+            CreateRequestCommand.builder()
+                .requestTypeKey("loan")
+                .payload(objectMapper.valueToTree(Map.of("amount", 100)))
+                .build());
+
+    requestTypeApi.changeType(
+        "loan",
+        RequestTypeCommand.builder()
+            .typeKey("loan")
+            .name("Loan V2")
+            .description("desc")
+            .payloadHandlerId("amount-positive")
+            .processDefinitionKey("requestTypeV2Process")
+            .build());
+
+    RequestResponse second =
+        requestApi.createAndSubmit(
+            CreateRequestCommand.builder()
+                .requestTypeKey("loan")
+                .payload(objectMapper.valueToTree(Map.of("amount", 250)))
+                .build());
+
+    assertThat(requestRepository.findById(first.getId()).orElseThrow().getRequestTypeVersion())
+        .isEqualTo(1);
+    assertThat(requestRepository.findById(second.getId()).orElseThrow().getRequestTypeVersion())
+        .isEqualTo(2);
+  }
+
+  @Test
+  void shouldKeepDraftUnvalidatedUntilSubmit() {
+    Long draftId =
+        requestApi.createDraft(
+            CreateRequestCommand.builder()
+                .requestTypeKey("loan")
+                .payload(objectMapper.valueToTree(Map.of("amount", 0)))
+                .build());
+
+    RequestEntity draft = requestRepository.findById(draftId).orElseThrow();
+    assertThat(draft.getStatus()).isEqualTo(RequestStatus.DRAFT);
+    assertThat(draft.getRequestTypeVersion()).isEqualTo(1);
+    assertThat(draft.getProcessInstanceId()).isNull();
+
+    assertThatThrownBy(() -> requestApi.submitDraft(draftId))
+        .isInstanceOf(ValidationErrorException.class)
+        .satisfies(
+            throwable -> {
+              ValidationErrorException exception = (ValidationErrorException) throwable;
+              assertThat(exception.getErrors()).hasSize(1);
+              assertThat(exception.getErrors().getFirst().name()).isEqualTo("amount");
+              assertThat(exception.getErrors().getFirst().code()).isEqualTo("Positive");
+            });
+
+    RequestEntity stillDraft = requestRepository.findById(draftId).orElseThrow();
+    assertThat(stillDraft.getStatus()).isEqualTo(RequestStatus.DRAFT);
+    assertThat(stillDraft.getRequestTypeVersion()).isEqualTo(1);
+    assertThat(stillDraft.getProcessInstanceId()).isNull();
+  }
+
+  @Test
+  void shouldSubmitDraftWithVersionCapturedAtDraftCreationTime() {
+    Long draftId =
+        requestApi.createDraft(
+            CreateRequestCommand.builder()
+                .requestTypeKey("loan")
+                .payload(objectMapper.valueToTree(Map.of("amount", 50)))
+                .build());
+    assertThat(requestRepository.findById(draftId).orElseThrow().getRequestTypeVersion())
+        .isEqualTo(1);
+
+    requestTypeApi.changeType(
+        "loan",
+        RequestTypeCommand.builder()
+            .typeKey("loan")
+            .name("Loan V2")
+            .description("desc")
+            .payloadHandlerId("amount-positive")
+            .processDefinitionKey("requestTypeV2Process")
+            .build());
+
+    RequestResponse submitted = requestApi.submitDraft(draftId);
+    assertThat(submitted.getRequestTypeVersion()).isEqualTo(1);
+    assertThat(requestRepository.findById(draftId).orElseThrow().getRequestTypeVersion())
+        .isEqualTo(1);
+  }
+
+  @Test
+  void shouldUpdateAndSubmitDraft() {
+    Long draftId =
+        requestApi.createDraft(
+            CreateRequestCommand.builder()
+                .requestTypeKey("loan")
+                .payload(objectMapper.valueToTree(Map.of("amount", 0)))
+                .build());
+
+    requestApi.updateDraft(draftId, objectMapper.valueToTree(Map.of("amount", 25)), 0L);
+    RequestResponse submitted = requestApi.submitDraft(draftId);
+
+    assertThat(submitted.getStatus()).isEqualTo(RequestStatus.IN_PROGRESS);
+    assertThat(requestRepository.findById(draftId).orElseThrow().getStatus())
+        .isEqualTo(RequestStatus.IN_PROGRESS);
+  }
+
+  @Test
+  void shouldCompleteUserTask() {
+    requestTypeApi.createType(
+        RequestTypeCommand.builder()
+            .typeKey("manual")
+            .name("Manual")
+            .description("desc")
+            .payloadHandlerId("noop")
+            .processDefinitionKey("simpleUserTaskProcess")
+            .build());
+
+    var created =
+        requestApi.createAndSubmit(
+            CreateRequestCommand.builder()
+                .requestTypeKey("manual")
+                .payload(objectMapper.valueToTree(Map.of("value", "x")))
+                .build());
+
+    RequestTaskEntity task = requestTaskRepository.findByRequestId(created.getId()).getFirst();
+    requestApi.completeTask(created.getId(), task.getId(), TaskAction.APPROVED, "approved");
+
+    RequestTaskEntity completedTask = requestTaskRepository.findById(task.getId()).orElseThrow();
+    assertThat(completedTask.getStatus()).isEqualTo(RequestTaskStatus.COMPLETED);
+    assertThat(completedTask.getAction()).isEqualTo(TaskAction.APPROVED.name());
   }
 }

@@ -1,86 +1,76 @@
 package com.gurch.sandbox.requests;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * Public API for managing request records. Provides operations for CRUD and searching request data.
- */
+/** Public API for request submission, lookup, and search operations. */
 public interface RequestApi {
-  /**
-   * Retrieves all requests in the system.
-   *
-   * @return a list of all request responses
-   */
-  List<RequestResponse> findAll();
 
   /**
-   * Finds a specific request by its unique identifier.
+   * Fetches a request by identifier.
    *
-   * @param id the unique identifier of the request
-   * @return an optional containing the request response if found, or empty if not
+   * @param id request id
+   * @return request when present
    */
   Optional<RequestResponse> findById(Long id);
 
   /**
-   * Creates a new draft request.
+   * Creates a draft request without validation/workflow processing.
    *
-   * @param name the name of the request
-   * @return the created request response
+   * @param command draft command
+   * @return created draft request id
    */
-  RequestResponse createDraft(String name);
+  Long createDraft(CreateRequestCommand command);
 
   /**
-   * Creates and submits a request, starting workflow immediately.
+   * Updates an existing draft request.
    *
-   * @param name the name of the request
-   * @return the submitted request response
+   * @param id request id
+   * @param payload updated draft payload
+   * @param version optimistic lock version
+   * @return updated draft id
    */
-  RequestResponse createAndSubmit(String name);
+  Long updateDraft(Long id, JsonNode payload, Long version);
 
   /**
-   * Updates an existing draft request. Implements optimistic locking via the version field.
+   * Submits an existing draft request; validation/workflow happen here.
    *
-   * @param id the unique identifier of the request to update
-   * @param name the new name for the request
-   * @param version the current version of the record for optimistic locking
-   * @return the updated request response
+   * @param id request id
+   * @return submitted request
    */
-  RequestResponse updateDraft(Long id, String name, Long version);
+  RequestResponse submitDraft(Long id);
 
   /**
-   * Submits an existing draft request and starts workflow.
+   * Creates and submits a request using latest active request type version.
    *
-   * @param id the unique identifier of the request to submit
-   * @param name optional updated name to persist before submit
-   * @param version optional optimistic-lock version for the update-before-submit path
-   * @return the submitted request response
+   * @param command request submission command
+   * @return created request
    */
-  RequestResponse submitDraft(Long id, String name, Long version);
+  RequestResponse createAndSubmit(CreateRequestCommand command);
 
   /**
-   * Deletes a request record by its unique identifier.
+   * Deletes a request by identifier.
    *
-   * @param id the unique identifier of the request to delete
+   * @param id request id
    */
   void deleteById(Long id);
 
   /**
    * Completes a workflow user task for a request.
    *
-   * @param requestId request identifier
-   * @param taskId request task identifier
-   * @param action task action selected by the user
-   * @param comment task completion comment
+   * @param requestId request id
+   * @param taskId request task id
+   * @param action selected task action
+   * @param comment optional completion comment
    */
   void completeTask(Long requestId, Long taskId, TaskAction action, String comment);
 
   /**
-   * Searches for requests matching the provided criteria. Supports partial name match, status
-   * filtering, ID filtering, and pagination.
+   * Searches requests using filters and paging options.
    *
-   * @param criteria the search criteria to apply
-   * @return a list of request responses matching the criteria
+   * @param criteria search criteria
+   * @return matching requests
    */
-  List<RequestResponse> search(RequestSearchCriteria criteria);
+  List<RequestSearchResponse> search(RequestSearchCriteria criteria);
 }

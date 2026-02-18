@@ -1,7 +1,9 @@
 package com.gurch.sandbox.requests;
 
 import com.gurch.sandbox.dto.CreateResponse;
+import com.gurch.sandbox.requesttypes.RequestTypeResolutionErrorCode;
 import com.gurch.sandbox.web.ApiErrorEnum;
+import com.gurch.sandbox.web.NotFoundException;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -15,7 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/** REST controller for request CRUD and search endpoints. */
+/** REST controller for request create/read/search operations. */
 @RestController
 @RequestMapping("/api/requests")
 @RequiredArgsConstructor
@@ -23,50 +25,61 @@ public class RequestController {
 
   private final RequestApi requestApi;
 
-  /** Creates a draft request record. */
+  /** Creates a new draft request without workflow start. */
   @PostMapping("/drafts")
+  @ApiErrorEnum({RequestTypeResolutionErrorCode.class})
   @ResponseStatus(HttpStatus.CREATED)
-  public CreateResponse createDraft(@Valid @RequestBody RequestDtos.CreateDraftRequest request) {
-    return new CreateResponse(requestApi.createDraft(request.getName()).getId());
+  public CreateResponse createDraft(@Valid @RequestBody RequestDtos.CreateRequest request) {
+    return new CreateResponse(
+        requestApi.createDraft(
+            CreateRequestCommand.builder()
+                .requestTypeKey(request.getRequestTypeKey())
+                .payload(request.getPayload())
+                .build()));
   }
 
-  /** Creates and submits a request record. */
-  @PostMapping("/submit")
-  @ResponseStatus(HttpStatus.CREATED)
-  public CreateResponse submitNew(@Valid @RequestBody RequestDtos.SubmitRequest request) {
-    return new CreateResponse(requestApi.createAndSubmit(request.getName()).getId());
-  }
-
-  /** Gets one request by ID. */
-  @GetMapping("/{id}")
-  public RequestResponse getById(@PathVariable Long id) {
-    return requestApi
-        .findById(id)
-        .orElseThrow(() -> new com.gurch.sandbox.web.NotFoundException("Request not found"));
-  }
-
-  /** Updates an existing draft request record. */
+  /** Updates an existing draft request. */
   @PutMapping("/{id}")
   @ApiErrorEnum({RequestDraftErrorCode.class})
-  public RequestResponse updateDraft(
+  public CreateResponse updateDraft(
       @PathVariable Long id, @Valid @RequestBody RequestDtos.UpdateDraftRequest request) {
-    return requestApi.updateDraft(id, request.getName(), request.getVersion());
+    return new CreateResponse(
+        requestApi.updateDraft(id, request.getPayload(), request.getVersion()));
   }
 
-  /** Submits an existing draft request. */
+  /** Submits a draft request and starts workflow. */
   @PostMapping("/{id}/submit")
-  @ResponseStatus(HttpStatus.OK)
-  @ApiErrorEnum({RequestDraftErrorCode.class})
-  public RequestResponse submitDraft(
-      @PathVariable Long id,
-      @Valid @RequestBody(required = false) RequestDtos.UpdateDraftRequest request) {
-    if (request == null) {
-      return requestApi.submitDraft(id, null, null);
-    }
-    return requestApi.submitDraft(id, request.getName(), request.getVersion());
+  @ApiErrorEnum({
+    RequestDraftErrorCode.class,
+    RequestSubmissionErrorCode.class,
+    RequestTypeResolutionErrorCode.class
+  })
+  public RequestResponse submitDraft(@PathVariable Long id) {
+    return requestApi.submitDraft(id);
   }
 
-  /** Deletes a request by ID. */
+  /** Creates and submits a new request. */
+  @PostMapping
+  @ApiErrorEnum({RequestSubmissionErrorCode.class, RequestTypeResolutionErrorCode.class})
+  @ResponseStatus(HttpStatus.CREATED)
+  public CreateResponse create(@Valid @RequestBody RequestDtos.CreateRequest request) {
+    return new CreateResponse(
+        requestApi
+            .createAndSubmit(
+                CreateRequestCommand.builder()
+                    .requestTypeKey(request.getRequestTypeKey())
+                    .payload(request.getPayload())
+                    .build())
+            .getId());
+  }
+
+  /** Returns a request by id. */
+  @GetMapping("/{id}")
+  public RequestResponse getById(@PathVariable Long id) {
+    return requestApi.findById(id).orElseThrow(() -> new NotFoundException("Request not found"));
+  }
+
+  /** Deletes a request by id. */
   @DeleteMapping("/{id}")
   @ResponseStatus(HttpStatus.NO_CONTENT)
   public void delete(@PathVariable Long id) {
@@ -83,7 +96,7 @@ public class RequestController {
     requestApi.completeTask(requestId, taskId, request.getAction(), request.getComment());
   }
 
-  /** Searches requests using optional filters and pagination. */
+  /** Searches requests by optional filters. */
   @GetMapping("/search")
   public RequestDtos.SearchResponse search(RequestSearchCriteria criteria) {
     return new RequestDtos.SearchResponse(requestApi.search(criteria));
