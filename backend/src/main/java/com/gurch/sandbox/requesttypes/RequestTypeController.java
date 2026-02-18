@@ -2,7 +2,6 @@ package com.gurch.sandbox.requesttypes;
 
 import com.gurch.sandbox.web.ApiErrorEnum;
 import jakarta.validation.Valid;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -57,8 +56,8 @@ public class RequestTypeController {
 
   /** Searches request types with optional filters. */
   @GetMapping("/search")
-  public List<RequestTypeSearchResponse> search(RequestTypeSearchCriteria criteria) {
-    return requestTypeApi.search(criteria);
+  public RequestTypeDtos.SearchResponse search(RequestTypeSearchCriteria criteria) {
+    return new RequestTypeDtos.SearchResponse(requestTypeApi.search(criteria));
   }
 
   /** Deletes a request type when it is not used by any request. */

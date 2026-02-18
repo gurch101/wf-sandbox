@@ -4,25 +4,35 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gurch.sandbox.requests.RequestPayloadHandler;
 import com.gurch.sandbox.requests.RequestSubmissionErrorCode;
+import com.gurch.sandbox.requesttypes.PayloadHandlerCatalog;
 import com.gurch.sandbox.web.ValidationErrorException;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 
 @Component
-public class RequestPayloadHandlerRegistry {
+public class RequestPayloadHandlerRegistry implements PayloadHandlerCatalog {
 
   private final ObjectMapper objectMapper;
+  private final Validator validator;
   private final Map<String, RequestPayloadHandler<?>> handlers;
 
   public RequestPayloadHandlerRegistry(
-      ObjectMapper objectMapper, List<RequestPayloadHandler<?>> handlers) {
+      ObjectMapper objectMapper, Validator validator, List<RequestPayloadHandler<?>> handlers) {
     this.objectMapper = objectMapper.copy();
+    this.validator = validator;
     this.handlers =
-        handlers.stream()
-            .collect(
-                java.util.stream.Collectors.toMap(RequestPayloadHandler::id, Function.identity()));
+        handlers.stream().collect(Collectors.toMap(RequestPayloadHandler::id, Function.identity()));
+  }
+
+  @Override
+  public boolean exists(String handlerId) {
+    return handlers.containsKey(handlerId);
   }
 
   public void validate(String handlerId, JsonNode payload) {
@@ -34,7 +44,17 @@ public class RequestPayloadHandlerRegistry {
   }
 
   private <T> void validateTyped(RequestPayloadHandler<T> handler, JsonNode payload) {
-    handler.validate(toTypedPayload(payload, handler.payloadType()));
+    T typedPayload = toTypedPayload(payload, handler.payloadType());
+    if (typedPayload == null) {
+      throw ValidationErrorException.of(RequestSubmissionErrorCode.INVALID_REQUEST_PAYLOAD);
+    }
+
+    Set<ConstraintViolation<T>> violations = validator.validate(typedPayload);
+    if (!violations.isEmpty()) {
+      throw ValidationErrorException.of(RequestSubmissionErrorCode.INVALID_REQUEST_PAYLOAD);
+    }
+
+    handler.validate(typedPayload);
   }
 
   private <T> T toTypedPayload(JsonNode payload, Class<T> payloadType) {

@@ -53,6 +53,6 @@ public interface RequestDtos {
   @Schema(description = "Response wrapper for request search results")
   class SearchResponse {
     @Schema(description = "Matching requests")
-    List<com.gurch.sandbox.requests.RequestSearchResponse> requests;
+    List<RequestSearchResponse> requests;
   }
 }

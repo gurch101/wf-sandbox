@@ -1,8 +1,8 @@
 package com.gurch.sandbox.requests;
 
 import com.gurch.sandbox.dto.CreateResponse;
-import com.gurch.sandbox.requesttypes.RequestTypeErrorCode;
 import com.gurch.sandbox.web.ApiErrorEnum;
+import com.gurch.sandbox.web.NotFoundException;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -26,7 +26,7 @@ public class RequestController {
 
   /** Creates a new draft request without workflow start. */
   @PostMapping("/drafts")
-  @ApiErrorEnum({RequestTypeErrorCode.class})
+  @ApiErrorEnum({RequestTypeResolutionErrorCode.class})
   @ResponseStatus(HttpStatus.CREATED)
   public CreateResponse createDraft(@Valid @RequestBody RequestDtos.CreateRequest request) {
     return new CreateResponse(
@@ -51,7 +51,7 @@ public class RequestController {
   @ApiErrorEnum({
     RequestDraftErrorCode.class,
     RequestSubmissionErrorCode.class,
-    RequestTypeErrorCode.class
+    RequestTypeResolutionErrorCode.class
   })
   public RequestResponse submitDraft(@PathVariable Long id) {
     return requestApi.submitDraft(id);
@@ -59,7 +59,7 @@ public class RequestController {
 
   /** Creates and submits a new request. */
   @PostMapping
-  @ApiErrorEnum({RequestSubmissionErrorCode.class, RequestTypeErrorCode.class})
+  @ApiErrorEnum({RequestSubmissionErrorCode.class, RequestTypeResolutionErrorCode.class})
   @ResponseStatus(HttpStatus.CREATED)
   public CreateResponse create(@Valid @RequestBody RequestDtos.CreateRequest request) {
     return new CreateResponse(
@@ -75,9 +75,7 @@ public class RequestController {
   /** Returns a request by id. */
   @GetMapping("/{id}")
   public RequestResponse getById(@PathVariable Long id) {
-    return requestApi
-        .findById(id)
-        .orElseThrow(() -> new com.gurch.sandbox.web.NotFoundException("Request not found"));
+    return requestApi.findById(id).orElseThrow(() -> new NotFoundException("Request not found"));
   }
 
   /** Deletes a request by id. */

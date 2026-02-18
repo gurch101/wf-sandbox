@@ -13,6 +13,15 @@ public interface RequestTypeApi {
   ResolvedRequestTypeVersion resolveLatestActive(String typeKey);
 
   /**
+   * Resolves a specific version for a type key.
+   *
+   * @param typeKey request type key
+   * @param version immutable version number
+   * @return resolved version
+   */
+  ResolvedRequestTypeVersion resolveVersion(String typeKey, Integer version);
+
+  /**
    * Creates a request type with initial active version.
    *
    * @param command create command

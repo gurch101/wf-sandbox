@@ -8,6 +8,8 @@ public enum RequestTypeErrorCode implements ApiErrorCode {
   REQUEST_TYPE_NOT_FOUND("typeKey", "request type not found", HttpStatus.BAD_REQUEST),
   INVALID_PROCESS_DEFINITION_KEY(
       "processDefinitionKey", "process definition key is invalid", HttpStatus.BAD_REQUEST),
+  INVALID_PAYLOAD_HANDLER_ID(
+      "payloadHandlerId", "payload handler id is invalid", HttpStatus.BAD_REQUEST),
   REQUEST_TYPE_IN_USE(
       "typeKey", "request type is used by at least one request", HttpStatus.BAD_REQUEST);
 

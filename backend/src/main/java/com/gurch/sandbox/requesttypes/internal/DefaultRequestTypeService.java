@@ -3,6 +3,7 @@ package com.gurch.sandbox.requesttypes.internal;
 import com.gurch.sandbox.query.JoinType;
 import com.gurch.sandbox.query.Operator;
 import com.gurch.sandbox.query.SQLQueryBuilder;
+import com.gurch.sandbox.requesttypes.PayloadHandlerCatalog;
 import com.gurch.sandbox.requesttypes.RequestTypeApi;
 import com.gurch.sandbox.requesttypes.RequestTypeCommand;
 import com.gurch.sandbox.requesttypes.RequestTypeErrorCode;
@@ -13,6 +14,7 @@ import com.gurch.sandbox.web.ValidationErrorException;
 import com.gurch.sandbox.workflows.WorkflowApi;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.jdbc.core.DataClassRowMapper;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +27,7 @@ public class DefaultRequestTypeService implements RequestTypeApi {
   private final RequestTypeVersionRepository versionRepository;
   private final NamedParameterJdbcTemplate jdbcTemplate;
   private final WorkflowApi workflowApi;
+  private final PayloadHandlerCatalog payloadHandlerCatalog;
 
   @Override
   @Transactional(readOnly = true)
@@ -50,9 +53,28 @@ public class DefaultRequestTypeService implements RequestTypeApi {
   }
 
   @Override
+  @Transactional(readOnly = true)
+  public ResolvedRequestTypeVersion resolveVersion(String typeKey, Integer version) {
+    RequestTypeEntity type =
+        requestTypeRepository
+            .findByTypeKey(typeKey)
+            .orElseThrow(
+                () -> ValidationErrorException.of(RequestTypeErrorCode.REQUEST_TYPE_NOT_FOUND));
+
+    RequestTypeVersionEntity resolvedVersion =
+        versionRepository
+            .findByRequestTypeIdAndVersion(type.getId(), version)
+            .orElseThrow(
+                () -> ValidationErrorException.of(RequestTypeErrorCode.REQUEST_TYPE_NOT_FOUND));
+
+    return toResolved(type.getTypeKey(), resolvedVersion);
+  }
+
+  @Override
   @Transactional
   public ResolvedRequestTypeVersion createType(RequestTypeCommand command) {
     validateProcessDefinitionKey(command.getProcessDefinitionKey());
+    validatePayloadHandlerId(command.getPayloadHandlerId());
 
     RequestTypeEntity type =
         requestTypeRepository.save(
@@ -81,6 +103,7 @@ public class DefaultRequestTypeService implements RequestTypeApi {
   @Transactional
   public ResolvedRequestTypeVersion changeType(String typeKey, RequestTypeCommand command) {
     validateProcessDefinitionKey(command.getProcessDefinitionKey());
+    validatePayloadHandlerId(command.getPayloadHandlerId());
 
     RequestTypeEntity type =
         requestTypeRepository
@@ -134,18 +157,7 @@ public class DefaultRequestTypeService implements RequestTypeApi {
 
     var query = builder.build();
     return jdbcTemplate.query(
-        query.sql(),
-        query.params(),
-        (rs, rowNum) ->
-            RequestTypeSearchResponse.builder()
-                .typeKey(rs.getString("type_key"))
-                .name(rs.getString("name"))
-                .description(rs.getString("description"))
-                .active(rs.getBoolean("active"))
-                .activeVersion((Integer) rs.getObject("active_version"))
-                .payloadHandlerId(rs.getString("payload_handler_id"))
-                .processDefinitionKey(rs.getString("process_definition_key"))
-                .build());
+        query.sql(), query.params(), new DataClassRowMapper<>(RequestTypeSearchResponse.class));
   }
 
   @Override
@@ -172,6 +184,12 @@ public class DefaultRequestTypeService implements RequestTypeApi {
   private void validateProcessDefinitionKey(String processDefinitionKey) {
     if (!workflowApi.processDefinitionExists(processDefinitionKey)) {
       throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_PROCESS_DEFINITION_KEY);
+    }
+  }
+
+  private void validatePayloadHandlerId(String payloadHandlerId) {
+    if (!payloadHandlerCatalog.exists(payloadHandlerId)) {
+      throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_PAYLOAD_HANDLER_ID);
     }
   }
 

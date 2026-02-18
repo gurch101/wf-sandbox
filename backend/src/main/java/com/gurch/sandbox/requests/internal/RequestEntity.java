@@ -16,7 +16,6 @@ import org.springframework.data.relational.core.mapping.Table;
 @Table("requests")
 public class RequestEntity {
   @Id private Long id;
-  private String name;
   private String requestTypeKey;
   private Integer requestTypeVersion;
   private JsonNode payloadJson;

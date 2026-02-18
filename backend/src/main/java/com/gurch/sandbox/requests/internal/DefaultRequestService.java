@@ -56,13 +56,14 @@ public class DefaultRequestService implements RequestApi {
   @Override
   @Transactional
   public Long createDraft(CreateRequestCommand command) {
-    requestTypeApi.resolveLatestActive(command.getRequestTypeKey());
+    ResolvedRequestTypeVersion resolved =
+        requestTypeApi.resolveLatestActive(command.getRequestTypeKey());
 
     RequestEntity saved =
         repository.save(
             RequestEntity.builder()
-                .name(command.getRequestTypeKey())
                 .requestTypeKey(command.getRequestTypeKey())
+                .requestTypeVersion(resolved.getVersion())
                 .payloadJson(command.getPayload())
                 .status(RequestStatus.DRAFT)
                 .build());
@@ -98,7 +99,10 @@ public class DefaultRequestService implements RequestApi {
     }
 
     ResolvedRequestTypeVersion resolved =
-        requestTypeApi.resolveLatestActive(draft.getRequestTypeKey());
+        draft.getRequestTypeVersion() == null
+            ? requestTypeApi.resolveLatestActive(draft.getRequestTypeKey())
+            : requestTypeApi.resolveVersion(
+                draft.getRequestTypeKey(), draft.getRequestTypeVersion());
     return submitPersistedRequest(draft, resolved, draft.getPayloadJson());
   }
 
@@ -108,16 +112,16 @@ public class DefaultRequestService implements RequestApi {
     ResolvedRequestTypeVersion resolved =
         requestTypeApi.resolveLatestActive(command.getRequestTypeKey());
 
-    RequestEntity saved =
+    RequestEntity draft =
         repository.save(
             RequestEntity.builder()
-                .name(command.getRequestTypeKey())
                 .requestTypeKey(command.getRequestTypeKey())
+                .requestTypeVersion(resolved.getVersion())
                 .payloadJson(command.getPayload())
-                .status(RequestStatus.SUBMITTED)
+                .status(RequestStatus.DRAFT)
                 .build());
 
-    return submitPersistedRequest(saved, resolved, command.getPayload());
+    return submitPersistedRequest(draft, resolved, command.getPayload());
   }
 
   @Override
@@ -166,7 +170,7 @@ public class DefaultRequestService implements RequestApi {
                     + "r.request_type_version AS requestTypeVersion, "
                     + "r.status, r.created_at AS createdAt, r.updated_at AS updatedAt, r.version")
             .from("requests", "r")
-            .where("upper(r.name)", Operator.LIKE, criteria.getNamePattern())
+            .where("upper(r.request_type_key)", Operator.LIKE, criteria.getNamePattern())
             .where("r.status", Operator.IN, criteria.getStatuses())
             .where("r.id", Operator.IN, criteria.getIds())
             .where("r.request_type_key", Operator.IN, criteria.getNormalizedRequestTypeKeys())
@@ -220,7 +224,7 @@ public class DefaultRequestService implements RequestApi {
 
     RequestEntity submitted =
         repository.save(
-            repository.findById(baseEntity.getId()).orElse(baseEntity).toBuilder()
+            baseEntity.toBuilder()
                 .requestTypeKey(resolved.getTypeKey())
                 .requestTypeVersion(resolved.getVersion())
                 .payloadJson(payload)
@@ -233,7 +237,7 @@ public class DefaultRequestService implements RequestApi {
 
     RequestEntity inProgress =
         repository.save(
-            repository.findById(submitted.getId()).orElse(submitted).toBuilder()
+            submitted.toBuilder()
                 .status(RequestStatus.IN_PROGRESS)
                 .processInstanceId(processInstance.getProcessInstanceId())
                 .build());

@@ -86,7 +86,7 @@ class IdempotencyIntegrationTest extends AbstractJdbcIntegrationTest {
     MvcResult firstResult =
         mockMvc
             .perform(
-                post("/api/requests")
+                post("/api/requests/drafts")
                     .with(csrf())
                     .header("Idempotency-Key", idempotencyKey)
                     .contentType(MediaType.APPLICATION_JSON)
@@ -99,7 +99,7 @@ class IdempotencyIntegrationTest extends AbstractJdbcIntegrationTest {
     MvcResult secondResult =
         mockMvc
             .perform(
-                post("/api/requests")
+                post("/api/requests/drafts")
                     .with(csrf())
                     .header("Idempotency-Key", idempotencyKey)
                     .contentType(MediaType.APPLICATION_JSON)
@@ -122,7 +122,7 @@ class IdempotencyIntegrationTest extends AbstractJdbcIntegrationTest {
 
     mockMvc
         .perform(
-            post("/api/requests")
+            post("/api/requests/drafts")
                 .with(csrf())
                 .header("Idempotency-Key", idempotencyKey)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -134,7 +134,7 @@ class IdempotencyIntegrationTest extends AbstractJdbcIntegrationTest {
 
     mockMvc
         .perform(
-            post("/api/requests")
+            post("/api/requests/drafts")
                 .with(csrf())
                 .header("Idempotency-Key", idempotencyKey)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -145,7 +145,7 @@ class IdempotencyIntegrationTest extends AbstractJdbcIntegrationTest {
   @Test
   void shouldReturnConflictWhenAlreadyProcessing() throws Exception {
     String idempotencyKey = UUID.randomUUID().toString();
-    String operation = "POST /api/requests";
+    String operation = "POST /api/requests/drafts";
 
     RequestDtos.CreateRequest request =
         new RequestDtos.CreateRequest("loan", objectMapper.readTree("{\"amount\":10}"));
@@ -160,7 +160,7 @@ class IdempotencyIntegrationTest extends AbstractJdbcIntegrationTest {
 
     mockMvc
         .perform(
-            post("/api/requests")
+            post("/api/requests/drafts")
                 .with(csrf())
                 .header("Idempotency-Key", idempotencyKey)
                 .contentType(MediaType.APPLICATION_JSON)

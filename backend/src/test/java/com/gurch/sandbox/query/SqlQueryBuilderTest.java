@@ -26,9 +26,9 @@ class SqlQueryBuilderTest extends AbstractJdbcIntegrationTest {
   void setUp() {
     jdbcTemplate.getJdbcTemplate().execute("DELETE FROM requests");
 
-    insertRequest("Request A", "IN_PROGRESS", null, 1L);
-    insertRequest("Request B", "COMPLETED", "pi-1", 2L);
-    insertRequest("Request C", "REJECTED", "pi-2", 3L);
+    insertRequest("request-a", "IN_PROGRESS", null, 1L);
+    insertRequest("request-b", "COMPLETED", "pi-1", 2L);
+    insertRequest("request-c", "REJECTED", "pi-2", 3L);
   }
 
   @Test
@@ -91,7 +91,7 @@ class SqlQueryBuilderTest extends AbstractJdbcIntegrationTest {
             .where("r.version", Operator.GT, 0L)
             .whereOr(
                 WhereClause.create("r.status", Operator.EQ, null),
-                WhereClause.create("r.name", Operator.LIKE, null))
+                WhereClause.create("r.request_type_key", Operator.LIKE, null))
             .build();
 
     assertThat(query.sql()).contains("r.version > :p1");
@@ -210,11 +210,11 @@ class SqlQueryBuilderTest extends AbstractJdbcIntegrationTest {
             .from("requests", "r")
             .where("r.status", Operator.EQ, "IN_PROGRESS")
             .rawWhere(
-                "upper(r.name) like :namePattern and r.status = :p1",
+                "upper(r.request_type_key) like :namePattern and r.status = :p1",
                 Map.of("namePattern", "%REQUEST%", "p1", "IN_PROGRESS"))
             .build();
 
-    assertThat(query.sql()).contains("upper(r.name) like :p2 and r.status = :p3");
+    assertThat(query.sql()).contains("upper(r.request_type_key) like :p2 and r.status = :p3");
     assertThat(query.params()).containsOnlyKeys("p1", "p2", "p3");
 
     List<Long> ids = jdbcTemplate.queryForList(query.sql(), query.params(), Long.class);
@@ -474,20 +474,21 @@ class SqlQueryBuilderTest extends AbstractJdbcIntegrationTest {
         .whereOr(
             WhereClause.create("r.status", Operator.EQ, "IN_PROGRESS"),
             WhereClause.create("r.status", Operator.EQ, "COMPLETED"))
-        .rawWhere("upper(r.name) like :namePattern and r.status = :p1", rawParams)
+        .rawWhere("upper(r.request_type_key) like :namePattern and r.status = :p1", rawParams)
         .safeOrderBy("-createdAt", SortWhitelist.create().allow("createdAt", "r.created_at"))
         .page(0, 10)
         .build();
   }
 
-  private void insertRequest(String name, String status, String processInstanceId, long version) {
+  private void insertRequest(
+      String requestTypeKey, String status, String processInstanceId, long version) {
     jdbcTemplate.update(
         """
-        INSERT INTO requests (name, status, process_instance_id, created_at, updated_at, version)
-        VALUES (:name, :status, :processInstanceId, :createdAt, :updatedAt, :version)
+        INSERT INTO requests (request_type_key, status, process_instance_id, created_at, updated_at, version)
+        VALUES (:requestTypeKey, :status, :processInstanceId, :createdAt, :updatedAt, :version)
         """,
         new MapSqlParameterSource()
-            .addValue("name", name)
+            .addValue("requestTypeKey", requestTypeKey)
             .addValue("status", status)
             .addValue("processInstanceId", processInstanceId)
             .addValue("createdAt", OffsetDateTime.now(ZoneOffset.UTC))

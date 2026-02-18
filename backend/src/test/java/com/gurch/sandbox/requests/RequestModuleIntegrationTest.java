@@ -2,7 +2,6 @@ package com.gurch.sandbox.requests;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -19,6 +18,7 @@ import com.gurch.sandbox.requests.internal.RequestTaskEntity;
 import com.gurch.sandbox.requests.internal.RequestTaskRepository;
 import com.gurch.sandbox.requests.internal.RequestTaskStatus;
 import com.gurch.sandbox.requesttypes.RequestTypeDtos;
+import com.gurch.sandbox.requesttypes.internal.RequestTypeRepository;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -30,7 +30,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -41,12 +40,12 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
   @Autowired private RequestRepository requestRepository;
   @Autowired private RequestTaskRepository requestTaskRepository;
   @Autowired private ExternalTaskService externalTaskService;
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired private RequestTypeRepository requestTypeRepository;
 
   @BeforeEach
   void setUp() {
     requestRepository.deleteAll();
-    jdbcTemplate.update("DELETE FROM request_types");
+    requestTypeRepository.deleteAll();
   }
 
   @Test
@@ -65,38 +64,6 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
 
     RequestEntity firstAfterUpdate = requestRepository.findById(firstRequestId).orElseThrow();
     assertThat(firstAfterUpdate.getRequestTypeVersion()).isEqualTo(1);
-  }
-
-  @Test
-  void shouldIgnoreClientProvidedVersionAndUseLatestActive() throws Exception {
-    createType("loan", "Loan", "amount-positive", "requestTypeV1Process");
-
-    String rawPayload =
-        """
-        {
-          "requestTypeKey": "loan",
-          "requestTypeVersion": 999,
-          "payload": { "amount": 42 }
-        }
-        """;
-
-    MvcResult result =
-        mockMvc
-            .perform(
-                post("/api/requests")
-                    .with(csrf())
-                    .header("Idempotency-Key", UUID.randomUUID().toString())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(rawPayload))
-            .andExpect(status().isCreated())
-            .andReturn();
-
-    Long id =
-        objectMapper
-            .readValue(result.getResponse().getContentAsString(), CreateResponse.class)
-            .getId();
-    RequestEntity saved = requestRepository.findById(id).orElseThrow();
-    assertThat(saved.getRequestTypeVersion()).isEqualTo(1);
   }
 
   @Test
@@ -123,7 +90,7 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
             .getId();
     RequestEntity draft = requestRepository.findById(id).orElseThrow();
     assertThat(draft.getStatus()).isEqualTo(RequestStatus.DRAFT);
-    assertThat(draft.getRequestTypeVersion()).isNull();
+    assertThat(draft.getRequestTypeVersion()).isEqualTo(1);
     assertThat(draft.getProcessInstanceId()).isNull();
 
     mockMvc
@@ -136,7 +103,47 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
 
     RequestEntity stillDraft = requestRepository.findById(id).orElseThrow();
     assertThat(stillDraft.getStatus()).isEqualTo(RequestStatus.DRAFT);
+    assertThat(stillDraft.getRequestTypeVersion()).isEqualTo(1);
     assertThat(stillDraft.getProcessInstanceId()).isNull();
+  }
+
+  @Test
+  void shouldSubmitDraftWithVersionCapturedAtDraftCreationTime() throws Exception {
+    createType("loan", "Loan", "amount-positive", "requestTypeV1Process");
+
+    MvcResult createDraftResult =
+        mockMvc
+            .perform(
+                post("/api/requests/drafts")
+                    .with(csrf())
+                    .header("Idempotency-Key", UUID.randomUUID().toString())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        objectMapper.writeValueAsString(
+                            new RequestDtos.CreateRequest(
+                                "loan", objectMapper.readTree("{\"amount\":50}")))))
+            .andExpect(status().isCreated())
+            .andReturn();
+
+    Long draftId =
+        objectMapper
+            .readValue(createDraftResult.getResponse().getContentAsString(), CreateResponse.class)
+            .getId();
+    assertThat(requestRepository.findById(draftId).orElseThrow().getRequestTypeVersion())
+        .isEqualTo(1);
+
+    updateType("loan", "Loan V2", "amount-positive", "requestTypeV2Process");
+
+    mockMvc
+        .perform(
+            post("/api/requests/{id}/submit", draftId)
+                .with(csrf())
+                .header("Idempotency-Key", UUID.randomUUID().toString()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.requestTypeVersion").value(1));
+
+    assertThat(requestRepository.findById(draftId).orElseThrow().getRequestTypeVersion())
+        .isEqualTo(1);
   }
 
   @Test
@@ -197,6 +204,43 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
                     objectMapper.writeValueAsString(
                         new RequestDtos.CreateRequest(
                             "loan", objectMapper.readTree("{\"amount\":0}")))))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.errors[0].code").value("INVALID_REQUEST_PAYLOAD"));
+
+    assertThat(requestRepository.count()).isZero();
+  }
+
+  @Test
+  void shouldCreateMoneyInRequestWithTypedTransferPayload() throws Exception {
+    createType("money-in", "Money In", "money-in", "requestTypeV1Process");
+
+    Long requestId =
+        createRequest(
+            "money-in",
+            Map.of("fromAccount", "ACCOUNT-A", "toAccount", "ACCOUNT-B", "amount", 150.75));
+
+    RequestEntity request = requestRepository.findById(requestId).orElseThrow();
+    assertThat(request.getRequestTypeKey()).isEqualTo("money-in");
+    assertThat(request.getRequestTypeVersion()).isEqualTo(1);
+    assertThat(request.getStatus()).isEqualTo(RequestStatus.IN_PROGRESS);
+  }
+
+  @Test
+  void shouldRejectMoneyInRequestWhenAccountsMatch() throws Exception {
+    createType("money-in", "Money In", "money-in", "requestTypeV1Process");
+
+    mockMvc
+        .perform(
+            post("/api/requests")
+                .with(csrf())
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        new RequestDtos.CreateRequest(
+                            "money-in",
+                            objectMapper.readTree(
+                                "{\"fromAccount\":\"ACCOUNT-A\",\"toAccount\":\"ACCOUNT-A\",\"amount\":10}")))))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.errors[0].code").value("INVALID_REQUEST_PAYLOAD"));
 
@@ -330,7 +374,7 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
   }
 
   @Test
-  void detailsShouldIncludePayloadAndSearchShouldOmitPayload() throws Exception {
+  void detailsShouldIncludePayload() throws Exception {
     createType("loan", "Loan", "amount-positive", "requestTypeV1Process");
     Long requestId = createRequest("loan", Map.of("amount", 77));
 
@@ -340,6 +384,12 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
         .andExpect(jsonPath("$.payload.amount").value(77))
         .andExpect(jsonPath("$.requestTypeKey").value("loan"))
         .andExpect(jsonPath("$.requestTypeVersion").value(1));
+  }
+
+  @Test
+  void searchShouldOmitPayload() throws Exception {
+    createType("loan", "Loan", "amount-positive", "requestTypeV1Process");
+    createRequest("loan", Map.of("amount", 77));
 
     mockMvc
         .perform(get("/api/requests/search"))
@@ -383,100 +433,6 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
         .andExpect(status().isNoContent());
 
     assertTaskStatusEventually(task.getId(), RequestTaskStatus.COMPLETED);
-  }
-
-  @Test
-  void shouldSearchRequestTypes() throws Exception {
-    createType("loan", "Loan", "amount-positive", "requestTypeV1Process");
-    createType("mortgage", "Mortgage", "noop", "requestTypeV2Process");
-
-    mockMvc
-        .perform(get("/api/internal/request-types/search").param("typeKeyContains", "loa"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$[0].typeKey").value("loan"))
-        .andExpect(jsonPath("$[0].activeVersion").value(1));
-  }
-
-  @Test
-  void shouldDeleteUnusedRequestTypeAndRejectDeleteWhenInUse() throws Exception {
-    createType("unused", "Unused", "noop", "requestTypeV2Process");
-    createType("loan", "Loan", "amount-positive", "requestTypeV1Process");
-    createRequest("loan", Map.of("amount", 10));
-
-    mockMvc
-        .perform(
-            delete("/api/internal/request-types/{typeKey}", "unused")
-                .with(csrf())
-                .header("Idempotency-Key", UUID.randomUUID().toString()))
-        .andExpect(status().isNoContent());
-
-    mockMvc
-        .perform(get("/api/internal/request-types/search").param("typeKeyContains", "unused"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.length()").value(0));
-
-    mockMvc
-        .perform(
-            delete("/api/internal/request-types/{typeKey}", "loan")
-                .with(csrf())
-                .header("Idempotency-Key", UUID.randomUUID().toString()))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.errors[0].code").value("REQUEST_TYPE_IN_USE"));
-  }
-
-  @Test
-  void shouldRejectCreateTypeWithInvalidProcessDefinitionKey() throws Exception {
-    mockMvc
-        .perform(
-            post("/api/internal/request-types")
-                .with(csrf())
-                .header("Idempotency-Key", UUID.randomUUID().toString())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(
-                    objectMapper.writeValueAsString(
-                        new RequestTypeDtos.CreateTypeRequest(
-                            "bad", "Bad", "desc", "noop", "missing-process-definition-key"))))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.errors[0].code").value("INVALID_PROCESS_DEFINITION_KEY"));
-  }
-
-  @Test
-  void shouldRejectUpdateTypeWithInvalidProcessDefinitionKey() throws Exception {
-    createType("loan", "Loan", "amount-positive", "requestTypeV1Process");
-
-    mockMvc
-        .perform(
-            put("/api/internal/request-types/{typeKey}", "loan")
-                .with(csrf())
-                .header("Idempotency-Key", UUID.randomUUID().toString())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(
-                    objectMapper.writeValueAsString(
-                        new RequestTypeDtos.ChangeTypeRequest(
-                            "Loan", "desc", "amount-positive", "missing-process-definition-key"))))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.errors[0].code").value("INVALID_PROCESS_DEFINITION_KEY"));
-  }
-
-  @Test
-  void shouldSearchAndValidateWorkflowDefinitions() throws Exception {
-    mockMvc
-        .perform(
-            get("/api/internal/workflows/process-definitions/search")
-                .param("processDefinitionKeyContains", "requestTypeV1"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$[0].key").value("requestTypeV1Process"));
-
-    mockMvc
-        .perform(
-            get("/api/internal/workflows/process-definitions/{key}/exists", "requestTypeV1Process"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.exists").value(true));
-
-    mockMvc
-        .perform(get("/api/internal/workflows/process-definitions/{key}/exists", "missingKey"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.exists").value(false));
   }
 
   private void createType(

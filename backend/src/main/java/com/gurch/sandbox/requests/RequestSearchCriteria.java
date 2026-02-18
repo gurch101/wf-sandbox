@@ -1,5 +1,6 @@
 package com.gurch.sandbox.requests;
 
+import com.gurch.sandbox.dto.SearchCriteriaUtils;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.ArrayList;
 import java.util.List;
@@ -10,15 +11,17 @@ import lombok.Value;
 import lombok.extern.jackson.Jacksonized;
 
 /**
- * Criteria object for searching request records. Supports filtering by name, status, and ID, as
- * well as pagination.
+ * Criteria object for searching request records. Supports filtering by request type key, status,
+ * and ID, as well as pagination.
  */
 @Value
 @Builder
 @Jacksonized
 @Schema(description = "Criteria for searching request records")
 public class RequestSearchCriteria {
-  @Schema(description = "Partial name to search for (case-insensitive)", example = "feature")
+  @Schema(
+      description = "Partial request type key to search for (case-insensitive)",
+      example = "loan")
   String nameContains;
 
   @Schema(description = "Request type keys filter", example = "[\"loan\", \"mortgage\"]")
@@ -45,15 +48,12 @@ public class RequestSearchCriteria {
   Integer size;
 
   /**
-   * Returns an uppercase wildcard pattern for name filtering.
+   * Returns an uppercase wildcard pattern for request type key filtering.
    *
    * @return uppercase pattern for SQL LIKE, or null when name filter is absent
    */
   public String getNamePattern() {
-    return Optional.ofNullable(nameContains)
-        .filter(s -> !s.isBlank())
-        .map(s -> "%" + s.toUpperCase(Locale.ROOT) + "%")
-        .orElse(null);
+    return SearchCriteriaUtils.toUpperLikePattern(nameContains);
   }
 
   /**
@@ -62,19 +62,17 @@ public class RequestSearchCriteria {
    * @return uppercase assignee list, or null when no assignee filters are provided
    */
   public List<String> getNormalizedTaskAssignees() {
-    List<String> normalized = new ArrayList<>();
+    List<String> normalized =
+        SearchCriteriaUtils.normalizeUppercaseStringList(
+            Optional.ofNullable(taskAssignees).orElseGet(List::of));
+    if (normalized == null) {
+      normalized = new ArrayList<>();
+    }
+
     Optional.ofNullable(taskAssignee)
         .filter(s -> !s.isBlank())
         .map(s -> s.trim().toUpperCase(Locale.ROOT))
         .ifPresent(normalized::add);
-
-    Optional.ofNullable(taskAssignees).stream()
-        .flatMap(List::stream)
-        .filter(s -> s != null)
-        .map(String::trim)
-        .filter(s -> !s.isBlank())
-        .map(s -> s.toUpperCase(Locale.ROOT))
-        .forEach(normalized::add);
 
     return normalized.isEmpty() ? null : normalized;
   }
@@ -85,14 +83,6 @@ public class RequestSearchCriteria {
    * @return key list, or null when no key filters are provided
    */
   public List<String> getNormalizedRequestTypeKeys() {
-    List<String> normalized = new ArrayList<>();
-    Optional.ofNullable(requestTypeKeys).stream()
-        .flatMap(List::stream)
-        .filter(s -> s != null)
-        .map(String::trim)
-        .filter(s -> !s.isBlank())
-        .forEach(normalized::add);
-
-    return normalized.isEmpty() ? null : normalized;
+    return SearchCriteriaUtils.normalizeStringList(requestTypeKeys);
   }
 }
