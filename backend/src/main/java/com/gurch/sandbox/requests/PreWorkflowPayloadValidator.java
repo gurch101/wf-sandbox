@@ -7,7 +7,7 @@ package com.gurch.sandbox.requests;
  *
  * @param <T> typed payload model expected by this handler
  */
-public interface RequestPayloadHandler<T> {
+public interface PreWorkflowPayloadValidator<T> {
   /**
    * Stable handler identifier referenced by request type versions.
    *

@@ -1,6 +1,6 @@
 package com.gurch.sandbox.transfers.internal;
 
-import com.gurch.sandbox.requests.RequestPayloadHandler;
+import com.gurch.sandbox.requests.PreWorkflowPayloadValidator;
 import com.gurch.sandbox.requests.RequestSubmissionErrorCode;
 import com.gurch.sandbox.web.ValidationErrorException;
 import jakarta.validation.constraints.NotBlank;
@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 /** Typed payload handler for money-in transfer requests. */
 @Component
 public class MoneyInPayloadHandler
-    implements RequestPayloadHandler<MoneyInPayloadHandler.MoneyInPayload> {
+    implements PreWorkflowPayloadValidator<MoneyInPayloadHandler.MoneyInPayload> {
 
   @Override
   public String id() {

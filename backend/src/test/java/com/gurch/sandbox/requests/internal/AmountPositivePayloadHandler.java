@@ -1,6 +1,6 @@
 package com.gurch.sandbox.requests.internal;
 
-import com.gurch.sandbox.requests.RequestPayloadHandler;
+import com.gurch.sandbox.requests.PreWorkflowPayloadValidator;
 import com.gurch.sandbox.requests.RequestSubmissionErrorCode;
 import com.gurch.sandbox.web.ValidationErrorException;
 import jakarta.validation.constraints.NotNull;
@@ -16,7 +16,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class AmountPositivePayloadHandler
-    implements RequestPayloadHandler<AmountPositivePayloadHandler.AmountPositivePayload> {
+    implements PreWorkflowPayloadValidator<AmountPositivePayloadHandler.AmountPositivePayload> {
 
   @Override
   public String id() {

@@ -14,13 +14,13 @@ import com.gurch.sandbox.requests.RequestStatus;
 import com.gurch.sandbox.requests.TaskAction;
 import com.gurch.sandbox.requesttypes.RequestTypeApi;
 import com.gurch.sandbox.requesttypes.RequestTypeCommand;
+import com.gurch.sandbox.requesttypes.internal.RequestTypeRepository;
 import com.gurch.sandbox.web.ValidationErrorException;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 class DefaultRequestServiceIntegrationTest extends AbstractJdbcIntegrationTest {
 
@@ -28,13 +28,13 @@ class DefaultRequestServiceIntegrationTest extends AbstractJdbcIntegrationTest {
   @Autowired private RequestRepository requestRepository;
   @Autowired private RequestTaskRepository requestTaskRepository;
   @Autowired private RequestTypeApi requestTypeApi;
+  @Autowired private RequestTypeRepository requestTypeRepository;
   @Autowired private ObjectMapper objectMapper;
-  @Autowired private JdbcTemplate jdbcTemplate;
 
   @BeforeEach
   void setUp() {
     requestRepository.deleteAll();
-    jdbcTemplate.update("DELETE FROM request_types");
+    requestTypeRepository.deleteAll();
 
     requestTypeApi.createType(
         RequestTypeCommand.builder()

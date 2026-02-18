@@ -3,7 +3,7 @@ package com.gurch.sandbox.requests.internal;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gurch.sandbox.dto.ValidationError;
-import com.gurch.sandbox.requests.RequestPayloadHandler;
+import com.gurch.sandbox.requests.PreWorkflowPayloadValidator;
 import com.gurch.sandbox.requests.RequestSubmissionErrorCode;
 import com.gurch.sandbox.requesttypes.PayloadHandlerCatalog;
 import com.gurch.sandbox.web.ValidationErrorException;
@@ -23,14 +23,17 @@ public class RequestPayloadHandlerRegistry implements PayloadHandlerCatalog {
 
   private final ObjectMapper objectMapper;
   private final Validator validator;
-  private final Map<String, RequestPayloadHandler<?>> handlers;
+  private final Map<String, PreWorkflowPayloadValidator<?>> handlers;
 
   public RequestPayloadHandlerRegistry(
-      ObjectMapper objectMapper, Validator validator, List<RequestPayloadHandler<?>> handlers) {
+      ObjectMapper objectMapper,
+      Validator validator,
+      List<PreWorkflowPayloadValidator<?>> handlers) {
     this.objectMapper = objectMapper.copy();
     this.validator = validator;
     this.handlers =
-        handlers.stream().collect(Collectors.toMap(RequestPayloadHandler::id, Function.identity()));
+        handlers.stream()
+            .collect(Collectors.toMap(PreWorkflowPayloadValidator::id, Function.identity()));
   }
 
   @Override
@@ -39,14 +42,14 @@ public class RequestPayloadHandlerRegistry implements PayloadHandlerCatalog {
   }
 
   public void validate(String handlerId, JsonNode payload) {
-    RequestPayloadHandler<?> handler = handlers.get(handlerId);
+    PreWorkflowPayloadValidator<?> handler = handlers.get(handlerId);
     if (handler == null) {
       throw ValidationErrorException.of(RequestSubmissionErrorCode.MISSING_PAYLOAD_HANDLER);
     }
     validateTyped(handler, payload);
   }
 
-  private <T> void validateTyped(RequestPayloadHandler<T> handler, JsonNode payload) {
+  private <T> void validateTyped(PreWorkflowPayloadValidator<T> handler, JsonNode payload) {
     T typedPayload = toTypedPayload(payload, handler.payloadType());
     if (typedPayload == null) {
       throw ValidationErrorException.of(RequestSubmissionErrorCode.INVALID_REQUEST_PAYLOAD);

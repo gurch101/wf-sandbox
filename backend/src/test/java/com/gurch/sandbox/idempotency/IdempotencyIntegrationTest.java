@@ -14,6 +14,7 @@ import com.gurch.sandbox.idempotency.internal.IdempotencyStatus;
 import com.gurch.sandbox.requests.RequestDtos;
 import com.gurch.sandbox.requesttypes.RequestTypeApi;
 import com.gurch.sandbox.requesttypes.RequestTypeCommand;
+import com.gurch.sandbox.requesttypes.internal.RequestTypeRepository;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
@@ -32,11 +33,12 @@ class IdempotencyIntegrationTest extends AbstractJdbcIntegrationTest {
   @Autowired private IdempotencyRepository repository;
   @Autowired private IdempotencyCleanupTask cleanupTask;
   @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired private RequestTypeRepository requestTypeRepository;
   @Autowired private RequestTypeApi requestTypeApi;
 
   @BeforeEach
   void setUp() {
-    jdbcTemplate.update("DELETE FROM request_types");
+    requestTypeRepository.deleteAll();
     requestTypeApi.createType(
         RequestTypeCommand.builder()
             .typeKey("loan")
