@@ -62,7 +62,8 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
                         new RequestDtos.CreateRequest(
                             "loan", objectMapper.readTree("{\"amount\":0}")))))
         .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.errors[0].code").value("INVALID_REQUEST_PAYLOAD"));
+        .andExpect(jsonPath("$.errors[0].name").value("amount"))
+        .andExpect(jsonPath("$.errors[0].code").value("Positive"));
 
     assertThat(requestRepository.count()).isZero();
   }
@@ -99,6 +100,7 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
                             objectMapper.readTree(
                                 "{\"fromAccount\":\"ACCOUNT-A\",\"toAccount\":\"ACCOUNT-A\",\"amount\":10}")))))
         .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.errors[0].name").value("payload"))
         .andExpect(jsonPath("$.errors[0].code").value("INVALID_REQUEST_PAYLOAD"));
 
     assertThat(requestRepository.count()).isZero();
@@ -154,7 +156,8 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
                     objectMapper.writeValueAsString(
                         new RequestDtos.CreateRequest("loan", objectMapper.readTree("{}")))))
         .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.errors[0].code").value("INVALID_REQUEST_PAYLOAD"));
+        .andExpect(jsonPath("$.errors[0].name").value("amount"))
+        .andExpect(jsonPath("$.errors[0].code").value("NotNull"));
 
     assertThat(requestRepository.count()).isZero();
   }

@@ -2,17 +2,20 @@ package com.gurch.sandbox.requests.internal;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.gurch.sandbox.dto.ValidationError;
 import com.gurch.sandbox.requests.RequestPayloadHandler;
 import com.gurch.sandbox.requests.RequestSubmissionErrorCode;
 import com.gurch.sandbox.requesttypes.PayloadHandlerCatalog;
 import com.gurch.sandbox.web.ValidationErrorException;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -51,7 +54,13 @@ public class RequestPayloadHandlerRegistry implements PayloadHandlerCatalog {
 
     Set<ConstraintViolation<T>> violations = validator.validate(typedPayload);
     if (!violations.isEmpty()) {
-      throw ValidationErrorException.of(RequestSubmissionErrorCode.INVALID_REQUEST_PAYLOAD);
+      List<ValidationError> errors =
+          violations.stream()
+              .map(this::toValidationError)
+              .sorted(
+                  Comparator.comparing(ValidationError::name).thenComparing(ValidationError::code))
+              .toList();
+      throw ValidationErrorException.of(HttpStatus.BAD_REQUEST, errors);
     }
 
     handler.validate(typedPayload);
@@ -66,5 +75,15 @@ public class RequestPayloadHandlerRegistry implements PayloadHandlerCatalog {
     } catch (Exception e) {
       throw ValidationErrorException.of(RequestSubmissionErrorCode.INVALID_REQUEST_PAYLOAD);
     }
+  }
+
+  private ValidationError toValidationError(ConstraintViolation<?> violation) {
+    String fieldName =
+        violation.getPropertyPath() == null || violation.getPropertyPath().toString().isBlank()
+            ? "payload"
+            : violation.getPropertyPath().toString();
+    String code =
+        violation.getConstraintDescriptor().getAnnotation().annotationType().getSimpleName();
+    return new ValidationError(fieldName, code, violation.getMessage());
   }
 }

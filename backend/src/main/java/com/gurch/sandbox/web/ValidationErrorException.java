@@ -54,6 +54,25 @@ public final class ValidationErrorException extends RuntimeException {
   }
 
   /**
+   * Creates an exception from explicit validation errors using a single HTTP status.
+   *
+   * @param status status to return
+   * @param errors mapped validation errors
+   * @return exception containing provided validation errors
+   */
+  public static ValidationErrorException of(HttpStatus status, List<ValidationError> errors) {
+    if (status == null) {
+      throw new IllegalArgumentException("ValidationErrorException requires a non-null status");
+    }
+    if (errors == null || errors.isEmpty()) {
+      throw new IllegalArgumentException("ValidationErrorException requires at least one error");
+    }
+    String message =
+        errors.stream().map(ValidationError::message).collect(Collectors.joining("; "));
+    return new ValidationErrorException(status, errors, message);
+  }
+
+  /**
    * @return HTTP status for the grouped validation errors
    */
   public HttpStatus getStatus() {

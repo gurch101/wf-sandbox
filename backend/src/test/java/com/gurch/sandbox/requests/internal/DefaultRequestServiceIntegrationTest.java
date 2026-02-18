@@ -11,7 +11,6 @@ import com.gurch.sandbox.requests.RequestResponse;
 import com.gurch.sandbox.requests.RequestSearchCriteria;
 import com.gurch.sandbox.requests.RequestSearchResponse;
 import com.gurch.sandbox.requests.RequestStatus;
-import com.gurch.sandbox.requests.RequestSubmissionErrorCode;
 import com.gurch.sandbox.requests.TaskAction;
 import com.gurch.sandbox.requesttypes.RequestTypeApi;
 import com.gurch.sandbox.requesttypes.RequestTypeCommand;
@@ -131,8 +130,8 @@ class DefaultRequestServiceIntegrationTest extends AbstractJdbcIntegrationTest {
             throwable -> {
               ValidationErrorException exception = (ValidationErrorException) throwable;
               assertThat(exception.getErrors()).hasSize(1);
-              assertThat(exception.getErrors().getFirst().code())
-                  .isEqualTo(RequestSubmissionErrorCode.INVALID_REQUEST_PAYLOAD.code());
+              assertThat(exception.getErrors().getFirst().name()).isEqualTo("amount");
+              assertThat(exception.getErrors().getFirst().code()).isEqualTo("Positive");
             });
 
     RequestEntity stillDraft = requestRepository.findById(draftId).orElseThrow();
