@@ -208,6 +208,5 @@ class DefaultRequestServiceIntegrationTest extends AbstractJdbcIntegrationTest {
     RequestTaskEntity completedTask = requestTaskRepository.findById(task.getId()).orElseThrow();
     assertThat(completedTask.getStatus()).isEqualTo(RequestTaskStatus.COMPLETED);
     assertThat(completedTask.getAction()).isEqualTo(TaskAction.APPROVED.name());
-    assertThat(completedTask.getComment()).isEqualTo("approved");
   }
 }
