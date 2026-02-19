@@ -1,18 +1,21 @@
 package com.gurch.sandbox.idempotency.internal;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import java.time.Instant;
-import lombok.Builder;
+import com.gurch.sandbox.persistence.AuditableEntity;
 import lombok.Data;
-import org.springframework.data.annotation.CreatedDate;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
+import lombok.experimental.SuperBuilder;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Table;
 
 /** Entity for storing idempotency records. */
 @Data
-@Builder(toBuilder = true)
+@EqualsAndHashCode(callSuper = true)
+@NoArgsConstructor
+@SuperBuilder(toBuilder = true)
 @Table("api_idempotency_records")
-public class IdempotencyRecordEntity {
+public class IdempotencyRecordEntity extends AuditableEntity {
   /** The internal ID of the record. */
   @Id private Long id;
 
@@ -33,7 +36,4 @@ public class IdempotencyRecordEntity {
 
   /** The HTTP response body stored as JSONB. */
   private JsonNode responseBody;
-
-  /** The timestamp when the record was created. */
-  @CreatedDate private Instant createdAt;
 }

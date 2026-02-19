@@ -12,6 +12,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,6 +20,9 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
 class SqlQueryBuilderTest extends AbstractJdbcIntegrationTest {
+
+  private static final UUID SYSTEM_USER_ID =
+      UUID.fromString("00000000-0000-0000-0000-000000000000");
 
   @Autowired private NamedParameterJdbcTemplate jdbcTemplate;
 
@@ -484,8 +488,26 @@ class SqlQueryBuilderTest extends AbstractJdbcIntegrationTest {
       String requestTypeKey, String status, String processInstanceId, long version) {
     jdbcTemplate.update(
         """
-        INSERT INTO requests (request_type_key, status, process_instance_id, created_at, updated_at, version)
-        VALUES (:requestTypeKey, :status, :processInstanceId, :createdAt, :updatedAt, :version)
+        INSERT INTO requests (
+          request_type_key,
+          status,
+          process_instance_id,
+          created_at,
+          updated_at,
+          created_by,
+          updated_by,
+          version
+        )
+        VALUES (
+          :requestTypeKey,
+          :status,
+          :processInstanceId,
+          :createdAt,
+          :updatedAt,
+          :createdBy,
+          :updatedBy,
+          :version
+        )
         """,
         new MapSqlParameterSource()
             .addValue("requestTypeKey", requestTypeKey)
@@ -493,6 +515,8 @@ class SqlQueryBuilderTest extends AbstractJdbcIntegrationTest {
             .addValue("processInstanceId", processInstanceId)
             .addValue("createdAt", OffsetDateTime.now(ZoneOffset.UTC))
             .addValue("updatedAt", OffsetDateTime.now(ZoneOffset.UTC))
+            .addValue("createdBy", SYSTEM_USER_ID)
+            .addValue("updatedBy", SYSTEM_USER_ID)
             .addValue("version", version));
   }
 }

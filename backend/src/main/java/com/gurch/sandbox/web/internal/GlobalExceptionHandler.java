@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import com.gurch.sandbox.dto.ValidationError;
 import com.gurch.sandbox.idempotency.IdempotencyConflictException;
 import com.gurch.sandbox.idempotency.MissingIdempotencyKeyException;
+import com.gurch.sandbox.web.ConflictException;
 import com.gurch.sandbox.web.NotFoundException;
 import com.gurch.sandbox.web.PayloadTooLargeException;
 import com.gurch.sandbox.web.ValidationErrorException;
@@ -139,6 +140,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
   @ExceptionHandler(NotFoundException.class)
   public ProblemDetail handleNotFoundException(NotFoundException e) {
     return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, e.getMessage());
+  }
+
+  @ExceptionHandler(ConflictException.class)
+  public ProblemDetail handleConflictException(ConflictException e) {
+    return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, e.getMessage());
   }
 
   @ExceptionHandler(OptimisticLockingFailureException.class)

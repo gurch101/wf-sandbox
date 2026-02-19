@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+  <!-- Dependency-injected collaborators in Spring beans are stable references, not exposed state. -->
+  <Match>
+    <Bug pattern="EI_EXPOSE_REP2"/>
+    <Class name="com.gurch.sandbox.auth.AdminController"/>
+  </Match>
+  <Match>
+    <Bug pattern="EI_EXPOSE_REP2"/>
+    <Class name="com.gurch.sandbox.auth.FileSystemJwtKeyManager"/>
+  </Match>
+  <Match>
+    <Bug pattern="EI_EXPOSE_REP2"/>
+    <Class name="com.gurch.sandbox.auth.internal.AdminSecurityRepository"/>
+  </Match>
+  <Match>
+    <Bug pattern="EI_EXPOSE_REP2"/>
+    <Class name="com.gurch.sandbox.auth.internal.AdminSecurityService"/>
+  </Match>
+  <Match>
+    <Bug pattern="EI_EXPOSE_REP2"/>
+    <Class name="com.gurch.sandbox.auth.internal.AuthContextRepository"/>
+  </Match>
+  <Match>
+    <Bug pattern="EI_EXPOSE_REP2"/>
+    <Class name="com.gurch.sandbox.auth.internal.BootstrapAdminInitializer"/>
+  </Match>
+  <Match>
+    <Bug pattern="EI_EXPOSE_REP2"/>
+    <Class name="com.gurch.sandbox.auth.internal.BootstrapSecurityRepository"/>
+  </Match>
+  <Match>
+    <Bug pattern="EI_EXPOSE_REP2"/>
+    <Class name="com.gurch.sandbox.auth.internal.JdbcRegisteredClientRepository"/>
+  </Match>
+  <Match>
+    <Bug pattern="EI_EXPOSE_REP2"/>
+    <Class name="com.gurch.sandbox.auth.internal.RefreshTokenFamilyRepository"/>
+  </Match>
+  <Match>
+    <Bug pattern="EI_EXPOSE_REP2"/>
+    <Class name="com.gurch.sandbox.auth.internal.RefreshTokenReuseDetectionFilter"/>
+  </Match>
+  <Match>
+    <Bug pattern="EI_EXPOSE_REP2"/>
+    <Class name="com.gurch.sandbox.auth.internal.SystemClientUserRepository"/>
+  </Match>
+  <Match>
+    <Bug pattern="EI_EXPOSE_REP2"/>
+    <Class name="com.gurch.sandbox.auth.internal.TrackingOAuth2AuthorizationService"/>
+  </Match>
+  <Match>
+    <Bug pattern="EI_EXPOSE_REP2"/>
+    <Class name="com.gurch.sandbox.auth.internal.UserCredentialRepository"/>
+  </Match>
+  <Match>
+    <Bug pattern="EI_EXPOSE_REP2"/>
+    <Class name="com.gurch.sandbox.auth.internal.UserLookupRepository"/>
+  </Match>
+  <Match>
+    <Bug pattern="EI_EXPOSE_REP2"/>
+    <Class name="com.gurch.sandbox.requests.TaskController"/>
+  </Match>
+  <Match>
+    <Bug pattern="EI_EXPOSE_REP2"/>
+    <Class name="com.gurch.sandbox.requests.internal.RequestAuthorization"/>
+  </Match>
+</FindBugsFilter>

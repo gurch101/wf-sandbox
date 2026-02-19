@@ -2,6 +2,7 @@ package com.gurch.sandbox.requests;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -29,10 +30,18 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+@WithMockUser(
+    username = "11111111-1111-1111-1111-111111111111",
+    authorities = {"request.read", "request.write", "task.complete", "task.list"})
 class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
+
+  private static final UUID TEST_USER_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
   @Autowired private MockMvc mockMvc;
   @Autowired private ObjectMapper objectMapper;
@@ -40,11 +49,38 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
   @Autowired private RequestTaskRepository requestTaskRepository;
   @Autowired private ExternalTaskService externalTaskService;
   @Autowired private RequestTypeRepository requestTypeRepository;
+  @Autowired private NamedParameterJdbcTemplate jdbcTemplate;
 
   @BeforeEach
   void setUp() {
     requestRepository.deleteAll();
     requestTypeRepository.deleteAll();
+    jdbcTemplate.update(
+        """
+        INSERT INTO users (id, username, email, enabled, is_system, created_at, updated_at)
+        VALUES (:id, :username, :email, true, false, now(), now())
+        ON CONFLICT (id) DO NOTHING
+        """,
+        Map.of(
+            "id",
+            TEST_USER_ID,
+            "username",
+            TEST_USER_ID.toString(),
+            "email",
+            "request-module-user@local.invalid"));
+    jdbcTemplate.update(
+        """
+        INSERT INTO principal_client_scopes (id, principal_user_id, business_client_id, created_at)
+        VALUES (:id, :principalUserId, :businessClientId, now())
+        ON CONFLICT (principal_user_id, business_client_id) DO NOTHING
+        """,
+        Map.of(
+            "id",
+            UUID.fromString("88888888-8888-8888-8888-888888888888"),
+            "principalUserId",
+            TEST_USER_ID,
+            "businessClientId",
+            "CLIENT_A"));
   }
 
   @Test
@@ -284,6 +320,11 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
     mockMvc
         .perform(
             post("/api/requests/{requestId}/tasks/{taskId}/complete", requestId, task.getId())
+                .with(
+                    user(TEST_USER_ID.toString())
+                        .authorities(
+                            new SimpleGrantedAuthority("task.complete"),
+                            new SimpleGrantedAuthority("admin.security.manage")))
                 .with(csrf())
                 .header("Idempotency-Key", UUID.randomUUID().toString())
                 .contentType(MediaType.APPLICATION_JSON)
@@ -293,6 +334,48 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
         .andExpect(status().isNoContent());
 
     assertTaskStatusEventually(task.getId(), RequestTaskStatus.COMPLETED);
+  }
+
+  @Test
+  void shouldReturnForbiddenWhenRequestIsOutsidePrincipalClientScope() throws Exception {
+    RequestEntity outOfScope =
+        requestRepository.save(
+            RequestEntity.builder()
+                .requestTypeKey("loan")
+                .requestTypeVersion(1)
+                .payloadJson(objectMapper.createObjectNode().put("amount", 10))
+                .status(RequestStatus.DRAFT)
+                .businessClientId("CLIENT_B")
+                .build());
+
+    mockMvc
+        .perform(get("/api/requests/{id}", outOfScope.getId()))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
+  void shouldFilterSearchResultsByPrincipalClientScope() throws Exception {
+    requestRepository.save(
+        RequestEntity.builder()
+            .requestTypeKey("loan")
+            .requestTypeVersion(1)
+            .payloadJson(objectMapper.createObjectNode().put("amount", 10))
+            .status(RequestStatus.DRAFT)
+            .businessClientId("CLIENT_A")
+            .build());
+    requestRepository.save(
+        RequestEntity.builder()
+            .requestTypeKey("loan")
+            .requestTypeVersion(1)
+            .payloadJson(objectMapper.createObjectNode().put("amount", 20))
+            .status(RequestStatus.DRAFT)
+            .businessClientId("CLIENT_B")
+            .build());
+
+    mockMvc
+        .perform(get("/api/requests/search"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.requests.length()").value(1));
   }
 
   private void createType(

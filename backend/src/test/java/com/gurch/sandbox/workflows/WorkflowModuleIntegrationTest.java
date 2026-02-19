@@ -7,8 +7,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.gurch.sandbox.AbstractJdbcIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
+@WithMockUser
 class WorkflowModuleIntegrationTest extends AbstractJdbcIntegrationTest {
 
   @Autowired private MockMvc mockMvc;

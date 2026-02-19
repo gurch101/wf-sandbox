@@ -67,6 +67,30 @@ public interface RequestApi {
   void completeTask(Long requestId, Long taskId, TaskAction action, String comment);
 
   /**
+   * Lists workflow tasks matching provided criteria.
+   *
+   * @param criteria task search criteria
+   * @return matching task responses
+   */
+  List<RequestTaskResponse> listTasks(RequestTaskSearchCriteria criteria);
+
+  /**
+   * Claims a task for the provided assignee.
+   *
+   * @param taskId request task identifier
+   * @param assignee assignee identifier
+   */
+  void claimTask(Long taskId, String assignee);
+
+  /**
+   * Assigns a task to the provided assignee.
+   *
+   * @param taskId request task identifier
+   * @param assignee assignee identifier
+   */
+  void assignTask(Long taskId, String assignee);
+
+  /**
    * Searches requests using filters and paging options.
    *
    * @param criteria search criteria

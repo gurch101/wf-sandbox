@@ -11,4 +11,8 @@
   <!-- Suppress Javadoc checks for the base package (SandboxApplication etc.) -->
   <suppress checks="JavadocType|MissingJavadocType|JavadocMethod|MissingJavadocMethod"
             files="com[\/]gurch[\/]sandbox[\/][^\/]*\.java"/>
+
+  <!-- Suppress Javadoc checks for controllers -->
+  <suppress checks="JavadocType|MissingJavadocType|JavadocMethod|MissingJavadocMethod"
+            files=".*Controller\.java"/>
 </suppressions>
