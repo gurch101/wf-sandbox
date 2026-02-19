@@ -84,6 +84,10 @@ dependencies {
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
+tasks.withType(JavaCompile).configureEach {
+	options.compilerArgs += ['-Werror']
+}
+
 tasks.named('test') {
 	useJUnitPlatform()
 	def xdgRuntimeDir = System.getenv('XDG_RUNTIME_DIR')
