@@ -73,6 +73,8 @@ public final class ValidationErrorException extends RuntimeException {
   }
 
   /**
+   * Returns the HTTP status for the grouped validation errors.
+   *
    * @return HTTP status for the grouped validation errors
    */
   public HttpStatus getStatus() {
@@ -80,6 +82,8 @@ public final class ValidationErrorException extends RuntimeException {
   }
 
   /**
+   * Returns the immutable list of API validation errors.
+   *
    * @return immutable list of API validation errors
    */
   public List<ValidationError> getErrors() {

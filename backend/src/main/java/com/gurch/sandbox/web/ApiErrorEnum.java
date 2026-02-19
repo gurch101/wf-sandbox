@@ -13,6 +13,8 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 public @interface ApiErrorEnum {
   /**
+   * Returns error-code enum types that may be returned by this endpoint.
+   *
    * @return error-code enum types that may be returned by this endpoint
    */
   Class<? extends ApiErrorCode>[] value();
