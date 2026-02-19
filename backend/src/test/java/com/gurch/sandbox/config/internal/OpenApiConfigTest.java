@@ -81,16 +81,17 @@ class OpenApiConfigTest {
         .contains("INVALID_REQUEST_PAYLOAD", "MISSING_PAYLOAD_HANDLER");
   }
 
+  @SuppressWarnings("UnusedMethod")
   private static final class DummyController {
     @PostMapping("/idempotent")
-    public void idempotent() {}
+    void idempotent() {}
 
     @PostMapping("/not-idempotent")
     @NotIdempotent
-    public void notIdempotent() {}
+    void notIdempotent() {}
 
     @PostMapping("/with-errors")
     @ApiErrorEnum({RequestSubmissionErrorCode.class})
-    public void withErrors() {}
+    void withErrors() {}
   }
 }

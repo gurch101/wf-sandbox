@@ -24,7 +24,7 @@ class JacksonConfigTest {
   }
 
   private static final class Payload {
-    public TestEnum status;
+    TestEnum status;
   }
 
   private enum TestEnum {

@@ -5,6 +5,8 @@ import org.springframework.http.HttpStatus;
 /** Contract for API error codes that can be surfaced in runtime responses and OpenAPI docs. */
 public interface ApiErrorCode {
   /**
+   * Returns the field name associated with the validation/business error.
+   *
    * @return field name associated with the validation/business error
    */
   String fieldName();
@@ -19,11 +21,15 @@ public interface ApiErrorCode {
   }
 
   /**
+   * Returns the human-readable default message.
+   *
    * @return human-readable default message
    */
   String message();
 
   /**
+   * Returns the HTTP status used when this error is returned.
+   *
    * @return HTTP status used when this error is returned
    */
   HttpStatus status();
