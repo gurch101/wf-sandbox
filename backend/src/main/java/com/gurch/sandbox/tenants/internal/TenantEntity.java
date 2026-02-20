@@ -1,4 +1,4 @@
-package com.gurch.sandbox.users.internal;
+package com.gurch.sandbox.tenants.internal;
 
 import com.gurch.sandbox.persistence.MutableEntity;
 import lombok.Data;
@@ -11,10 +11,8 @@ import org.springframework.data.relational.core.mapping.Table;
 @NoArgsConstructor
 @SuperBuilder(toBuilder = true)
 @EqualsAndHashCode(callSuper = true)
-@Table("users")
-public class UserEntity extends MutableEntity<Integer> {
-  private String username;
-  private String email;
+@Table("tenants")
+public class TenantEntity extends MutableEntity<Integer> {
+  private String name;
   private boolean active;
-  private Integer tenantId;
 }
