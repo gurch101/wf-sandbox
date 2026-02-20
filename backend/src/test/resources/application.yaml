@@ -1,11 +1,15 @@
 fluxnova:
   bpm:
+    job-execution:
+      enabled: false
     metrics:
       enabled: false
 
 # Keep Camunda-compatible aliases as a fallback in case FluxNova still binds these keys.
 camunda:
   bpm:
+    job-execution:
+      enabled: false
     metrics:
       enabled: false
 
