@@ -20,6 +20,6 @@ class WorkflowModuleIntegrationTest extends AbstractJdbcIntegrationTest {
             get("/api/internal/workflows/process-definitions/search")
                 .param("processDefinitionKeyContains", "requestTypeV1"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.workflowDefinitions[0].key").value("requestTypeV1Process"));
+        .andExpect(jsonPath("$.items[0].key").value("requestTypeV1Process"));
   }
 }

@@ -1,6 +1,6 @@
 package com.gurch.sandbox.tenants;
 
-import java.util.List;
+import com.gurch.sandbox.dto.PagedResponse;
 import java.util.Optional;
 
 /** Public API for admin tenant CRUD and search operations. */
@@ -19,5 +19,5 @@ public interface TenantApi {
   void deleteById(Integer id);
 
   /** Searches tenants using optional filters. */
-  List<TenantSearchResponse> search(TenantSearchCriteria criteria);
+  PagedResponse<TenantSearchResponse> search(TenantSearchCriteria criteria);
 }

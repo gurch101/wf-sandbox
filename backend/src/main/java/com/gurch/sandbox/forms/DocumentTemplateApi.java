@@ -1,6 +1,6 @@
 package com.gurch.sandbox.forms;
 
-import java.util.List;
+import com.gurch.sandbox.dto.PagedResponse;
 import java.util.Optional;
 
 /** Public API for document-template upload, download, search, and deletion. */
@@ -16,7 +16,7 @@ public interface DocumentTemplateApi {
   DocumentTemplateDownload download(Long id);
 
   /** Searches document templates by optional filters and pagination. */
-  List<DocumentTemplateResponse> search(DocumentTemplateSearchCriteria criteria);
+  PagedResponse<DocumentTemplateResponse> search(DocumentTemplateSearchCriteria criteria);
 
   /** Deletes a document template and its stored content. */
   void deleteById(Long id);

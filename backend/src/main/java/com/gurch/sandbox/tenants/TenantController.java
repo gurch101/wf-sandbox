@@ -1,6 +1,7 @@
 package com.gurch.sandbox.tenants;
 
 import com.gurch.sandbox.dto.CreateResponse;
+import com.gurch.sandbox.dto.PagedResponse;
 import com.gurch.sandbox.web.ApiErrorEnum;
 import com.gurch.sandbox.web.NotFoundException;
 import jakarta.validation.Valid;
@@ -60,7 +61,7 @@ public class TenantController {
   }
 
   @GetMapping("/search")
-  public TenantDtos.SearchResponse search(TenantSearchCriteria criteria) {
-    return new TenantDtos.SearchResponse(tenantApi.search(criteria));
+  public PagedResponse<TenantSearchResponse> search(TenantSearchCriteria criteria) {
+    return tenantApi.search(criteria);
   }
 }

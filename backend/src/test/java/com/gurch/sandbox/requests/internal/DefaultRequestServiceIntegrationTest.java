@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gurch.sandbox.AbstractJdbcIntegrationTest;
+import com.gurch.sandbox.dto.PagedResponse;
 import com.gurch.sandbox.requests.CreateRequestCommand;
 import com.gurch.sandbox.requests.RequestApi;
 import com.gurch.sandbox.requests.RequestResponse;
@@ -71,11 +72,12 @@ class DefaultRequestServiceIntegrationTest extends AbstractJdbcIntegrationTest {
             .payload(objectMapper.valueToTree(Map.of("amount", 15)))
             .build());
 
-    List<RequestSearchResponse> results =
+    PagedResponse<RequestSearchResponse> results =
         requestApi.search(RequestSearchCriteria.builder().requestTypeKeys(List.of("loan")).build());
 
-    assertThat(results).hasSize(1);
-    assertThat(results.getFirst().requestTypeKey()).isEqualTo("loan");
+    assertThat(results.items()).hasSize(1);
+    assertThat(results.items().getFirst().requestTypeKey()).isEqualTo("loan");
+    assertThat(results.totalElements()).isEqualTo(1);
   }
 
   @Test

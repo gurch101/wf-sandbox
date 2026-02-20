@@ -1,7 +1,7 @@
 package com.gurch.sandbox.requests;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import java.util.List;
+import com.gurch.sandbox.dto.PagedResponse;
 import java.util.Optional;
 
 /** Public API for request submission, lookup, and search operations. */
@@ -72,5 +72,5 @@ public interface RequestApi {
    * @param criteria search criteria
    * @return matching requests
    */
-  List<RequestSearchResponse> search(RequestSearchCriteria criteria);
+  PagedResponse<RequestSearchResponse> search(RequestSearchCriteria criteria);
 }

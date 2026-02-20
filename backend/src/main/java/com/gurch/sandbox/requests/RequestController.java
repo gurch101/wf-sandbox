@@ -1,6 +1,7 @@
 package com.gurch.sandbox.requests;
 
 import com.gurch.sandbox.dto.CreateResponse;
+import com.gurch.sandbox.dto.PagedResponse;
 import com.gurch.sandbox.requesttypes.RequestTypeResolutionErrorCode;
 import com.gurch.sandbox.web.ApiErrorEnum;
 import com.gurch.sandbox.web.NotFoundException;
@@ -89,7 +90,7 @@ public class RequestController {
   }
 
   @GetMapping("/search")
-  public RequestDtos.SearchResponse search(RequestSearchCriteria criteria) {
-    return new RequestDtos.SearchResponse(requestApi.search(criteria));
+  public PagedResponse<RequestSearchResponse> search(RequestSearchCriteria criteria) {
+    return requestApi.search(criteria);
   }
 }

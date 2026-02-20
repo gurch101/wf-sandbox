@@ -1,30 +1,32 @@
 package com.gurch.sandbox.forms;
 
+import com.gurch.sandbox.dto.SearchCriteria;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
-import lombok.Builder;
-import lombok.Value;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.experimental.SuperBuilder;
 import lombok.extern.jackson.Jacksonized;
 
 /** Criteria object for filtering uploaded document templates. */
-@Value
-@Builder
+@Getter
+@Setter
+@SuperBuilder
 @Jacksonized
+@NoArgsConstructor
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
 @Schema(description = "Criteria for searching document-template metadata")
-public class DocumentTemplateSearchCriteria {
+public class DocumentTemplateSearchCriteria extends SearchCriteria {
   @Schema(description = "Partial name match (case-insensitive)", example = "intake")
-  String nameContains;
+  private String nameContains;
 
   @Schema(description = "Optional document type filters")
-  List<DocumentTemplateType> documentTypes;
-
-  @Schema(description = "Zero-indexed page number", example = "0")
-  Integer page;
-
-  @Schema(description = "Page size", example = "20")
-  Integer size;
+  private List<DocumentTemplateType> documentTypes;
 
   public String getNamePattern() {
     return Optional.ofNullable(nameContains)

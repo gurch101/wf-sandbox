@@ -1,9 +1,10 @@
 package com.gurch.sandbox.tenants.internal;
 
+import com.gurch.sandbox.dto.PagedResponse;
 import com.gurch.sandbox.persistence.PersistenceExceptionUtils;
-import com.gurch.sandbox.query.BuiltQuery;
 import com.gurch.sandbox.query.Operator;
 import com.gurch.sandbox.query.SQLQueryBuilder;
+import com.gurch.sandbox.query.SearchExecutor;
 import com.gurch.sandbox.tenants.TenantApi;
 import com.gurch.sandbox.tenants.TenantCommand;
 import com.gurch.sandbox.tenants.TenantErrorCode;
@@ -12,12 +13,9 @@ import com.gurch.sandbox.tenants.TenantSearchCriteria;
 import com.gurch.sandbox.tenants.TenantSearchResponse;
 import com.gurch.sandbox.web.NotFoundException;
 import com.gurch.sandbox.web.ValidationErrorException;
-import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
-import org.springframework.jdbc.core.DataClassRowMapper;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,11 +24,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class DefaultTenantService implements TenantApi {
 
   private final TenantRepository repository;
-  private final NamedParameterJdbcTemplate jdbcTemplate;
+  private final SearchExecutor searchExecutor;
 
   @Override
   @Transactional(readOnly = true)
   public Optional<TenantResponse> findById(Integer id) {
+
     return repository.findById(id).map(this::toResponse);
   }
 
@@ -84,19 +83,16 @@ public class DefaultTenantService implements TenantApi {
 
   @Override
   @Transactional(readOnly = true)
-  public List<TenantSearchResponse> search(TenantSearchCriteria criteria) {
+  public PagedResponse<TenantSearchResponse> search(TenantSearchCriteria criteria) {
     SQLQueryBuilder builder =
         SQLQueryBuilder.select(
                 "t.id, t.name, t.active, t.created_at AS createdAt, "
                     + "t.updated_at AS updatedAt, t.version")
             .from("tenants", "t")
             .where("upper(t.name)", Operator.LIKE, criteria.getNamePattern())
-            .where("t.active", Operator.EQ, criteria.getActive())
-            .page(criteria.getPage(), criteria.getSize());
+            .where("t.active", Operator.EQ, criteria.getActive());
 
-    BuiltQuery query = builder.build();
-    return jdbcTemplate.query(
-        query.sql(), query.params(), new DataClassRowMapper<>(TenantSearchResponse.class));
+    return searchExecutor.execute(builder, criteria, TenantSearchResponse.class);
   }
 
   private static RuntimeException mapPersistenceFailure(RuntimeException ex) {

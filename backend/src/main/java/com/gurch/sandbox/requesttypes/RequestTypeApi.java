@@ -1,9 +1,10 @@
 package com.gurch.sandbox.requesttypes;
 
-import java.util.List;
+import com.gurch.sandbox.dto.PagedResponse;
 
 /** Public API for request type and version management. */
 public interface RequestTypeApi {
+
   /**
    * Resolves the latest active version for a type key.
    *
@@ -44,7 +45,7 @@ public interface RequestTypeApi {
    * @param criteria search criteria
    * @return matching request types
    */
-  List<RequestTypeSearchResponse> search(RequestTypeSearchCriteria criteria);
+  PagedResponse<RequestTypeSearchResponse> search(RequestTypeSearchCriteria criteria);
 
   /**
    * Deletes request type and versions if not used by any request.

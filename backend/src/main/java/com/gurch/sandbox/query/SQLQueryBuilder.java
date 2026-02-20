@@ -6,6 +6,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.StringJoiner;
 
@@ -369,6 +370,60 @@ public final class SQLQueryBuilder {
       sql = sql + " OFFSET " + offset;
     }
     sqlBuilder.append(sql);
+    return new BuiltQuery(sqlBuilder.toString(), finalParams);
+  }
+
+  /**
+   * Builds a count query for the current state. Useful for pagination total counts. Strips ORDER
+   * BY, LIMIT, and OFFSET.
+   *
+   * @return the built count query
+   * @throws IllegalStateException if FROM clause is missing
+   */
+  public BuiltQuery buildCount() {
+    if (fromTable == null || fromAlias == null) {
+      throw new IllegalStateException("FROM clause is required");
+    }
+    Map<String, Object> finalParams = new LinkedHashMap<>(params);
+    StringBuilder sqlBuilder = new StringBuilder();
+    if (!ctes.isEmpty()) {
+      List<String> cteParts = new ArrayList<>();
+      for (Map.Entry<String, SQLQueryBuilder> cte : ctes.entrySet()) {
+        BuiltQuery cteQuery = cte.getValue().build();
+        String rewrittenCteSql =
+            ParameterRewriter.rewrite(cteQuery.sql(), cteQuery.params(), finalParams);
+        cteParts.add(cte.getKey() + " AS (" + rewrittenCteSql + ")");
+      }
+      sqlBuilder.append("WITH ").append(String.join(", ", cteParts)).append(" ");
+    }
+
+    String countSelect = "COUNT(*)";
+    // If original query has DISTINCT or GROUP BY, we wrap it in a subquery to get accurate count
+    if (selectClause.trim().toUpperCase(Locale.ROOT).startsWith("DISTINCT")
+        || !groupByClauses.isEmpty()) {
+      String innerSql = "SELECT " + selectClause + " FROM " + fromTable + " " + fromAlias;
+
+      if (!joinClauses.isEmpty()) {
+        innerSql = innerSql + " " + String.join(" ", joinClauses);
+      }
+      if (!whereClauses.isEmpty()) {
+        innerSql = innerSql + " WHERE " + String.join(" AND ", whereClauses);
+      }
+      if (!groupByClauses.isEmpty()) {
+        innerSql = innerSql + " GROUP BY " + String.join(", ", groupByClauses);
+      }
+      sqlBuilder.append("SELECT COUNT(*) FROM (").append(innerSql).append(") AS count_target");
+    } else {
+      String sql = "SELECT " + countSelect + " FROM " + fromTable + " " + fromAlias;
+      if (!joinClauses.isEmpty()) {
+        sql = sql + " " + String.join(" ", joinClauses);
+      }
+      if (!whereClauses.isEmpty()) {
+        sql = sql + " WHERE " + String.join(" AND ", whereClauses);
+      }
+      sqlBuilder.append(sql);
+    }
+
     return new BuiltQuery(sqlBuilder.toString(), finalParams);
   }
 

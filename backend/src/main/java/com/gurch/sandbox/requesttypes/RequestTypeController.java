@@ -1,5 +1,6 @@
 package com.gurch.sandbox.requesttypes;
 
+import com.gurch.sandbox.dto.PagedResponse;
 import com.gurch.sandbox.web.ApiErrorEnum;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -52,8 +53,8 @@ public class RequestTypeController {
   }
 
   @GetMapping("/search")
-  public RequestTypeDtos.SearchResponse search(RequestTypeSearchCriteria criteria) {
-    return new RequestTypeDtos.SearchResponse(requestTypeApi.search(criteria));
+  public PagedResponse<RequestTypeSearchResponse> search(RequestTypeSearchCriteria criteria) {
+    return requestTypeApi.search(criteria);
   }
 
   @DeleteMapping("/{typeKey}")

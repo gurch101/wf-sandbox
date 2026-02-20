@@ -1,6 +1,7 @@
 package com.gurch.sandbox.users;
 
 import com.gurch.sandbox.dto.CreateResponse;
+import com.gurch.sandbox.dto.PagedResponse;
 import com.gurch.sandbox.web.ApiErrorEnum;
 import com.gurch.sandbox.web.NotFoundException;
 import jakarta.validation.Valid;
@@ -68,7 +69,7 @@ public class UserController {
   }
 
   @GetMapping("/search")
-  public UserDtos.SearchResponse search(UserSearchCriteria criteria) {
-    return new UserDtos.SearchResponse(userApi.search(criteria));
+  public PagedResponse<UserSearchResponse> search(UserSearchCriteria criteria) {
+    return userApi.search(criteria);
   }
 }

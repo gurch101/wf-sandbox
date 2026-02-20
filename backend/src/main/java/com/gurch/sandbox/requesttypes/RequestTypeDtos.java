@@ -2,7 +2,6 @@ package com.gurch.sandbox.requesttypes;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
-import java.util.List;
 import lombok.Value;
 
 /** DTOs for internal request type management endpoints. */
@@ -41,13 +40,5 @@ public interface RequestTypeDtos {
 
     @NotBlank(message = "processDefinitionKey is required")
     String processDefinitionKey;
-  }
-
-  /** Response wrapper for request type search endpoint. */
-  @Value
-  @Schema(description = "Response wrapper for request type search results")
-  class SearchResponse {
-    @Schema(description = "Matching request types")
-    List<RequestTypeSearchResponse> requestTypes;
   }
 }

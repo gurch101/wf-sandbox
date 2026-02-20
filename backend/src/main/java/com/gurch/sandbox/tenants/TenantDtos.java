@@ -3,7 +3,6 @@ package com.gurch.sandbox.tenants;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import java.util.List;
 import lombok.Value;
 
 /** DTOs for admin tenant CRUD endpoints. */
@@ -30,12 +29,5 @@ public interface TenantDtos {
 
     @NotNull(message = "version is required")
     Long version;
-  }
-
-  /** Response wrapper for tenant search endpoint. */
-  @Value
-  @Schema(description = "Tenant search response")
-  class SearchResponse {
-    List<TenantSearchResponse> tenants;
   }
 }

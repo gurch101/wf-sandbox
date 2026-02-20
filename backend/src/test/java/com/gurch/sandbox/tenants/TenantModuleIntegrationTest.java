@@ -82,8 +82,8 @@ class TenantModuleIntegrationTest extends AbstractJdbcIntegrationTest {
     mockMvc
         .perform(get("/api/admin/tenants/search").param("nameContains", "acm"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.tenants.length()").value(1))
-        .andExpect(jsonPath("$.tenants[0].name").value("acme"));
+        .andExpect(jsonPath("$.items.length()").value(1))
+        .andExpect(jsonPath("$.items[0].name").value("acme"));
   }
 
   private Integer createTenant(String name, boolean active) throws Exception {

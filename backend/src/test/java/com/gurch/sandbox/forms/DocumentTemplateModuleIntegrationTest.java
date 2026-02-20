@@ -95,8 +95,8 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
     mockMvc
         .perform(get("/api/document-templates/search").param("nameContains", "intake"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.documentTemplates.length()").value(1))
-        .andExpect(jsonPath("$.documentTemplates[0].id").value(id));
+        .andExpect(jsonPath("$.items.length()").value(1))
+        .andExpect(jsonPath("$.items[0].id").value(id));
 
     mockMvc
         .perform(

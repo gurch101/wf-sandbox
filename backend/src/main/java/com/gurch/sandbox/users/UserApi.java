@@ -1,6 +1,6 @@
 package com.gurch.sandbox.users;
 
-import java.util.List;
+import com.gurch.sandbox.dto.PagedResponse;
 import java.util.Optional;
 
 /** Public API for admin user CRUD and search operations. */
@@ -19,5 +19,5 @@ public interface UserApi {
   void deleteById(Integer id);
 
   /** Searches users using optional filters. */
-  List<UserSearchResponse> search(UserSearchCriteria criteria);
+  PagedResponse<UserSearchResponse> search(UserSearchCriteria criteria);
 }

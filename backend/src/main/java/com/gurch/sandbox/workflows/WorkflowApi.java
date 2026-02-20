@@ -1,9 +1,10 @@
 package com.gurch.sandbox.workflows;
 
-import java.util.List;
+import com.gurch.sandbox.dto.PagedResponse;
 
 /** API for workflow process-definition discovery and validation. */
 public interface WorkflowApi {
+
   /**
    * Returns true when a process definition with the provided key is deployed.
    *
@@ -18,5 +19,6 @@ public interface WorkflowApi {
    * @param criteria search criteria
    * @return deployed process definitions
    */
-  List<WorkflowDefinitionResponse> searchProcessDefinitions(WorkflowSearchCriteria criteria);
+  PagedResponse<WorkflowDefinitionResponse> searchProcessDefinitions(
+      WorkflowSearchCriteria criteria);
 }
