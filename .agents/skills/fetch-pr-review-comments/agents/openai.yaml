@@ -1,0 +1,4 @@
+interface:
+  display_name: "Fetch PR Comments"
+  short_description: "Fetch GitHub PR review comments into a Markdown table."
+  default_prompt: "Fetch PR review comments from a provided GitHub pull request URL and print a markdown table sorted by filename and line number."
