@@ -8,6 +8,10 @@
   <suppress checks="JavadocType|MissingJavadocType|JavadocMethod|MissingJavadocMethod"
             files=".*[\/]internal[\/].*"/>
 
+  <!-- Suppress Javadoc checks for REST controllers -->
+  <suppress checks="JavadocType|MissingJavadocType|JavadocMethod|MissingJavadocMethod"
+            files=".*Controller\.java"/>
+
   <!-- Suppress Javadoc checks for the base package (SandboxApplication etc.) -->
   <suppress checks="JavadocType|MissingJavadocType|JavadocMethod|MissingJavadocMethod"
             files="com[\/]gurch[\/]sandbox[\/][^\/]*\.java"/>

@@ -16,7 +16,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/** REST controller for admin tenant CRUD and search operations. */
 @RestController
 @RequestMapping("/api/admin/tenants")
 @RequiredArgsConstructor
@@ -24,7 +23,6 @@ public class TenantController {
 
   private final TenantApi tenantApi;
 
-  /** Creates a new tenant. */
   @PostMapping
   @ApiErrorEnum({TenantErrorCode.class})
   @ResponseStatus(HttpStatus.CREATED)
@@ -36,13 +34,11 @@ public class TenantController {
             .longValue());
   }
 
-  /** Retrieves one tenant by id. */
   @GetMapping("/{id}")
   public TenantResponse getById(@PathVariable Integer id) {
     return tenantApi.findById(id).orElseThrow(() -> new NotFoundException("Tenant not found"));
   }
 
-  /** Updates one tenant by id. */
   @PutMapping("/{id}")
   @ApiErrorEnum({TenantErrorCode.class})
   public CreateResponse update(
@@ -56,7 +52,6 @@ public class TenantController {
             .longValue());
   }
 
-  /** Deletes one tenant by id. */
   @DeleteMapping("/{id}")
   @ApiErrorEnum({TenantErrorCode.class})
   @ResponseStatus(HttpStatus.NO_CONTENT)
@@ -64,7 +59,6 @@ public class TenantController {
     tenantApi.deleteById(id);
   }
 
-  /** Searches tenants by optional filters. */
   @GetMapping("/search")
   public TenantDtos.SearchResponse search(TenantSearchCriteria criteria) {
     return new TenantDtos.SearchResponse(tenantApi.search(criteria));

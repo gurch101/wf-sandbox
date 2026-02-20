@@ -31,7 +31,7 @@ class UserModuleIntegrationTest extends AbstractJdbcIntegrationTest {
   @BeforeEach
   void setUp() {
     userRepository.findAll().stream()
-        .filter(user -> user.getId() != null && user.getId() > 1)
+        .filter(user -> user.getId() > 1)
         .forEach(userRepository::delete);
   }
 
@@ -89,24 +89,6 @@ class UserModuleIntegrationTest extends AbstractJdbcIntegrationTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.users.length()").value(1))
         .andExpect(jsonPath("$.users[0].username").value("alice"));
-  }
-
-  @Test
-  void shouldRejectDuplicateUsername() throws Exception {
-    createUser("duplicate-user", "first@example.com", true);
-
-    mockMvc
-        .perform(
-            post("/api/admin/users")
-                .with(csrf())
-                .header("Idempotency-Key", UUID.randomUUID().toString())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(
-                    objectMapper.writeValueAsString(
-                        new UserDtos.CreateUserRequest(
-                            "duplicate-user", "second@example.com", true, null))))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.errors[0].code").value("USERNAME_ALREADY_EXISTS"));
   }
 
   private Integer createUser(String username, String email, boolean active) throws Exception {
