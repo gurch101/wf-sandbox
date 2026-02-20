@@ -14,6 +14,17 @@ spring:
       max-file-size: ${FORMS_UPLOAD_MAX_FILE_SIZE:25MB}
       max-request-size: ${FORMS_UPLOAD_MAX_REQUEST_SIZE:25MB}
 
+auth:
+  jwt:
+    keys:
+      directory: ${AUTH_JWT_KEYS_DIR:${java.io.tmpdir}/sandbox-jwt-keys}
+      active-key-id: ${AUTH_JWT_ACTIVE_KEY_ID:sandbox-rsa-key-v1}
+      # Rotation strategy:
+      # 1) Generate a new key pair file with a new key id in the same directory.
+      # 2) Set it as active-key-id.
+      # 3) Keep previous key ids in retired-key-ids until all issued tokens expire.
+      retired-key-ids: ${AUTH_JWT_RETIRED_KEY_IDS:}
+
 documenttemplates:
   upload:
     max-size-bytes: ${FORMS_UPLOAD_MAX_SIZE_BYTES:26214400}
