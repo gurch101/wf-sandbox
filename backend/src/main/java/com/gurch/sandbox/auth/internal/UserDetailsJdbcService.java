@@ -7,11 +7,11 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 @Service
-public class JdbcUserDetailsService implements UserDetailsService {
+public class UserDetailsJdbcService implements UserDetailsService {
 
   private final UserCredentialRepository userCredentialRepository;
 
-  public JdbcUserDetailsService(UserCredentialRepository userCredentialRepository) {
+  public UserDetailsJdbcService(UserCredentialRepository userCredentialRepository) {
     this.userCredentialRepository = userCredentialRepository;
   }
 

@@ -12,7 +12,7 @@ import org.springframework.data.relational.core.mapping.Table;
 @NoArgsConstructor
 @SuperBuilder(toBuilder = true)
 @Table("request_types")
-public class RequestTypeEntity extends VersionedAuditableEntity {
+public class RequestTypeEntity extends VersionedAuditableEntity<Long> {
   private String typeKey;
   private String name;
   private String description;

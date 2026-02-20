@@ -39,7 +39,8 @@ class OpenApiConfigTest {
   void shouldAddIdempotencyHeaderForPostMappings() throws Exception {
     OpenApiConfig config = new OpenApiConfig();
     HandlerMethod handlerMethod =
-        new HandlerMethod(new DummyController(), DummyController.class.getMethod("idempotent"));
+        new HandlerMethod(
+            new DummyController(), DummyController.class.getDeclaredMethod("idempotent"));
 
     Operation customized =
         config.idempotencyKeyHeaderCustomizer().customize(new Operation(), handlerMethod);
@@ -52,7 +53,8 @@ class OpenApiConfigTest {
   void shouldSkipIdempotencyHeaderForNotIdempotentMethods() throws Exception {
     OpenApiConfig config = new OpenApiConfig();
     HandlerMethod handlerMethod =
-        new HandlerMethod(new DummyController(), DummyController.class.getMethod("notIdempotent"));
+        new HandlerMethod(
+            new DummyController(), DummyController.class.getDeclaredMethod("notIdempotent"));
 
     Operation customized =
         config.idempotencyKeyHeaderCustomizer().customize(new Operation(), handlerMethod);
@@ -65,7 +67,8 @@ class OpenApiConfigTest {
   void shouldDocumentApiErrorEnumCodes() throws Exception {
     OpenApiConfig config = new OpenApiConfig();
     HandlerMethod handlerMethod =
-        new HandlerMethod(new DummyController(), DummyController.class.getMethod("withErrors"));
+        new HandlerMethod(
+            new DummyController(), DummyController.class.getDeclaredMethod("withErrors"));
 
     Operation customized =
         config.apiErrorEnumCustomizer().customize(new Operation(), handlerMethod);

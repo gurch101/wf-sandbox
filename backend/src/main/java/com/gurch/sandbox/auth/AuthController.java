@@ -28,8 +28,17 @@ public class AuthController {
     String userId = authentication.getName();
     String username = extractUsername(authentication);
     List<String> roles = extractRoles(authentication);
-    List<String> permissions = extractPermissions(authentication);
     Optional<UUID> principalUserId = parseUuid(userId);
+    List<String> permissions =
+        principalUserId
+            .map(
+                id -> {
+                  List<String> dbPermissions = authContextRepository.findPermissionCodes(id);
+                  return dbPermissions.isEmpty()
+                      ? extractPermissions(authentication)
+                      : dbPermissions;
+                })
+            .orElseGet(() -> extractPermissions(authentication));
     List<String> workflowGroupIds =
         principalUserId.map(authContextRepository::findWorkflowGroupCodes).orElseGet(List::of);
     List<String> clientScopeIds =

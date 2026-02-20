@@ -1,9 +1,12 @@
+-- Users for both human principals and internal system principals.
 CREATE TABLE users (
   id UUID PRIMARY KEY,
   username VARCHAR(100) NOT NULL UNIQUE,
   email VARCHAR(320) NOT NULL UNIQUE,
   enabled BOOLEAN NOT NULL,
   is_system BOOLEAN NOT NULL DEFAULT false,
+  created_by UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
+  updated_by UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
   created_at TIMESTAMPTZ NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL
 );
@@ -37,6 +40,7 @@ ALTER TABLE request_tasks
   ADD CONSTRAINT fk_request_tasks_created_by FOREIGN KEY (created_by) REFERENCES users (id),
   ADD CONSTRAINT fk_request_tasks_updated_by FOREIGN KEY (updated_by) REFERENCES users (id);
 
+-- OAuth2 client registrations used by the authorization server.
 CREATE TABLE oauth_clients (
   client_id VARCHAR(100) PRIMARY KEY,
   client_secret_hash VARCHAR(255),
@@ -48,11 +52,13 @@ CREATE TABLE oauth_clients (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Mapping from OAuth2 machine clients to system users.
 CREATE TABLE system_client_users (
   client_id VARCHAR(100) PRIMARY KEY REFERENCES oauth_clients(client_id) ON DELETE CASCADE,
   user_id UUID NOT NULL UNIQUE REFERENCES users(id)
 );
 
+-- Refresh-token family metadata used for replay detection and forced revocation.
 CREATE TABLE oauth_refresh_token_families (
   id UUID PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES users(id),
@@ -63,6 +69,7 @@ CREATE TABLE oauth_refresh_token_families (
   UNIQUE (user_id, client_id)
 );
 
+-- Individual refresh-token hashes issued for a family.
 CREATE TABLE oauth_refresh_tokens (
   token_hash VARCHAR(128) PRIMARY KEY,
   family_id UUID NOT NULL REFERENCES oauth_refresh_token_families(id) ON DELETE CASCADE,
@@ -73,28 +80,34 @@ CREATE TABLE oauth_refresh_tokens (
 
 CREATE INDEX idx_oauth_refresh_tokens_family_id ON oauth_refresh_tokens(family_id);
 
+-- Password hashes for user login.
 CREATE TABLE user_credentials (
   user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   password_hash VARCHAR(255) NOT NULL,
   password_updated_at TIMESTAMPTZ NOT NULL
 );
 
+-- RBAC roles assigned to users.
 CREATE TABLE roles (
   id UUID PRIMARY KEY,
   code VARCHAR(100) NOT NULL UNIQUE,
   name VARCHAR(150) NOT NULL,
+  version BIGINT NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL
 );
 
+-- RBAC permissions assigned to roles.
 CREATE TABLE permissions (
   id UUID PRIMARY KEY,
   code VARCHAR(120) NOT NULL UNIQUE,
   description VARCHAR(255) NOT NULL,
+  version BIGINT NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL
 );
 
+-- Many-to-many mapping between roles and permissions.
 CREATE TABLE role_permissions (
   role_id UUID NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
   permission_id UUID NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
@@ -102,6 +115,7 @@ CREATE TABLE role_permissions (
   PRIMARY KEY (role_id, permission_id)
 );
 
+-- Many-to-many mapping between users and roles.
 CREATE TABLE user_roles (
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   role_id UUID NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
@@ -109,14 +123,17 @@ CREATE TABLE user_roles (
   PRIMARY KEY (user_id, role_id)
 );
 
+-- Workflow ownership/security groups used for task authorization.
 CREATE TABLE workflow_groups (
   id UUID PRIMARY KEY,
   code VARCHAR(100) NOT NULL UNIQUE,
   name VARCHAR(150) NOT NULL,
+  version BIGINT NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL
 );
 
+-- Many-to-many mapping between users and workflow groups.
 CREATE TABLE user_workflow_groups (
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   workflow_group_id UUID NOT NULL REFERENCES workflow_groups(id) ON DELETE CASCADE,
@@ -124,6 +141,7 @@ CREATE TABLE user_workflow_groups (
   PRIMARY KEY (user_id, workflow_group_id)
 );
 
+-- Business client scopes used to constrain request/task data visibility.
 CREATE TABLE principal_client_scopes (
   id UUID PRIMARY KEY,
   principal_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

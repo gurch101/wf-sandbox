@@ -109,6 +109,10 @@ public class RequestAuthorization {
             .from("request_tasks", "rt")
             .join(JoinType.INNER, "requests", "r", "r.id = rt.request_id")
             .where("rt.id", Operator.EQ, taskId)
+            .whereNotNull("r.workflow_group_code")
+            .whereNotNull("r.business_client_id")
+            .where("trim(r.workflow_group_code)", Operator.NE, "")
+            .where("trim(r.business_client_id)", Operator.NE, "")
             .build();
     return jdbcTemplate
         .query(
@@ -118,12 +122,6 @@ public class RequestAuthorization {
                 new TaskAuthorizationContext(
                     rs.getString("workflow_group_code"), rs.getString("business_client_id")))
         .stream()
-        .filter(
-            context ->
-                context.workflowGroupCode() != null
-                    && !context.workflowGroupCode().isBlank()
-                    && context.businessClientId() != null
-                    && !context.businessClientId().isBlank())
         .findFirst();
   }
 

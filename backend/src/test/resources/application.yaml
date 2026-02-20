@@ -8,7 +8,7 @@ auth:
     enabled: true
     username: admin
     email: admin@local.invalid
-    password: AdminPass123!
+    password: ${AUTH_BOOTSTRAP_PASSWORD}
 
 # Keep Camunda-compatible aliases as a fallback in case FluxNova still binds these keys.
 camunda:

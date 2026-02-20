@@ -88,7 +88,7 @@ public class AdminSecurityService {
             .findPermissionIdByCode(permissionCode)
             .orElseThrow(
                 () -> new NotFoundException("Permission not found for code: " + permissionCode));
-    if (repository.countPermissionRoleAssignments(permissionId) > 0) {
+    if (repository.existsPermissionRoleAssignment(permissionId)) {
       throw new ConflictException("Permission is in use and cannot be deleted: " + permissionCode);
     }
     repository.deletePermissionByCode(permissionCode);
@@ -121,8 +121,7 @@ public class AdminSecurityService {
                 () ->
                     new NotFoundException(
                         "Workflow group not found for code: " + workflowGroupCode));
-    if (repository.countWorkflowGroupUserAssignments(workflowGroupId) > 0
-        || repository.countRequestWorkflowGroupReferences(workflowGroupCode) > 0) {
+    if (repository.existsWorkflowGroupUserAssignment(workflowGroupId)) {
       throw new ConflictException(
           "Workflow group is in use and cannot be deleted: " + workflowGroupCode);
     }
@@ -135,8 +134,7 @@ public class AdminSecurityService {
         repository
             .findRoleIdByCode(roleCode)
             .orElseThrow(() -> new NotFoundException("Role not found for code: " + roleCode));
-    if (repository.countUserRoleAssignments(roleId) > 0
-        || repository.countRolePermissionAssignments(roleId) > 0) {
+    if (repository.existsUserRoleAssignment(roleId)) {
       throw new ConflictException("Role is in use and cannot be deleted: " + roleCode);
     }
     repository.deleteRoleByCode(roleCode);

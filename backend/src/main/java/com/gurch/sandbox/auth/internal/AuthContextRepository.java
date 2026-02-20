@@ -42,4 +42,17 @@ public class AuthContextRepository implements AuthContextApi {
     return jdbcTemplate.query(
         query.sql(), query.params(), (rs, rowNum) -> rs.getString("business_client_id"));
   }
+
+  @Override
+  public List<String> findPermissionCodes(UUID userId) {
+    BuiltQuery query =
+        SQLQueryBuilder.select("distinct p.code")
+            .from("user_roles", "ur")
+            .join(JoinType.INNER, "role_permissions", "rp", "rp.role_id = ur.role_id")
+            .join(JoinType.INNER, "permissions", "p", "p.id = rp.permission_id")
+            .where("ur.user_id", Operator.EQ, userId)
+            .orderBy("+p.code")
+            .build();
+    return jdbcTemplate.query(query.sql(), query.params(), (rs, rowNum) -> rs.getString("code"));
+  }
 }

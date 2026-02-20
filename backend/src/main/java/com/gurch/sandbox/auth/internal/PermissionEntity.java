@@ -7,4 +7,9 @@ import org.springframework.data.relational.core.mapping.Table;
 
 @Table("permissions")
 public record PermissionEntity(
-    @Id UUID id, String code, String description, Instant createdAt, Instant updatedAt) {}
+    @Id UUID id,
+    String code,
+    String description,
+    Long version,
+    Instant createdAt,
+    Instant updatedAt) {}

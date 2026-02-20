@@ -7,4 +7,4 @@ import org.springframework.data.relational.core.mapping.Table;
 
 @Table("workflow_groups")
 public record WorkflowGroupEntity(
-    @Id UUID id, String code, String name, Instant createdAt, Instant updatedAt) {}
+    @Id UUID id, String code, String name, Long version, Instant createdAt, Instant updatedAt) {}

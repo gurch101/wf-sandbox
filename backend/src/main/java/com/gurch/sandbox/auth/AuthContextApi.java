@@ -11,4 +11,7 @@ public interface AuthContextApi {
 
   /** Returns business client scopes assigned to the principal user. */
   List<String> findClientScopeIds(UUID userId);
+
+  /** Returns effective permission codes for the principal user through assigned roles. */
+  List<String> findPermissionCodes(UUID userId);
 }

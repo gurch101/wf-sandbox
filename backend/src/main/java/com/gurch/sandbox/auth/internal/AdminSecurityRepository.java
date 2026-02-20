@@ -1,6 +1,7 @@
 package com.gurch.sandbox.auth.internal;
 
 import com.gurch.sandbox.query.BuiltQuery;
+import com.gurch.sandbox.query.JoinType;
 import com.gurch.sandbox.query.Operator;
 import com.gurch.sandbox.query.SQLQueryBuilder;
 import java.sql.Timestamp;
@@ -48,7 +49,7 @@ public class AdminSecurityRepository {
 
   public List<RoleEntity> findRoles(String codePattern, int page, int size) {
     SQLQueryBuilder builder =
-        SQLQueryBuilder.select("r.id, r.code, r.name, r.created_at, r.updated_at")
+        SQLQueryBuilder.select("r.id, r.code, r.name, r.version, r.created_at, r.updated_at")
             .from("roles", "r")
             .where("upper(r.code)", Operator.LIKE, codePattern)
             .orderBy("+r.code")
@@ -62,6 +63,7 @@ public class AdminSecurityRepository {
                 (UUID) rs.getObject("id"),
                 rs.getString("code"),
                 rs.getString("name"),
+                rs.getLong("version"),
                 rs.getTimestamp("created_at").toInstant(),
                 rs.getTimestamp("updated_at").toInstant()));
   }
@@ -86,7 +88,7 @@ public class AdminSecurityRepository {
 
   public List<PermissionEntity> findPermissions(String codePattern, int page, int size) {
     SQLQueryBuilder builder =
-        SQLQueryBuilder.select("p.id, p.code, p.description, p.created_at, p.updated_at")
+        SQLQueryBuilder.select("p.id, p.code, p.description, p.version, p.created_at, p.updated_at")
             .from("permissions", "p")
             .where("upper(p.code)", Operator.LIKE, codePattern)
             .orderBy("+p.code")
@@ -100,6 +102,7 @@ public class AdminSecurityRepository {
                 (UUID) rs.getObject("id"),
                 rs.getString("code"),
                 rs.getString("description"),
+                rs.getLong("version"),
                 rs.getTimestamp("created_at").toInstant(),
                 rs.getTimestamp("updated_at").toInstant()));
   }
@@ -124,7 +127,7 @@ public class AdminSecurityRepository {
 
   public List<WorkflowGroupEntity> findWorkflowGroups(String codePattern, int page, int size) {
     SQLQueryBuilder builder =
-        SQLQueryBuilder.select("wg.id, wg.code, wg.name, wg.created_at, wg.updated_at")
+        SQLQueryBuilder.select("wg.id, wg.code, wg.name, wg.version, wg.created_at, wg.updated_at")
             .from("workflow_groups", "wg")
             .where("upper(wg.code)", Operator.LIKE, codePattern)
             .orderBy("+wg.code")
@@ -138,6 +141,7 @@ public class AdminSecurityRepository {
                 (UUID) rs.getObject("id"),
                 rs.getString("code"),
                 rs.getString("name"),
+                rs.getLong("version"),
                 rs.getTimestamp("created_at").toInstant(),
                 rs.getTimestamp("updated_at").toInstant()));
   }
@@ -157,8 +161,8 @@ public class AdminSecurityRepository {
     Timestamp now = Timestamp.from(Instant.now());
     jdbcTemplate.update(
         """
-        INSERT INTO roles (id, code, name, created_at, updated_at)
-        VALUES (:id, :code, :name, :now, :now)
+        INSERT INTO roles (id, code, name, version, created_at, updated_at)
+        VALUES (:id, :code, :name, 0, :now, :now)
         """,
         Map.of("id", roleId, "code", code, "name", name, "now", now));
     return roleId;
@@ -169,8 +173,8 @@ public class AdminSecurityRepository {
     Timestamp now = Timestamp.from(Instant.now());
     jdbcTemplate.update(
         """
-        INSERT INTO permissions (id, code, description, created_at, updated_at)
-        VALUES (:id, :code, :description, :now, :now)
+        INSERT INTO permissions (id, code, description, version, created_at, updated_at)
+        VALUES (:id, :code, :description, 0, :now, :now)
         """,
         Map.of("id", permissionId, "code", code, "description", description, "now", now));
     return permissionId;
@@ -181,8 +185,8 @@ public class AdminSecurityRepository {
     Timestamp now = Timestamp.from(Instant.now());
     jdbcTemplate.update(
         """
-        INSERT INTO workflow_groups (id, code, name, created_at, updated_at)
-        VALUES (:id, :code, :name, :now, :now)
+        INSERT INTO workflow_groups (id, code, name, version, created_at, updated_at)
+        VALUES (:id, :code, :name, 0, :now, :now)
         """,
         Map.of("id", groupId, "code", code, "name", name, "now", now));
     return groupId;
@@ -282,7 +286,7 @@ public class AdminSecurityRepository {
     BuiltQuery query =
         SQLQueryBuilder.select("r.code")
             .from("user_roles", "ur")
-            .join(com.gurch.sandbox.query.JoinType.INNER, "roles", "r", "r.id = ur.role_id")
+            .join(JoinType.INNER, "roles", "r", "r.id = ur.role_id")
             .where("ur.user_id", Operator.EQ, userId)
             .orderBy("+r.code")
             .build();
@@ -293,11 +297,7 @@ public class AdminSecurityRepository {
     BuiltQuery query =
         SQLQueryBuilder.select("p.code")
             .from("role_permissions", "rp")
-            .join(
-                com.gurch.sandbox.query.JoinType.INNER,
-                "permissions",
-                "p",
-                "p.id = rp.permission_id")
+            .join(JoinType.INNER, "permissions", "p", "p.id = rp.permission_id")
             .where("rp.role_id", Operator.EQ, roleId)
             .orderBy("+p.code")
             .build();
@@ -308,11 +308,7 @@ public class AdminSecurityRepository {
     BuiltQuery query =
         SQLQueryBuilder.select("wg.code")
             .from("user_workflow_groups", "uwg")
-            .join(
-                com.gurch.sandbox.query.JoinType.INNER,
-                "workflow_groups",
-                "wg",
-                "wg.id = uwg.workflow_group_id")
+            .join(JoinType.INNER, "workflow_groups", "wg", "wg.id = uwg.workflow_group_id")
             .where("uwg.user_id", Operator.EQ, userId)
             .orderBy("+wg.code")
             .build();
@@ -330,44 +326,44 @@ public class AdminSecurityRepository {
         query.sql(), query.params(), (rs, rowNum) -> rs.getString("business_client_id"));
   }
 
-  public int countUserRoleAssignments(UUID roleId) {
+  public boolean existsUserRoleAssignment(UUID roleId) {
     BuiltQuery query =
-        SQLQueryBuilder.select("count(*)")
+        SQLQueryBuilder.select("1")
             .from("user_roles", "ur")
             .where("ur.role_id", Operator.EQ, roleId)
+            .limit(1)
             .build();
-    return nullableIntToPrimitive(
-        jdbcTemplate.queryForObject(query.sql(), query.params(), Integer.class));
+    return !jdbcTemplate.queryForList(query.sql(), query.params()).isEmpty();
   }
 
-  public int countRolePermissionAssignments(UUID roleId) {
+  public boolean existsRolePermissionAssignment(UUID roleId) {
     BuiltQuery query =
-        SQLQueryBuilder.select("count(*)")
+        SQLQueryBuilder.select("1")
             .from("role_permissions", "rp")
             .where("rp.role_id", Operator.EQ, roleId)
+            .limit(1)
             .build();
-    return nullableIntToPrimitive(
-        jdbcTemplate.queryForObject(query.sql(), query.params(), Integer.class));
+    return !jdbcTemplate.queryForList(query.sql(), query.params()).isEmpty();
   }
 
-  public int countPermissionRoleAssignments(UUID permissionId) {
+  public boolean existsPermissionRoleAssignment(UUID permissionId) {
     BuiltQuery query =
-        SQLQueryBuilder.select("count(*)")
+        SQLQueryBuilder.select("1")
             .from("role_permissions", "rp")
             .where("rp.permission_id", Operator.EQ, permissionId)
+            .limit(1)
             .build();
-    return nullableIntToPrimitive(
-        jdbcTemplate.queryForObject(query.sql(), query.params(), Integer.class));
+    return !jdbcTemplate.queryForList(query.sql(), query.params()).isEmpty();
   }
 
-  public int countWorkflowGroupUserAssignments(UUID workflowGroupId) {
+  public boolean existsWorkflowGroupUserAssignment(UUID workflowGroupId) {
     BuiltQuery query =
-        SQLQueryBuilder.select("count(*)")
+        SQLQueryBuilder.select("1")
             .from("user_workflow_groups", "uwg")
             .where("uwg.workflow_group_id", Operator.EQ, workflowGroupId)
+            .limit(1)
             .build();
-    return nullableIntToPrimitive(
-        jdbcTemplate.queryForObject(query.sql(), query.params(), Integer.class));
+    return !jdbcTemplate.queryForList(query.sql(), query.params()).isEmpty();
   }
 
   public int countRequestWorkflowGroupReferences(String workflowGroupCode) {
@@ -397,6 +393,7 @@ public class AdminSecurityRepository {
         """
         UPDATE roles
         SET name = :name,
+            version = version + 1,
             updated_at = :updatedAt
         WHERE code = :code
         """,
@@ -416,6 +413,7 @@ public class AdminSecurityRepository {
         """
         UPDATE permissions
         SET description = :description,
+            version = version + 1,
             updated_at = :updatedAt
         WHERE code = :code
         """,
@@ -435,6 +433,7 @@ public class AdminSecurityRepository {
         """
         UPDATE workflow_groups
         SET name = :name,
+            version = version + 1,
             updated_at = :updatedAt
         WHERE code = :code
         """,

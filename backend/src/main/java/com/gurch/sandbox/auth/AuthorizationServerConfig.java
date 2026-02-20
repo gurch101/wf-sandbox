@@ -1,10 +1,10 @@
 package com.gurch.sandbox.auth;
 
-import com.gurch.sandbox.auth.internal.JdbcUserDetailsService;
 import com.gurch.sandbox.auth.internal.RefreshTokenFamilyRepository;
 import com.gurch.sandbox.auth.internal.RefreshTokenReuseDetectionFilter;
 import com.gurch.sandbox.auth.internal.SystemClientUserRepository;
 import com.gurch.sandbox.auth.internal.TrackingOAuth2AuthorizationService;
+import com.gurch.sandbox.auth.internal.UserDetailsJdbcService;
 import com.gurch.sandbox.auth.internal.UserLookupRepository;
 import com.nimbusds.jose.jwk.JWK;
 import com.nimbusds.jose.jwk.JWKSet;
@@ -106,9 +106,9 @@ public class AuthorizationServerConfig {
 
   @Bean
   DaoAuthenticationProvider daoAuthenticationProvider(
-      JdbcUserDetailsService jdbcUserDetailsService, PasswordEncoder passwordEncoder) {
+      UserDetailsJdbcService userDetailsJdbcService, PasswordEncoder passwordEncoder) {
     DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
-    provider.setUserDetailsService(jdbcUserDetailsService);
+    provider.setUserDetailsService(userDetailsJdbcService);
     provider.setPasswordEncoder(passwordEncoder);
     return provider;
   }

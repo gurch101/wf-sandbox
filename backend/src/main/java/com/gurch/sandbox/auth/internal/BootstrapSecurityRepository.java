@@ -1,5 +1,6 @@
 package com.gurch.sandbox.auth.internal;
 
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
@@ -53,7 +54,7 @@ public class BootstrapSecurityRepository {
             "email",
             email,
             "now",
-            java.sql.Timestamp.from(Instant.now())));
+            Timestamp.from(Instant.now())));
   }
 
   public void upsertCredential(UUID userId, String passwordHash) {
@@ -61,6 +62,7 @@ public class BootstrapSecurityRepository {
         """
         INSERT INTO user_credentials (user_id, password_hash, password_updated_at)
         VALUES (:userId, :passwordHash, :updatedAt)
+        -- EXCLUDED references the proposed INSERT row during ON CONFLICT handling.
         ON CONFLICT (user_id) DO UPDATE SET
           password_hash = EXCLUDED.password_hash,
           password_updated_at = EXCLUDED.password_updated_at
@@ -68,7 +70,7 @@ public class BootstrapSecurityRepository {
         Map.of(
             "userId", userId,
             "passwordHash", passwordHash,
-            "updatedAt", java.sql.Timestamp.from(Instant.now())));
+            "updatedAt", Timestamp.from(Instant.now())));
   }
 
   public UUID insertRoleIfMissing(String code, String name) {
@@ -78,14 +80,14 @@ public class BootstrapSecurityRepository {
               UUID roleId = UUID.randomUUID();
               jdbcTemplate.update(
                   """
-                  INSERT INTO roles (id, code, name, created_at, updated_at)
-                  VALUES (:id, :code, :name, :now, :now)
+                  INSERT INTO roles (id, code, name, version, created_at, updated_at)
+                  VALUES (:id, :code, :name, 0, :now, :now)
                   """,
                   Map.of(
                       "id", roleId,
                       "code", code,
                       "name", name,
-                      "now", java.sql.Timestamp.from(Instant.now())));
+                      "now", Timestamp.from(Instant.now())));
               return roleId;
             });
   }
@@ -97,14 +99,14 @@ public class BootstrapSecurityRepository {
               UUID permissionId = UUID.randomUUID();
               jdbcTemplate.update(
                   """
-                  INSERT INTO permissions (id, code, description, created_at, updated_at)
-                  VALUES (:id, :code, :description, :now, :now)
+                  INSERT INTO permissions (id, code, description, version, created_at, updated_at)
+                  VALUES (:id, :code, :description, 0, :now, :now)
                   """,
                   Map.of(
                       "id", permissionId,
                       "code", code,
                       "description", description,
-                      "now", java.sql.Timestamp.from(Instant.now())));
+                      "now", Timestamp.from(Instant.now())));
               return permissionId;
             });
   }
@@ -119,7 +121,7 @@ public class BootstrapSecurityRepository {
         Map.of(
             "roleId", roleId,
             "permissionId", permissionId,
-            "createdAt", java.sql.Timestamp.from(Instant.now())));
+            "createdAt", Timestamp.from(Instant.now())));
   }
 
   public void linkUserRole(UUID userId, UUID roleId) {
@@ -132,6 +134,6 @@ public class BootstrapSecurityRepository {
         Map.of(
             "userId", userId,
             "roleId", roleId,
-            "createdAt", java.sql.Timestamp.from(Instant.now())));
+            "createdAt", Timestamp.from(Instant.now())));
   }
 }

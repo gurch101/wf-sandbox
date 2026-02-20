@@ -15,7 +15,7 @@ import org.springframework.data.relational.core.mapping.Table;
 @NoArgsConstructor
 @SuperBuilder(toBuilder = true)
 @Table("requests")
-public class RequestEntity extends VersionedAuditableEntity {
+public class RequestEntity extends VersionedAuditableEntity<Long> {
   private String requestTypeKey;
   private Integer requestTypeVersion;
   private JsonNode payloadJson;

@@ -1,6 +1,5 @@
 package com.gurch.sandbox.requests;
 
-import com.gurch.sandbox.idempotency.NotIdempotent;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.HttpStatus;
@@ -25,7 +24,6 @@ public class TaskController {
   }
 
   @GetMapping
-  @NotIdempotent
   @PreAuthorize("@requestAuthorization.canListTasks(authentication)")
   public List<RequestTaskResponse> list(RequestTaskSearchCriteria criteria) {
     return requestApi.listTasks(criteria);

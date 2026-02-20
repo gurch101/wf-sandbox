@@ -18,11 +18,14 @@ import org.springframework.security.oauth2.server.authorization.settings.TokenSe
 import org.springframework.stereotype.Repository;
 
 @Repository
-public class JdbcRegisteredClientRepository implements RegisteredClientRepository {
+public class RegisteredClientJdbcRepository implements RegisteredClientRepository {
+
+  private static final Duration ACCESS_TOKEN_TTL = Duration.ofMinutes(15);
+  private static final Duration REFRESH_TOKEN_TTL = Duration.ofDays(30);
 
   private final NamedParameterJdbcTemplate jdbcTemplate;
 
-  public JdbcRegisteredClientRepository(NamedParameterJdbcTemplate jdbcTemplate) {
+  public RegisteredClientJdbcRepository(NamedParameterJdbcTemplate jdbcTemplate) {
     this.jdbcTemplate = jdbcTemplate;
   }
 
@@ -79,10 +82,10 @@ public class JdbcRegisteredClientRepository implements RegisteredClientRepositor
   @Override
   public RegisteredClient findByClientId(String clientId) {
     BuiltQuery query =
-        SQLQueryBuilder.select(
-                "client_id, client_secret_hash, grant_types, scopes, redirect_uris, enabled")
+        SQLQueryBuilder.select("client_id, client_secret_hash, grant_types, scopes, redirect_uris")
             .from("oauth_clients", "oc")
             .where("oc.client_id", Operator.EQ, clientId)
+            .where("oc.enabled", Operator.EQ, true)
             .build();
 
     return jdbcTemplate
@@ -90,10 +93,6 @@ public class JdbcRegisteredClientRepository implements RegisteredClientRepositor
             query.sql(),
             query.params(),
             (rs, rowNum) -> {
-              if (!rs.getBoolean("enabled")) {
-                return null;
-              }
-
               Set<String> grantTypes = splitValues(rs.getString("grant_types"));
               Set<String> scopes = splitValues(rs.getString("scopes"));
 
@@ -102,8 +101,8 @@ public class JdbcRegisteredClientRepository implements RegisteredClientRepositor
                       .clientId(rs.getString("client_id"))
                       .tokenSettings(
                           TokenSettings.builder()
-                              .accessTokenTimeToLive(Duration.ofMinutes(15))
-                              .refreshTokenTimeToLive(Duration.ofDays(30))
+                              .accessTokenTimeToLive(ACCESS_TOKEN_TTL)
+                              .refreshTokenTimeToLive(REFRESH_TOKEN_TTL)
                               .reuseRefreshTokens(false)
                               .build());
 

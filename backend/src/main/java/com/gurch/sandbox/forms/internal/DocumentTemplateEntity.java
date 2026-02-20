@@ -14,7 +14,7 @@ import org.springframework.data.relational.core.mapping.Table;
 @NoArgsConstructor
 @SuperBuilder(toBuilder = true)
 @Table("forms")
-public class DocumentTemplateEntity extends VersionedAuditableEntity {
+public class DocumentTemplateEntity extends VersionedAuditableEntity<Long> {
   private String name;
   private String description;
   private String mimeType;

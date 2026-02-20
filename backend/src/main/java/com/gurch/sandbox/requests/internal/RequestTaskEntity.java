@@ -12,7 +12,7 @@ import org.springframework.data.relational.core.mapping.Table;
 @NoArgsConstructor
 @SuperBuilder(toBuilder = true)
 @Table("request_tasks")
-public class RequestTaskEntity extends VersionedAuditableEntity {
+public class RequestTaskEntity extends VersionedAuditableEntity<Long> {
   private Long requestId;
   private String processInstanceId;
   private String taskId;

@@ -1,6 +1,7 @@
 package com.gurch.sandbox.auth.internal;
 
 import com.gurch.sandbox.query.BuiltQuery;
+import com.gurch.sandbox.query.JoinType;
 import com.gurch.sandbox.query.Operator;
 import com.gurch.sandbox.query.SQLQueryBuilder;
 import java.nio.charset.StandardCharsets;
@@ -11,40 +12,42 @@ import java.util.HexFormat;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.core.convert.ConversionService;
+import org.springframework.dao.EmptyResultDataAccessException;
+import org.springframework.jdbc.core.DataClassRowMapper;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 public class RefreshTokenFamilyRepository {
 
-  private final NamedParameterJdbcTemplate jdbcTemplate;
+  private static final String SHA_256 = "SHA-256";
 
-  public RefreshTokenFamilyRepository(NamedParameterJdbcTemplate jdbcTemplate) {
+  private final NamedParameterJdbcTemplate jdbcTemplate;
+  private final DataClassRowMapper<RefreshTokenRecord> refreshTokenRecordRowMapper;
+
+  public RefreshTokenFamilyRepository(
+      NamedParameterJdbcTemplate jdbcTemplate, ConversionService conversionService) {
     this.jdbcTemplate = jdbcTemplate;
+    this.refreshTokenRecordRowMapper = DataClassRowMapper.newInstance(RefreshTokenRecord.class);
+    this.refreshTokenRecordRowMapper.setConversionService(conversionService);
   }
 
+  /**
+   * Looks up the token family metadata for a refresh token hash.
+   *
+   * <p>A token family represents the lifecycle of refresh-token rotation for one user/client pair.
+   */
   public Optional<RefreshTokenRecord> findByTokenHash(String tokenHash) {
     BuiltQuery query =
-        SQLQueryBuilder.select("rt.family_id, rt.is_active, f.revoked")
+        SQLQueryBuilder.select("rt.family_id, rt.is_active as active, f.revoked as revoked")
             .from("oauth_refresh_tokens", "rt")
-            .join(
-                com.gurch.sandbox.query.JoinType.INNER,
-                "oauth_refresh_token_families",
-                "f",
-                "f.id = rt.family_id")
+            .join(JoinType.INNER, "oauth_refresh_token_families", "f", "f.id = rt.family_id")
             .where("rt.token_hash", Operator.EQ, tokenHash)
             .build();
 
-    return jdbcTemplate
-        .query(
-            query.sql(),
-            query.params(),
-            (rs, rowNum) ->
-                new RefreshTokenRecord(
-                    (UUID) rs.getObject("family_id"),
-                    rs.getBoolean("is_active"),
-                    rs.getBoolean("revoked")))
-        .stream()
+    return jdbcTemplate.query(query.sql(), query.params(), refreshTokenRecordRowMapper).stream()
         .findFirst();
   }
 
@@ -55,13 +58,11 @@ public class RefreshTokenFamilyRepository {
             .where("f.id", Operator.EQ, familyId)
             .build();
 
-    return jdbcTemplate
-        .query(query.sql(), query.params(), (rs, rowNum) -> rs.getBoolean("revoked"))
-        .stream()
-        .findFirst()
-        .orElse(false);
+    return Boolean.TRUE.equals(
+        jdbcTemplate.queryForObject(query.sql(), query.params(), Boolean.class));
   }
 
+  @Transactional
   public UUID createOrGetFamily(UUID userId, String clientId, Instant expiresAt) {
     BuiltQuery query =
         SQLQueryBuilder.select("f.id")
@@ -70,11 +71,13 @@ public class RefreshTokenFamilyRepository {
             .where("f.client_id", Operator.EQ, clientId)
             .build();
 
-    Optional<UUID> existing =
-        jdbcTemplate
-            .query(query.sql(), query.params(), (rs, rowNum) -> (UUID) rs.getObject("id"))
-            .stream()
-            .findFirst();
+    Optional<UUID> existing;
+    try {
+      existing =
+          Optional.ofNullable(jdbcTemplate.queryForObject(query.sql(), query.params(), UUID.class));
+    } catch (EmptyResultDataAccessException ignored) {
+      existing = Optional.empty();
+    }
     if (existing.isPresent()) {
       return existing.get();
     }
@@ -93,6 +96,7 @@ public class RefreshTokenFamilyRepository {
     return familyId;
   }
 
+  @Transactional
   public void rotate(
       UUID familyId, String previousTokenHash, String newTokenHash, Instant expiresAt) {
     if (previousTokenHash != null) {
@@ -122,6 +126,7 @@ public class RefreshTokenFamilyRepository {
         Map.of("familyId", familyId, "expiresAt", Timestamp.from(expiresAt)));
   }
 
+  @Transactional
   public void revokeFamily(UUID familyId) {
     jdbcTemplate.update(
         """
@@ -141,7 +146,7 @@ public class RefreshTokenFamilyRepository {
 
   public String hashToken(String token) {
     try {
-      MessageDigest digest = MessageDigest.getInstance("SHA-256");
+      MessageDigest digest = MessageDigest.getInstance(SHA_256);
       byte[] bytes = digest.digest(token.getBytes(StandardCharsets.UTF_8));
       return HexFormat.of().formatHex(bytes);
     } catch (Exception e) {
