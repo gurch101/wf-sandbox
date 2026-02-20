@@ -17,7 +17,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/** REST controller for request create/read/search operations. */
 @RestController
 @RequestMapping("/api/requests")
 @RequiredArgsConstructor
@@ -25,7 +24,6 @@ public class RequestController {
 
   private final RequestApi requestApi;
 
-  /** Creates a new draft request without workflow start. */
   @PostMapping("/drafts")
   @ApiErrorEnum({RequestTypeResolutionErrorCode.class})
   @ResponseStatus(HttpStatus.CREATED)
@@ -38,7 +36,6 @@ public class RequestController {
                 .build()));
   }
 
-  /** Updates an existing draft request. */
   @PutMapping("/{id}")
   @ApiErrorEnum({RequestDraftErrorCode.class})
   public CreateResponse updateDraft(
@@ -47,7 +44,6 @@ public class RequestController {
         requestApi.updateDraft(id, request.getPayload(), request.getVersion()));
   }
 
-  /** Submits a draft request and starts workflow. */
   @PostMapping("/{id}/submit")
   @ApiErrorEnum({
     RequestDraftErrorCode.class,
@@ -58,7 +54,6 @@ public class RequestController {
     return requestApi.submitDraft(id);
   }
 
-  /** Creates and submits a new request. */
   @PostMapping
   @ApiErrorEnum({RequestSubmissionErrorCode.class, RequestTypeResolutionErrorCode.class})
   @ResponseStatus(HttpStatus.CREATED)
@@ -73,20 +68,17 @@ public class RequestController {
             .getId());
   }
 
-  /** Returns a request by id. */
   @GetMapping("/{id}")
   public RequestResponse getById(@PathVariable Long id) {
     return requestApi.findById(id).orElseThrow(() -> new NotFoundException("Request not found"));
   }
 
-  /** Deletes a request by id. */
   @DeleteMapping("/{id}")
   @ResponseStatus(HttpStatus.NO_CONTENT)
   public void delete(@PathVariable Long id) {
     requestApi.deleteById(id);
   }
 
-  /** Completes a request user task. */
   @PostMapping("/{requestId}/tasks/{taskId}/complete")
   @ResponseStatus(HttpStatus.NO_CONTENT)
   public void completeTask(
@@ -96,7 +88,6 @@ public class RequestController {
     requestApi.completeTask(requestId, taskId, request.getAction(), request.getComment());
   }
 
-  /** Searches requests by optional filters. */
   @GetMapping("/search")
   public RequestDtos.SearchResponse search(RequestSearchCriteria criteria) {
     return new RequestDtos.SearchResponse(requestApi.search(criteria));

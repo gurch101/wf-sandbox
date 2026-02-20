@@ -14,7 +14,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Internal controller for request type lifecycle management. */
 @RestController
 @RequestMapping("/api/internal/request-types")
 @RequiredArgsConstructor
@@ -22,7 +21,6 @@ public class RequestTypeController {
 
   private final RequestTypeApi requestTypeApi;
 
-  /** Creates a new request type with version 1 active. */
   @PostMapping
   @ApiErrorEnum({RequestTypeErrorCode.class})
   @ResponseStatus(HttpStatus.CREATED)
@@ -38,7 +36,6 @@ public class RequestTypeController {
             .build());
   }
 
-  /** Changes an existing request type by appending and activating a new version. */
   @PutMapping("/{typeKey}")
   @ApiErrorEnum({RequestTypeErrorCode.class})
   public ResolvedRequestTypeVersion change(
@@ -54,13 +51,11 @@ public class RequestTypeController {
             .build());
   }
 
-  /** Searches request types with optional filters. */
   @GetMapping("/search")
   public RequestTypeDtos.SearchResponse search(RequestTypeSearchCriteria criteria) {
     return new RequestTypeDtos.SearchResponse(requestTypeApi.search(criteria));
   }
 
-  /** Deletes a request type when it is not used by any request. */
   @DeleteMapping("/{typeKey}")
   @ResponseStatus(HttpStatus.NO_CONTENT)
   @ApiErrorEnum({RequestTypeErrorCode.class})

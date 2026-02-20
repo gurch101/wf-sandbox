@@ -16,7 +16,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/** REST controller for admin user CRUD and search operations. */
 @RestController
 @RequestMapping("/api/admin/users")
 @RequiredArgsConstructor
@@ -24,7 +23,6 @@ public class UserController {
 
   private final UserApi userApi;
 
-  /** Creates a new user. */
   @PostMapping
   @ApiErrorEnum({UserErrorCode.class})
   @ResponseStatus(HttpStatus.CREATED)
@@ -41,13 +39,11 @@ public class UserController {
             .longValue());
   }
 
-  /** Retrieves one user by id. */
   @GetMapping("/{id}")
   public UserResponse getById(@PathVariable Integer id) {
     return userApi.findById(id).orElseThrow(() -> new NotFoundException("User not found"));
   }
 
-  /** Updates one user by id. */
   @PutMapping("/{id}")
   @ApiErrorEnum({UserErrorCode.class})
   public CreateResponse update(
@@ -65,14 +61,12 @@ public class UserController {
             .longValue());
   }
 
-  /** Deletes one user by id. */
   @DeleteMapping("/{id}")
   @ResponseStatus(HttpStatus.NO_CONTENT)
   public void delete(@PathVariable Integer id) {
     userApi.deleteById(id);
   }
 
-  /** Searches users by optional filters. */
   @GetMapping("/search")
   public UserDtos.SearchResponse search(UserSearchCriteria criteria) {
     return new UserDtos.SearchResponse(userApi.search(criteria));

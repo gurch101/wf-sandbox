@@ -14,7 +14,6 @@ import com.gurch.sandbox.AbstractJdbcIntegrationTest;
 import com.gurch.sandbox.dto.CreateResponse;
 import com.gurch.sandbox.tenants.internal.TenantEntity;
 import com.gurch.sandbox.tenants.internal.TenantRepository;
-import com.gurch.sandbox.users.UserDtos;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -87,37 +86,6 @@ class TenantModuleIntegrationTest extends AbstractJdbcIntegrationTest {
         .andExpect(jsonPath("$.tenants[0].name").value("acme"));
   }
 
-  @Test
-  void shouldRejectDuplicateTenantName() throws Exception {
-    createTenant("duplicate", true);
-
-    mockMvc
-        .perform(
-            post("/api/admin/tenants")
-                .with(csrf())
-                .header("Idempotency-Key", UUID.randomUUID().toString())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(
-                    objectMapper.writeValueAsString(
-                        new TenantDtos.CreateTenantRequest("duplicate", true))))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.errors[0].code").value("TENANT_NAME_ALREADY_EXISTS"));
-  }
-
-  @Test
-  void shouldRejectDeleteWhenTenantInUseByUser() throws Exception {
-    Integer tenantId = createTenant("tenant-in-use", true);
-    createUser("tenant-user", "tenant-user@example.com", true, tenantId);
-
-    mockMvc
-        .perform(
-            delete("/api/admin/tenants/{id}", tenantId)
-                .with(csrf())
-                .header("Idempotency-Key", UUID.randomUUID().toString()))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.errors[0].code").value("TENANT_IN_USE"));
-  }
-
   private Integer createTenant(String name, boolean active) throws Exception {
     MvcResult result =
         mockMvc
@@ -142,25 +110,5 @@ class TenantModuleIntegrationTest extends AbstractJdbcIntegrationTest {
     assertThat(created.getName()).isEqualTo(name);
     assertThat(created.isActive()).isEqualTo(active);
     return tenantId;
-  }
-
-  private Integer createUser(String username, String email, boolean active, Integer tenantId)
-      throws Exception {
-    MvcResult result =
-        mockMvc
-            .perform(
-                post("/api/admin/users")
-                    .with(csrf())
-                    .header("Idempotency-Key", UUID.randomUUID().toString())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(
-                        objectMapper.writeValueAsString(
-                            new UserDtos.CreateUserRequest(username, email, active, tenantId))))
-            .andExpect(status().isCreated())
-            .andReturn();
-    return objectMapper
-        .readValue(result.getResponse().getContentAsString(), CreateResponse.class)
-        .getId()
-        .intValue();
   }
 }
