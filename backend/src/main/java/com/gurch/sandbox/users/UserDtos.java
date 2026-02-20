@@ -4,7 +4,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import java.util.List;
 import lombok.Value;
 
 /** DTOs for admin user CRUD endpoints. */
@@ -40,12 +39,5 @@ public interface UserDtos {
 
     @NotNull(message = "version is required")
     Long version;
-  }
-
-  /** Response wrapper for user search endpoint. */
-  @Value
-  @Schema(description = "User search response")
-  class SearchResponse {
-    List<UserSearchResponse> users;
   }
 }

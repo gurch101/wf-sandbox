@@ -1,11 +1,13 @@
 package com.gurch.sandbox.workflows.internal;
 
+import com.gurch.sandbox.dto.PagedResponse;
 import com.gurch.sandbox.workflows.WorkflowApi;
 import com.gurch.sandbox.workflows.WorkflowDefinitionResponse;
 import com.gurch.sandbox.workflows.WorkflowSearchCriteria;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.finos.fluxnova.bpm.engine.RepositoryService;
+import org.finos.fluxnova.bpm.engine.repository.ProcessDefinitionQuery;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -25,22 +27,27 @@ public class DefaultWorkflowService implements WorkflowApi {
   }
 
   @Override
-  public List<WorkflowDefinitionResponse> searchProcessDefinitions(
+  public PagedResponse<WorkflowDefinitionResponse> searchProcessDefinitions(
       WorkflowSearchCriteria criteria) {
-    var query = repositoryService.createProcessDefinitionQuery().latestVersion().active();
+    ProcessDefinitionQuery query =
+        repositoryService.createProcessDefinitionQuery().latestVersion().active();
     if (criteria.getProcessDefinitionKeyPattern() != null) {
       query = query.processDefinitionKeyLike(criteria.getProcessDefinitionKeyPattern());
     }
 
-    return query.list().stream()
-        .map(
-            pd ->
-                WorkflowDefinitionResponse.builder()
-                    .id(pd.getId())
-                    .key(pd.getKey())
-                    .name(pd.getName())
-                    .version(pd.getVersion())
-                    .build())
-        .toList();
+    long total = query.count();
+    List<WorkflowDefinitionResponse> items =
+        query.listPage(criteria.getPage() * criteria.getSize(), criteria.getSize()).stream()
+            .map(
+                pd ->
+                    WorkflowDefinitionResponse.builder()
+                        .id(pd.getId())
+                        .key(pd.getKey())
+                        .name(pd.getName())
+                        .version(pd.getVersion())
+                        .build())
+            .toList();
+
+    return new PagedResponse<>(items, total, criteria.getPage(), criteria.getSize());
   }
 }

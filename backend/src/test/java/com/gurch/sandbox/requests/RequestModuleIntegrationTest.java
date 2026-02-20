@@ -254,7 +254,7 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
     mockMvc
         .perform(get("/api/requests/search"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.requests[0].payload").doesNotExist());
+        .andExpect(jsonPath("$.items[0].payload").doesNotExist());
   }
 
   @Test
@@ -271,7 +271,7 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
                 .param("requestTypeKeys", "loan")
                 .param("requestTypeKeys", "mortgage"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.requests.length()").value(2));
+        .andExpect(jsonPath("$.items.length()").value(2));
   }
 
   @Test

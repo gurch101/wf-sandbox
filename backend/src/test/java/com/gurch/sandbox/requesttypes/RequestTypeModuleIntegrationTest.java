@@ -44,8 +44,8 @@ class RequestTypeModuleIntegrationTest extends AbstractJdbcIntegrationTest {
     mockMvc
         .perform(get("/api/internal/request-types/search").param("typeKeyContains", "loa"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.requestTypes[0].typeKey").value("loan"))
-        .andExpect(jsonPath("$.requestTypes[0].activeVersion").value(1));
+        .andExpect(jsonPath("$.items[0].typeKey").value("loan"))
+        .andExpect(jsonPath("$.items[0].activeVersion").value(1));
   }
 
   @Test
@@ -64,7 +64,7 @@ class RequestTypeModuleIntegrationTest extends AbstractJdbcIntegrationTest {
     mockMvc
         .perform(get("/api/internal/request-types/search").param("typeKeyContains", "unused"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.requestTypes.length()").value(0));
+        .andExpect(jsonPath("$.items.length()").value(0));
 
     mockMvc
         .perform(

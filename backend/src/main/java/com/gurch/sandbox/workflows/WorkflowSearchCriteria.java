@@ -1,19 +1,27 @@
 package com.gurch.sandbox.workflows;
 
+import com.gurch.sandbox.dto.SearchCriteria;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.Optional;
-import lombok.Builder;
-import lombok.Value;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.experimental.SuperBuilder;
 import lombok.extern.jackson.Jacksonized;
 
 /** Search criteria for deployed workflow process definitions. */
-@Value
-@Builder
+@Getter
+@Setter
+@SuperBuilder
 @Jacksonized
+@NoArgsConstructor
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
 @Schema(description = "Workflow process-definition search criteria")
-public class WorkflowSearchCriteria {
+public class WorkflowSearchCriteria extends SearchCriteria {
   @Schema(description = "Case-insensitive substring filter for process key", example = "request")
-  String processDefinitionKeyContains;
+  private String processDefinitionKeyContains;
 
   /**
    * Returns an uppercase wildcard pattern for process key filtering.

@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import java.util.List;
 import lombok.Value;
 
 /** Request module DTOs used by controller endpoints. */
@@ -46,13 +45,5 @@ public interface RequestDtos {
 
     @Schema(description = "Task completion comment")
     String comment;
-  }
-
-  /** Response wrapper for request search endpoint. */
-  @Value
-  @Schema(description = "Response wrapper for request search results")
-  class SearchResponse {
-    @Schema(description = "Matching requests")
-    List<RequestSearchResponse> requests;
   }
 }

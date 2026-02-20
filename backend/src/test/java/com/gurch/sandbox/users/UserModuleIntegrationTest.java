@@ -87,8 +87,8 @@ class UserModuleIntegrationTest extends AbstractJdbcIntegrationTest {
     mockMvc
         .perform(get("/api/admin/users/search").param("usernameContains", "ali"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.users.length()").value(1))
-        .andExpect(jsonPath("$.users[0].username").value("alice"));
+        .andExpect(jsonPath("$.items.length()").value(1))
+        .andExpect(jsonPath("$.items[0].username").value("alice"));
   }
 
   private Integer createUser(String username, String email, boolean active) throws Exception {

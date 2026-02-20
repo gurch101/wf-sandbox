@@ -1,6 +1,7 @@
 package com.gurch.sandbox.forms;
 
 import com.gurch.sandbox.dto.CreateResponse;
+import com.gurch.sandbox.dto.PagedResponse;
 import com.gurch.sandbox.idempotency.NotIdempotent;
 import com.gurch.sandbox.web.NotFoundException;
 import java.io.InputStream;
@@ -88,8 +89,8 @@ public class DocumentTemplateController {
   }
 
   @GetMapping("/search")
-  public DocumentTemplateSearchResponse search(DocumentTemplateSearchCriteria criteria) {
-    return new DocumentTemplateSearchResponse(documentTemplateApi.search(criteria));
+  public PagedResponse<DocumentTemplateResponse> search(DocumentTemplateSearchCriteria criteria) {
+    return documentTemplateApi.search(criteria);
   }
 
   @DeleteMapping("/{id}")

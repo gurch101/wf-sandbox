@@ -480,6 +480,60 @@ class SqlQueryBuilderTest extends AbstractJdbcIntegrationTest {
         .build();
   }
 
+  @Test
+  void buildCountGeneratesSimpleCountSql() {
+    BuiltQuery query =
+        SQLQueryBuilder.select("r.id", "r.status")
+            .from("requests", "r")
+            .where("r.status", Operator.EQ, "IN_PROGRESS")
+            .buildCount();
+
+    assertThat(query.sql()).isEqualTo("SELECT COUNT(*) FROM requests r WHERE r.status = :p1");
+    assertThat(jdbcTemplate.queryForObject(query.sql(), query.params(), Long.class)).isEqualTo(1L);
+  }
+
+  @Test
+  void buildCountWrapsDistinctQueriesInSubquery() {
+    BuiltQuery query =
+        SQLQueryBuilder.select("DISTINCT r.status")
+            .from("requests", "r")
+            .orderBy("r.status")
+            .page(0, 10)
+            .buildCount();
+
+    assertThat(query.sql())
+        .isEqualTo(
+            "SELECT COUNT(*) FROM (SELECT DISTINCT r.status FROM requests r) AS count_target");
+    assertThat(jdbcTemplate.queryForObject(query.sql(), query.params(), Long.class)).isEqualTo(3L);
+  }
+
+  @Test
+  void buildCountWrapsGroupByQueriesInSubquery() {
+    BuiltQuery query =
+        SQLQueryBuilder.select("r.status", "count(*)")
+            .from("requests", "r")
+            .groupBy("r.status")
+            .buildCount();
+
+    assertThat(query.sql())
+        .isEqualTo(
+            "SELECT COUNT(*) FROM (SELECT r.status, count(*) FROM requests r GROUP BY r.status) AS count_target");
+    assertThat(jdbcTemplate.queryForObject(query.sql(), query.params(), Long.class)).isEqualTo(3L);
+  }
+
+  @Test
+  void buildCountStripsOrderByAndPagination() {
+    BuiltQuery query =
+        SQLQueryBuilder.select("r.id")
+            .from("requests", "r")
+            .orderBy("r.id")
+            .page(1, 1)
+            .buildCount();
+
+    assertThat(query.sql()).isEqualTo("SELECT COUNT(*) FROM requests r");
+    assertThat(jdbcTemplate.queryForObject(query.sql(), query.params(), Long.class)).isEqualTo(3L);
+  }
+
   private void insertRequest(
       String requestTypeKey, String status, String processInstanceId, long version) {
     jdbcTemplate.update(

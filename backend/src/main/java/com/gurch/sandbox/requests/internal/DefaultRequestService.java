@@ -1,11 +1,11 @@
 package com.gurch.sandbox.requests.internal;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.gurch.sandbox.query.BuiltQuery;
+import com.gurch.sandbox.dto.PagedResponse;
 import com.gurch.sandbox.query.JoinType;
 import com.gurch.sandbox.query.Operator;
-import com.gurch.sandbox.query.QueryLoggingHelper;
 import com.gurch.sandbox.query.SQLQueryBuilder;
+import com.gurch.sandbox.query.SearchExecutor;
 import com.gurch.sandbox.requests.CreateRequestCommand;
 import com.gurch.sandbox.requests.RequestApi;
 import com.gurch.sandbox.requests.RequestDraftErrorCode;
@@ -23,15 +23,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.finos.fluxnova.bpm.engine.RuntimeService;
 import org.finos.fluxnova.bpm.engine.TaskService;
 import org.finos.fluxnova.bpm.engine.runtime.ProcessInstance;
 import org.finos.fluxnova.bpm.engine.task.Task;
-import org.springframework.jdbc.core.DataClassRowMapper;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,14 +39,16 @@ public class DefaultRequestService implements RequestApi {
 
   private final RequestRepository repository;
   private final RequestTaskRepository requestTaskRepository;
-  private final NamedParameterJdbcTemplate jdbcTemplate;
   private final RuntimeService runtimeService;
   private final TaskService taskService;
+
   private final RequestTypeApi requestTypeApi;
   private final RequestPayloadHandlerRegistry payloadHandlerRegistry;
+  private final SearchExecutor searchExecutor;
 
   @Override
   public Optional<RequestResponse> findById(Long id) {
+
     return repository.findById(id).map(entity -> toResponse(entity, true, true));
   }
 
@@ -163,7 +162,7 @@ public class DefaultRequestService implements RequestApi {
   }
 
   @Override
-  public List<RequestSearchResponse> search(RequestSearchCriteria criteria) {
+  public PagedResponse<RequestSearchResponse> search(RequestSearchCriteria criteria) {
     SQLQueryBuilder builder =
         SQLQueryBuilder.select(
                 "DISTINCT r.id, r.request_type_key AS requestTypeKey, "
@@ -172,19 +171,15 @@ public class DefaultRequestService implements RequestApi {
             .from("requests", "r")
             .where("r.status", Operator.IN, criteria.getStatuses())
             .where("r.id", Operator.IN, criteria.getIds())
-            .where("r.request_type_key", Operator.IN, criteria.getNormalizedRequestTypeKeys())
-            .page(criteria.getPage(), criteria.getSize());
+            .where("r.request_type_key", Operator.IN, criteria.getNormalizedRequestTypeKeys());
+
     if (criteria.getNormalizedTaskAssignees() != null) {
       builder
           .join(JoinType.INNER, "request_tasks", "rt", "rt.request_id = r.id")
           .where("upper(rt.assignee)", Operator.IN, criteria.getNormalizedTaskAssignees());
     }
 
-    BuiltQuery query = builder.build();
-    log.info(QueryLoggingHelper.format("requests.search", query, Set.of()));
-
-    return jdbcTemplate.query(
-        query.sql(), query.params(), new DataClassRowMapper<>(RequestSearchResponse.class));
+    return searchExecutor.execute(builder, criteria, RequestSearchResponse.class);
   }
 
   private RequestResponse toResponse(

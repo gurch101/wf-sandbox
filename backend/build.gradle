@@ -46,6 +46,11 @@ checkstyle {
 	maxWarnings = 0
 }
 
+spotbugs {
+	excludeFilter = file("config/spotbugs/exclude.xml")
+}
+
+
 spotless {
 	java {
 		target 'src/**/*.java'
@@ -73,6 +78,12 @@ dependencies {
 	implementation 'org.flywaydb:flyway-database-postgresql'
 	compileOnly 'org.projectlombok:lombok'
 	implementation 'org.postgresql:postgresql'
+
+
+
+
+
+
 	annotationProcessor 'org.projectlombok:lombok'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'org.springframework.boot:spring-boot-testcontainers'

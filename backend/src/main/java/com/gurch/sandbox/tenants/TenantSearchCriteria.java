@@ -1,28 +1,30 @@
 package com.gurch.sandbox.tenants;
 
+import com.gurch.sandbox.dto.SearchCriteria;
 import com.gurch.sandbox.dto.SearchCriteriaUtils;
 import io.swagger.v3.oas.annotations.media.Schema;
-import lombok.Builder;
-import lombok.Value;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.experimental.SuperBuilder;
 import lombok.extern.jackson.Jacksonized;
 
 /** Criteria object for searching tenants. */
-@Value
-@Builder
+@Getter
+@Setter
+@SuperBuilder
 @Jacksonized
+@NoArgsConstructor
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
 @Schema(description = "Criteria for searching tenants")
-public class TenantSearchCriteria {
+public class TenantSearchCriteria extends SearchCriteria {
   @Schema(description = "Case-insensitive tenant name filter", example = "acm")
-  String nameContains;
+  private String nameContains;
 
   @Schema(description = "Filter by active flag", example = "true")
-  Boolean active;
-
-  @Schema(description = "Zero-indexed page number", example = "0")
-  Integer page;
-
-  @Schema(description = "Page size", example = "20")
-  Integer size;
+  private Boolean active;
 
   public String getNamePattern() {
     return SearchCriteriaUtils.toUpperLikePattern(nameContains);

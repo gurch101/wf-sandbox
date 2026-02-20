@@ -1,8 +1,10 @@
 package com.gurch.sandbox.requesttypes.internal;
 
+import com.gurch.sandbox.dto.PagedResponse;
 import com.gurch.sandbox.query.JoinType;
 import com.gurch.sandbox.query.Operator;
 import com.gurch.sandbox.query.SQLQueryBuilder;
+import com.gurch.sandbox.query.SearchExecutor;
 import com.gurch.sandbox.requesttypes.PayloadHandlerCatalog;
 import com.gurch.sandbox.requesttypes.RequestTypeApi;
 import com.gurch.sandbox.requesttypes.RequestTypeCommand;
@@ -13,10 +15,8 @@ import com.gurch.sandbox.requesttypes.RequestTypeSearchResponse;
 import com.gurch.sandbox.requesttypes.ResolvedRequestTypeVersion;
 import com.gurch.sandbox.web.ValidationErrorException;
 import com.gurch.sandbox.workflows.WorkflowApi;
-import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import org.springframework.jdbc.core.DataClassRowMapper;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,10 +30,12 @@ public class DefaultRequestTypeService implements RequestTypeApi {
   private final NamedParameterJdbcTemplate jdbcTemplate;
   private final WorkflowApi workflowApi;
   private final PayloadHandlerCatalog payloadHandlerCatalog;
+  private final SearchExecutor searchExecutor;
 
   @Override
   @Transactional(readOnly = true)
   public ResolvedRequestTypeVersion resolveLatestActive(String typeKey) {
+
     RequestTypeEntity type =
         requestTypeRepository
             .findByTypeKey(typeKey)
@@ -154,7 +156,7 @@ public class DefaultRequestTypeService implements RequestTypeApi {
 
   @Override
   @Transactional(readOnly = true)
-  public List<RequestTypeSearchResponse> search(RequestTypeSearchCriteria criteria) {
+  public PagedResponse<RequestTypeSearchResponse> search(RequestTypeSearchCriteria criteria) {
     SQLQueryBuilder builder =
         SQLQueryBuilder.select(
                 "rt.type_key, rt.name, rt.description, rt.active, "
@@ -165,9 +167,7 @@ public class DefaultRequestTypeService implements RequestTypeApi {
             .where("upper(rt.type_key)", Operator.LIKE, criteria.getTypeKeyPattern())
             .where("rt.active", Operator.EQ, criteria.getActive());
 
-    var query = builder.build();
-    return jdbcTemplate.query(
-        query.sql(), query.params(), new DataClassRowMapper<>(RequestTypeSearchResponse.class));
+    return searchExecutor.execute(builder, criteria, RequestTypeSearchResponse.class);
   }
 
   @Override

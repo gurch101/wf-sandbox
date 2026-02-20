@@ -6,6 +6,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.StringJoiner;
 
@@ -235,21 +236,8 @@ public final class SQLQueryBuilder {
    * @return this builder
    */
   public SQLQueryBuilder orderBy(String sortExpressionToken) {
-    if (sortExpressionToken == null || sortExpressionToken.isBlank()) {
-      throw new IllegalArgumentException("Sort token must not be blank");
-    }
-    String normalizedToken = sortExpressionToken.trim();
-    String direction = "ASC";
-    if (normalizedToken.startsWith("-")) {
-      direction = "DESC";
-      normalizedToken = normalizedToken.substring(1);
-    } else if (normalizedToken.startsWith("+")) {
-      normalizedToken = normalizedToken.substring(1);
-    }
-    if (normalizedToken.isBlank()) {
-      throw new IllegalArgumentException("Sort token must include an expression");
-    }
-    orderByClauses.add(normalizedToken + " " + direction);
+    SortInfo sort = parseSortToken(sortExpressionToken);
+    orderByClauses.add(sort.expression() + " " + sort.direction());
     return this;
   }
 
@@ -289,25 +277,12 @@ public final class SQLQueryBuilder {
    * @return this builder
    */
   public SQLQueryBuilder safeOrderBy(String sortToken, SortWhitelist whitelist) {
-    if (sortToken == null || sortToken.isBlank()) {
-      throw new IllegalArgumentException("Sort token must not be blank");
-    }
-    String normalizedToken = sortToken.trim();
-    String direction = "ASC";
-    if (normalizedToken.startsWith("-")) {
-      direction = "DESC";
-      normalizedToken = normalizedToken.substring(1);
-    } else if (normalizedToken.startsWith("+")) {
-      normalizedToken = normalizedToken.substring(1);
-    }
-    if (normalizedToken.isBlank()) {
-      throw new IllegalArgumentException("Sort token must include a field");
-    }
-    String expression = whitelist.resolve(normalizedToken);
+    SortInfo sort = parseSortToken(sortToken);
+    String expression = whitelist.resolve(sort.expression());
     if (expression == null) {
-      throw new IllegalArgumentException("Unknown sort field: " + normalizedToken);
+      throw new IllegalArgumentException("Unknown sort field: " + sort.expression());
     }
-    orderByClauses.add(expression + " " + direction);
+    orderByClauses.add(expression + " " + sort.direction());
     return this;
   }
 
@@ -333,11 +308,57 @@ public final class SQLQueryBuilder {
    * @throws IllegalStateException if FROM clause is missing
    */
   public BuiltQuery build() {
+    validateFromClause();
+    Map<String, Object> finalParams = new LinkedHashMap<>(params);
+    StringBuilder sqlBuilder = new StringBuilder();
+    appendCtes(sqlBuilder, finalParams);
+
+    StringBuilder queryBuilder = new StringBuilder(buildBaseSql(selectClause, true));
+    if (!orderByClauses.isEmpty()) {
+      queryBuilder.append(" ORDER BY ").append(String.join(", ", orderByClauses));
+    }
+    if (limit != null) {
+      queryBuilder.append(" LIMIT ").append(limit);
+    }
+    if (offset != null) {
+      queryBuilder.append(" OFFSET ").append(offset);
+    }
+    sqlBuilder.append(queryBuilder);
+    return new BuiltQuery(sqlBuilder.toString(), finalParams);
+  }
+
+  /**
+   * Builds a count query for the current state. Useful for pagination total counts. Strips ORDER
+   * BY, LIMIT, and OFFSET.
+   *
+   * @return the built count query
+   * @throws IllegalStateException if FROM clause is missing
+   */
+  public BuiltQuery buildCount() {
+    validateFromClause();
+    Map<String, Object> finalParams = new LinkedHashMap<>(params);
+    StringBuilder sqlBuilder = new StringBuilder();
+    appendCtes(sqlBuilder, finalParams);
+
+    // If original query has DISTINCT or GROUP BY, we wrap it in a subquery to get accurate count
+    if (selectClause.trim().toUpperCase(Locale.ROOT).startsWith("DISTINCT")
+        || !groupByClauses.isEmpty()) {
+      String innerSql = buildBaseSql(selectClause, true);
+      sqlBuilder.append("SELECT COUNT(*) FROM (").append(innerSql).append(") AS count_target");
+    } else {
+      sqlBuilder.append(buildBaseSql("COUNT(*)", false));
+    }
+
+    return new BuiltQuery(sqlBuilder.toString(), finalParams);
+  }
+
+  private void validateFromClause() {
     if (fromTable == null || fromAlias == null) {
       throw new IllegalStateException("FROM clause is required");
     }
-    Map<String, Object> finalParams = new LinkedHashMap<>(params);
-    StringBuilder sqlBuilder = new StringBuilder();
+  }
+
+  private void appendCtes(StringBuilder sqlBuilder, Map<String, Object> finalParams) {
     if (!ctes.isEmpty()) {
       List<String> cteParts = new ArrayList<>();
       for (Map.Entry<String, SQLQueryBuilder> cte : ctes.entrySet()) {
@@ -348,29 +369,42 @@ public final class SQLQueryBuilder {
       }
       sqlBuilder.append("WITH ").append(String.join(", ", cteParts)).append(" ");
     }
+  }
 
-    String sql = "SELECT " + selectClause + " FROM " + fromTable + " " + fromAlias;
+  private String buildBaseSql(String select, boolean includeGroupBy) {
+    StringBuilder sb = new StringBuilder("SELECT ");
+    sb.append(select).append(" FROM ").append(fromTable).append(" ").append(fromAlias);
     if (!joinClauses.isEmpty()) {
-      sql = sql + " " + String.join(" ", joinClauses);
+      sb.append(" ").append(String.join(" ", joinClauses));
     }
     if (!whereClauses.isEmpty()) {
-      sql = sql + " WHERE " + String.join(" AND ", whereClauses);
+      sb.append(" WHERE ").append(String.join(" AND ", whereClauses));
     }
-    if (!groupByClauses.isEmpty()) {
-      sql = sql + " GROUP BY " + String.join(", ", groupByClauses);
+    if (includeGroupBy && !groupByClauses.isEmpty()) {
+      sb.append(" GROUP BY ").append(String.join(", ", groupByClauses));
     }
-    if (!orderByClauses.isEmpty()) {
-      sql = sql + " ORDER BY " + String.join(", ", orderByClauses);
-    }
-    if (limit != null) {
-      sql = sql + " LIMIT " + limit;
-    }
-    if (offset != null) {
-      sql = sql + " OFFSET " + offset;
-    }
-    sqlBuilder.append(sql);
-    return new BuiltQuery(sqlBuilder.toString(), finalParams);
+    return sb.toString();
   }
+
+  private SortInfo parseSortToken(String token) {
+    if (token == null || token.isBlank()) {
+      throw new IllegalArgumentException("Sort token must not be blank");
+    }
+    String normalizedToken = token.trim();
+    String direction = "ASC";
+    if (normalizedToken.startsWith("-")) {
+      direction = "DESC";
+      normalizedToken = normalizedToken.substring(1);
+    } else if (normalizedToken.startsWith("+")) {
+      normalizedToken = normalizedToken.substring(1);
+    }
+    if (normalizedToken.isBlank()) {
+      throw new IllegalArgumentException("Sort token must include a field/expression");
+    }
+    return new SortInfo(normalizedToken, direction);
+  }
+
+  private record SortInfo(String expression, String direction) {}
 
   private String toParameterizedPredicate(String column, Operator operator, Object value) {
     String paramName = nextParamName();

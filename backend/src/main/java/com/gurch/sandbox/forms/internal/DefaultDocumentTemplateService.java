@@ -1,27 +1,25 @@
 package com.gurch.sandbox.forms.internal;
 
+import com.gurch.sandbox.dto.PagedResponse;
 import com.gurch.sandbox.forms.DocumentTemplateApi;
 import com.gurch.sandbox.forms.DocumentTemplateDownload;
 import com.gurch.sandbox.forms.DocumentTemplateResponse;
 import com.gurch.sandbox.forms.DocumentTemplateSearchCriteria;
 import com.gurch.sandbox.forms.DocumentTemplateType;
 import com.gurch.sandbox.forms.DocumentTemplateUploadRequest;
-import com.gurch.sandbox.query.BuiltQuery;
 import com.gurch.sandbox.query.Operator;
 import com.gurch.sandbox.query.SQLQueryBuilder;
+import com.gurch.sandbox.query.SearchExecutor;
 import com.gurch.sandbox.storage.StorageApi;
 import com.gurch.sandbox.storage.StorageWriteRequest;
 import com.gurch.sandbox.storage.StorageWriteResult;
 import com.gurch.sandbox.web.NotFoundException;
 import com.gurch.sandbox.web.PayloadTooLargeException;
 import java.io.IOException;
-import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.jdbc.core.DataClassRowMapper;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,7 +35,7 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
 
   private final DocumentTemplateRepository repository;
   private final StorageApi storageApi;
-  private final NamedParameterJdbcTemplate jdbcTemplate;
+  private final SearchExecutor searchExecutor;
 
   @Value("${documenttemplates.upload.max-size-bytes:26214400}")
   private long maxUploadSizeBytes;
@@ -117,20 +115,21 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
   }
 
   @Override
-  public List<DocumentTemplateResponse> search(DocumentTemplateSearchCriteria criteria) {
+  public PagedResponse<DocumentTemplateResponse> search(DocumentTemplateSearchCriteria criteria) {
     SQLQueryBuilder builder =
         SQLQueryBuilder.select("f.*")
             .from("forms", "f")
             .where("upper(f.name)", Operator.LIKE, criteria.getNamePattern())
-            .where("f.document_type", Operator.IN, criteria.getDocumentTypes())
-            .page(criteria.getPage(), criteria.getSize());
+            .where("f.document_type", Operator.IN, criteria.getDocumentTypes());
 
-    BuiltQuery query = builder.build();
-    return jdbcTemplate
-        .query(query.sql(), query.params(), new DataClassRowMapper<>(DocumentTemplateEntity.class))
-        .stream()
-        .map(this::toResponse)
-        .toList();
+    PagedResponse<DocumentTemplateEntity> entities =
+        searchExecutor.execute(builder, criteria, DocumentTemplateEntity.class);
+
+    return new PagedResponse<>(
+        entities.items().stream().map(this::toResponse).toList(),
+        entities.totalElements(),
+        entities.page(),
+        entities.size());
   }
 
   @Override

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+    <Match>
+        <!-- Justification: A defensive copy is made in the PagedResponse constructor using List.copyOf, 
+             which returns an unmodifiable list. The representation is exposed but cannot be mutated. -->
+        <Class name="com.gurch.sandbox.dto.PagedResponse" />
+        <Bug pattern="EI_EXPOSE_REP" />
+    </Match>
+</FindBugsFilter>

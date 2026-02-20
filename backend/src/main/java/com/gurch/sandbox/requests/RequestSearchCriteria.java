@@ -1,51 +1,53 @@
 package com.gurch.sandbox.requests;
 
+import com.gurch.sandbox.dto.SearchCriteria;
 import com.gurch.sandbox.dto.SearchCriteriaUtils;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
-import lombok.Builder;
-import lombok.Value;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.experimental.SuperBuilder;
 import lombok.extern.jackson.Jacksonized;
 
 /**
  * Criteria object for searching request records. Supports filtering by request type key, status,
  * and ID, as well as pagination.
  */
-@Value
-@Builder
+@Getter
+@Setter
+@SuperBuilder
 @Jacksonized
+@NoArgsConstructor
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
 @Schema(description = "Criteria for searching request records")
-public class RequestSearchCriteria {
+public class RequestSearchCriteria extends SearchCriteria {
   @Schema(
       description = "Partial request type key to search for (case-insensitive)",
       example = "loan")
-  String nameContains;
+  private String nameContains;
 
   @Schema(description = "Request type keys filter", example = "[\"loan\", \"mortgage\"]")
-  List<String> requestTypeKeys;
+  private List<String> requestTypeKeys;
 
   @Schema(
       description = "List of statuses to filter by",
       example = "[\"SUBMITTED\", \"IN_PROGRESS\"]")
-  List<RequestStatus> statuses;
+  private List<RequestStatus> statuses;
 
   @Schema(description = "List of specific IDs to filter by", example = "[1, 2, 3]")
-  List<Long> ids;
+  private List<Long> ids;
 
   @Schema(description = "Task assignee filter", example = "demo")
-  String taskAssignee;
+  private String taskAssignee;
 
   @Schema(description = "Task assignees filter", example = "[\"demo\", \"john\"]")
-  List<String> taskAssignees;
-
-  @Schema(description = "Zero-indexed page number", example = "0")
-  Integer page;
-
-  @Schema(description = "Number of records per page", example = "20")
-  Integer size;
+  private List<String> taskAssignees;
 
   /**
    * Returns an uppercase wildcard pattern for request type key filtering.

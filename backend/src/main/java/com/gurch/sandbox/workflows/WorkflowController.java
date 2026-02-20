@@ -1,5 +1,6 @@
 package com.gurch.sandbox.workflows;
 
+import com.gurch.sandbox.dto.PagedResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -13,7 +14,7 @@ public class WorkflowController {
   private final WorkflowApi workflowApi;
 
   @GetMapping("/search")
-  public WorkflowDtos.SearchResponse search(WorkflowSearchCriteria criteria) {
-    return new WorkflowDtos.SearchResponse(workflowApi.searchProcessDefinitions(criteria));
+  public PagedResponse<WorkflowDefinitionResponse> search(WorkflowSearchCriteria criteria) {
+    return workflowApi.searchProcessDefinitions(criteria);
   }
 }

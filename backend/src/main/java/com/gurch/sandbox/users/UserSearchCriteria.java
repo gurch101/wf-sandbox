@@ -1,34 +1,36 @@
 package com.gurch.sandbox.users;
 
+import com.gurch.sandbox.dto.SearchCriteria;
 import com.gurch.sandbox.dto.SearchCriteriaUtils;
 import io.swagger.v3.oas.annotations.media.Schema;
-import lombok.Builder;
-import lombok.Value;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.experimental.SuperBuilder;
 import lombok.extern.jackson.Jacksonized;
 
 /** Criteria object for searching users. */
-@Value
-@Builder
+@Getter
+@Setter
+@SuperBuilder
 @Jacksonized
+@NoArgsConstructor
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
 @Schema(description = "Criteria for searching users")
-public class UserSearchCriteria {
+public class UserSearchCriteria extends SearchCriteria {
   @Schema(description = "Case-insensitive username filter", example = "admin")
-  String usernameContains;
+  private String usernameContains;
 
   @Schema(description = "Case-insensitive email filter", example = "example.com")
-  String emailContains;
+  private String emailContains;
 
   @Schema(description = "Filter by active flag", example = "true")
-  Boolean active;
+  private Boolean active;
 
   @Schema(description = "Filter by tenant identifier", example = "1")
-  Integer tenantId;
-
-  @Schema(description = "Zero-indexed page number", example = "0")
-  Integer page;
-
-  @Schema(description = "Page size", example = "20")
-  Integer size;
+  private Integer tenantId;
 
   public String getUsernamePattern() {
     return SearchCriteriaUtils.toUpperLikePattern(usernameContains);
