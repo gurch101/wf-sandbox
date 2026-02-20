@@ -1,18 +1,20 @@
 package com.gurch.sandbox.requests.internal;
 
+import com.gurch.sandbox.persistence.BaseEntity;
 import java.time.Instant;
-import lombok.Builder;
 import lombok.Data;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.Id;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
+import lombok.experimental.SuperBuilder;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.relational.core.mapping.Table;
 
 @Data
-@Builder(toBuilder = true)
+@NoArgsConstructor
+@SuperBuilder(toBuilder = true)
+@EqualsAndHashCode(callSuper = true)
 @Table("request_tasks")
-public class RequestTaskEntity {
-  @Id private Long id;
+public class RequestTaskEntity extends BaseEntity<Long> {
   private Long requestId;
   private String processInstanceId;
   private String taskId;
@@ -20,6 +22,5 @@ public class RequestTaskEntity {
   private RequestTaskStatus status;
   private String assignee;
   private String action;
-  @CreatedDate private Instant createdAt;
   @LastModifiedDate private Instant updatedAt;
 }

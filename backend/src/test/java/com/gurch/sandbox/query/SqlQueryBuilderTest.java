@@ -484,14 +484,34 @@ class SqlQueryBuilderTest extends AbstractJdbcIntegrationTest {
       String requestTypeKey, String status, String processInstanceId, long version) {
     jdbcTemplate.update(
         """
-        INSERT INTO requests (request_type_key, status, process_instance_id, created_at, updated_at, version)
-        VALUES (:requestTypeKey, :status, :processInstanceId, :createdAt, :updatedAt, :version)
+        INSERT INTO requests (
+          request_type_key,
+          status,
+          process_instance_id,
+          created_by,
+          created_at,
+          updated_by,
+          updated_at,
+          version
+        )
+        VALUES (
+          :requestTypeKey,
+          :status,
+          :processInstanceId,
+          :createdBy,
+          :createdAt,
+          :updatedBy,
+          :updatedAt,
+          :version
+        )
         """,
         new MapSqlParameterSource()
             .addValue("requestTypeKey", requestTypeKey)
             .addValue("status", status)
             .addValue("processInstanceId", processInstanceId)
+            .addValue("createdBy", 1L)
             .addValue("createdAt", OffsetDateTime.now(ZoneOffset.UTC))
+            .addValue("updatedBy", 1L)
             .addValue("updatedAt", OffsetDateTime.now(ZoneOffset.UTC))
             .addValue("version", version));
   }

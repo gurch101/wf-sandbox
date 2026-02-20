@@ -1,25 +1,23 @@
 package com.gurch.sandbox.requesttypes.internal;
 
-import java.time.Instant;
-import lombok.Builder;
+import com.gurch.sandbox.persistence.MutableEntity;
 import lombok.Data;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.Id;
-import org.springframework.data.annotation.LastModifiedDate;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
+import lombok.experimental.SuperBuilder;
 import org.springframework.data.annotation.Version;
 import org.springframework.data.relational.core.mapping.Table;
 
 @Data
-@Builder(toBuilder = true)
+@NoArgsConstructor
+@SuperBuilder(toBuilder = true)
+@EqualsAndHashCode(callSuper = true)
 @Table("request_types")
-public class RequestTypeEntity {
-  @Id private Long id;
+public class RequestTypeEntity extends MutableEntity<Long> {
   private String typeKey;
   private String name;
   private String description;
   private Long activeVersionId;
   private boolean active;
-  @CreatedDate private Instant createdAt;
-  @LastModifiedDate private Instant updatedAt;
   @Version private Long version;
 }
