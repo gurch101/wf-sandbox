@@ -1,5 +1,6 @@
 HELP.md
 .gradle
+.gradle-home/
 build/
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
@@ -37,6 +38,7 @@ out/
 .vscode/
 
 .env
+.envrc
 
 # Local uploaded form files
 /uploads/
