@@ -72,8 +72,9 @@ dependencies {
 	implementation 'org.flywaydb:flyway-core'
 	implementation 'org.flywaydb:flyway-database-postgresql'
 	compileOnly 'org.projectlombok:lombok'
-	implementation 'com.github.spotbugs:spotbugs-annotations:4.8.6'
+	implementation("com.github.spotbugs:spotbugs-annotations:4.9.8")
 	implementation 'org.postgresql:postgresql'
+
 
 
 
