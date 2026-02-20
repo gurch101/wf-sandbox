@@ -46,4 +46,46 @@ class DefaultUserServiceIntegrationTest extends AbstractJdbcIntegrationTest {
                 assertThat(((ValidationErrorException) error).getErrors().getFirst().code())
                     .isEqualTo("USERNAME_ALREADY_EXISTS"));
   }
+
+  @Test
+  void shouldRejectDuplicateEmail() {
+    userApi.create(
+        UserCommand.builder()
+            .username("first-user")
+            .email("duplicate@example.com")
+            .active(true)
+            .build());
+
+    assertThatThrownBy(
+            () ->
+                userApi.create(
+                    UserCommand.builder()
+                        .username("second-user")
+                        .email("duplicate@example.com")
+                        .active(true)
+                        .build()))
+        .isInstanceOf(ValidationErrorException.class)
+        .satisfies(
+            error ->
+                assertThat(((ValidationErrorException) error).getErrors().getFirst().code())
+                    .isEqualTo("EMAIL_ALREADY_EXISTS"));
+  }
+
+  @Test
+  void shouldRejectMissingTenantReference() {
+    assertThatThrownBy(
+            () ->
+                userApi.create(
+                    UserCommand.builder()
+                        .username("tenant-bound-user")
+                        .email("tenant-bound-user@example.com")
+                        .active(true)
+                        .tenantId(Integer.MAX_VALUE)
+                        .build()))
+        .isInstanceOf(ValidationErrorException.class)
+        .satisfies(
+            error ->
+                assertThat(((ValidationErrorException) error).getErrors().getFirst().code())
+                    .isEqualTo("TENANT_NOT_FOUND"));
+  }
 }
