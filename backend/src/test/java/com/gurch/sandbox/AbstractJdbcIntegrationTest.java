@@ -8,7 +8,7 @@ import org.springframework.security.test.context.support.WithMockUser;
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
 @AutoConfigureMockMvc
-@WithMockUser
+@WithMockUser(username = "1")
 public abstract class AbstractJdbcIntegrationTest {
   // Shared Spring Boot + Testcontainers context for integration tests.
 }

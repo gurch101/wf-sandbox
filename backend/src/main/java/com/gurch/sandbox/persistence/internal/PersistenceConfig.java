@@ -1,24 +1,62 @@
-package com.gurch.sandbox.config.internal;
+package com.gurch.sandbox.persistence.internal;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.postgresql.util.PGobject;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.convert.converter.Converter;
+import org.springframework.data.auditing.DateTimeProvider;
 import org.springframework.data.convert.ReadingConverter;
 import org.springframework.data.convert.WritingConverter;
+import org.springframework.data.domain.AuditorAware;
 import org.springframework.data.jdbc.core.convert.JdbcCustomConversions;
 import org.springframework.data.jdbc.repository.config.EnableJdbcAuditing;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 @Configuration
-@EnableJdbcAuditing
+@EnableJdbcAuditing(
+    auditorAwareRef = "jdbcAuditorAware",
+    dateTimeProviderRef = "jdbcAuditingDateTimeProvider")
 @RequiredArgsConstructor
 public class PersistenceConfig {
 
   private final ObjectMapper objectMapper;
+
+  @Bean
+  public Clock utcClock() {
+    return Clock.systemUTC();
+  }
+
+  @Bean
+  public DateTimeProvider jdbcAuditingDateTimeProvider(Clock utcClock) {
+    return () -> Optional.of(Instant.now(utcClock));
+  }
+
+  @Bean
+  public AuditorAware<Integer> jdbcAuditorAware() {
+    return () ->
+        Optional.ofNullable(SecurityContextHolder.getContext().getAuthentication())
+            .filter(authentication -> authentication.isAuthenticated())
+            .map(authentication -> authentication.getName())
+            .flatMap(PersistenceConfig::parseAuditorId);
+  }
+
+  private static Optional<Integer> parseAuditorId(String principalName) {
+    if (principalName == null || principalName.isBlank()) {
+      return Optional.empty();
+    }
+    try {
+      return Optional.of(Integer.parseInt(principalName));
+    } catch (NumberFormatException ignored) {
+      return Optional.empty();
+    }
+  }
 
   @Bean
   public JdbcCustomConversions jdbcCustomConversions() {

@@ -11,3 +11,13 @@ camunda:
 
 storage:
   local-root: ./build/test-uploads
+
+spring:
+  servlet:
+    multipart:
+      max-file-size: 2KB
+      max-request-size: 2KB
+
+documenttemplates:
+  upload:
+    max-size-bytes: 1024

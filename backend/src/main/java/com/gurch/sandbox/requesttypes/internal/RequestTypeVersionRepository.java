@@ -7,6 +7,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface RequestTypeVersionRepository
     extends ListCrudRepository<RequestTypeVersionEntity, Long> {
-  Optional<RequestTypeVersionEntity> findByRequestTypeIdAndVersion(
-      Long requestTypeId, Integer version);
+  Optional<RequestTypeVersionEntity> findByRequestTypeIdAndTypeVersion(
+      Long requestTypeId, Integer typeVersion);
 }

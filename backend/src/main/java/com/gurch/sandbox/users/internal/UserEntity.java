@@ -1,4 +1,4 @@
-package com.gurch.sandbox.requests.internal;
+package com.gurch.sandbox.users.internal;
 
 import com.gurch.sandbox.persistence.MutableEntity;
 import lombok.Data;
@@ -11,13 +11,9 @@ import org.springframework.data.relational.core.mapping.Table;
 @NoArgsConstructor
 @SuperBuilder(toBuilder = true)
 @EqualsAndHashCode(callSuper = true)
-@Table("request_tasks")
-public class RequestTaskEntity extends MutableEntity<Long> {
-  private Long requestId;
-  private String processInstanceId;
-  private String taskId;
-  private String name;
-  private RequestTaskStatus status;
-  private String assignee;
-  private String action;
+@Table("users")
+public class UserEntity extends MutableEntity<Integer> {
+  private String username;
+  private String email;
+  private boolean active;
 }

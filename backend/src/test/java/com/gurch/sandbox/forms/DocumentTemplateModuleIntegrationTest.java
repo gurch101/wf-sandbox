@@ -28,18 +28,11 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.test.context.support.WithMockUser;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 @AutoConfigureMockMvc
-@WithMockUser
-@TestPropertySource(
-    properties = {
-      "spring.servlet.multipart.max-file-size=2KB",
-      "spring.servlet.multipart.max-request-size=2KB",
-      "documenttemplates.upload.max-size-bytes=1024"
-    })
+@WithMockUser(username = "1")
 class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest {
 
   @Autowired private MockMvc mockMvc;

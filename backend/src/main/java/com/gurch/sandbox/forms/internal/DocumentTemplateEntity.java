@@ -1,21 +1,20 @@
 package com.gurch.sandbox.forms.internal;
 
 import com.gurch.sandbox.forms.DocumentTemplateType;
+import com.gurch.sandbox.persistence.MutableEntity;
 import com.gurch.sandbox.storage.StorageProviderType;
-import java.time.Instant;
-import lombok.Builder;
 import lombok.Data;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.Id;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.annotation.Version;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
+import lombok.experimental.SuperBuilder;
 import org.springframework.data.relational.core.mapping.Table;
 
 @Data
-@Builder(toBuilder = true)
+@NoArgsConstructor
+@SuperBuilder(toBuilder = true)
+@EqualsAndHashCode(callSuper = true)
 @Table("forms")
-public class DocumentTemplateEntity {
-  @Id private Long id;
+public class DocumentTemplateEntity extends MutableEntity<Long> {
   private String name;
   private String description;
   private String mimeType;
@@ -24,7 +23,4 @@ public class DocumentTemplateEntity {
   private DocumentTemplateType documentType;
   private StorageProviderType storageProvider;
   private String storagePath;
-  @CreatedDate private Instant createdAt;
-  @LastModifiedDate private Instant updatedAt;
-  @Version private Long version;
 }

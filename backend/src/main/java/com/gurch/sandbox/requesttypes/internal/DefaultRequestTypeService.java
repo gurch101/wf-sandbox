@@ -71,7 +71,7 @@ public class DefaultRequestTypeService implements RequestTypeApi {
 
     RequestTypeVersionEntity resolvedVersion =
         versionRepository
-            .findByRequestTypeIdAndVersion(type.getId(), version)
+            .findByRequestTypeIdAndTypeVersion(type.getId(), version)
             .orElseThrow(
                 () ->
                     ValidationErrorException.of(
@@ -99,7 +99,7 @@ public class DefaultRequestTypeService implements RequestTypeApi {
         versionRepository.save(
             RequestTypeVersionEntity.builder()
                 .requestTypeId(type.getId())
-                .version(1)
+                .typeVersion(1)
                 .payloadHandlerId(command.getPayloadHandlerId())
                 .processDefinitionKey(command.getProcessDefinitionKey())
                 .build());
@@ -136,7 +136,7 @@ public class DefaultRequestTypeService implements RequestTypeApi {
         versionRepository.save(
             RequestTypeVersionEntity.builder()
                 .requestTypeId(type.getId())
-                .version(previous.getVersion() + 1)
+                .typeVersion(previous.getTypeVersion() + 1)
                 .payloadHandlerId(command.getPayloadHandlerId())
                 .processDefinitionKey(command.getProcessDefinitionKey())
                 .build());
@@ -158,7 +158,7 @@ public class DefaultRequestTypeService implements RequestTypeApi {
     SQLQueryBuilder builder =
         SQLQueryBuilder.select(
                 "rt.type_key, rt.name, rt.description, rt.active, "
-                    + "rtv.version AS active_version, rtv.payload_handler_id, "
+                    + "rtv.type_version AS active_version, rtv.payload_handler_id, "
                     + "rtv.process_definition_key")
             .from("request_types", "rt")
             .join(JoinType.INNER, "request_type_versions", "rtv", "rtv.id = rt.active_version_id")
@@ -206,7 +206,7 @@ public class DefaultRequestTypeService implements RequestTypeApi {
   private ResolvedRequestTypeVersion toResolved(String typeKey, RequestTypeVersionEntity version) {
     return ResolvedRequestTypeVersion.builder()
         .typeKey(typeKey)
-        .version(version.getVersion())
+        .version(version.getTypeVersion())
         .payloadHandlerId(version.getPayloadHandlerId())
         .processDefinitionKey(version.getProcessDefinitionKey())
         .build();
