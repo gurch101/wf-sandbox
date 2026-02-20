@@ -1,6 +1,5 @@
 package com.gurch.sandbox.dto;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 
@@ -34,9 +33,6 @@ public record PagedResponse<T>(
   }
 
   @Override
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP",
-      justification = "Defensive copy is made in constructor; List.copyOf is immutable")
   public List<T> items() {
     return items;
   }
