@@ -1,0 +1,11 @@
+package com.gurch.sandbox.auth.internal;
+
+import java.util.Optional;
+import java.util.UUID;
+import org.springframework.data.repository.ListCrudRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface PermissionLookupRepository extends ListCrudRepository<PermissionEntity, UUID> {
+  Optional<PermissionEntity> findByCode(String code);
+}

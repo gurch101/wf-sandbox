@@ -7,6 +7,7 @@ import com.gurch.sandbox.idempotency.NotIdempotent;
 import com.gurch.sandbox.requests.RequestApi;
 import com.gurch.sandbox.requests.RequestController;
 import com.gurch.sandbox.requests.RequestSubmissionErrorCode;
+import com.gurch.sandbox.requests.internal.RequestAuthorization;
 import com.gurch.sandbox.web.ApiErrorEnum;
 import io.swagger.v3.oas.models.Operation;
 import java.lang.reflect.Method;
@@ -21,8 +22,11 @@ class OpenApiConfigTest {
   @Test
   void shouldLeaveOperationUnchangedWhenApiErrorEnumIsMissing() throws Exception {
     OpenApiConfig config = new OpenApiConfig();
-    RequestController controller = new RequestController(mock(RequestApi.class));
-    Method method = RequestController.class.getMethod("getById", Long.class);
+    RequestController controller =
+        new RequestController(mock(RequestApi.class), mock(RequestAuthorization.class));
+    Method method =
+        RequestController.class.getMethod(
+            "getById", Long.class, org.springframework.security.core.Authentication.class);
     HandlerMethod handlerMethod = new HandlerMethod(controller, method);
 
     Operation operation = new Operation();
@@ -35,7 +39,8 @@ class OpenApiConfigTest {
   void shouldAddIdempotencyHeaderForPostMappings() throws Exception {
     OpenApiConfig config = new OpenApiConfig();
     HandlerMethod handlerMethod =
-        new HandlerMethod(new DummyController(), DummyController.class.getMethod("idempotent"));
+        new HandlerMethod(
+            new DummyController(), DummyController.class.getDeclaredMethod("idempotent"));
 
     Operation customized =
         config.idempotencyKeyHeaderCustomizer().customize(new Operation(), handlerMethod);
@@ -48,7 +53,8 @@ class OpenApiConfigTest {
   void shouldSkipIdempotencyHeaderForNotIdempotentMethods() throws Exception {
     OpenApiConfig config = new OpenApiConfig();
     HandlerMethod handlerMethod =
-        new HandlerMethod(new DummyController(), DummyController.class.getMethod("notIdempotent"));
+        new HandlerMethod(
+            new DummyController(), DummyController.class.getDeclaredMethod("notIdempotent"));
 
     Operation customized =
         config.idempotencyKeyHeaderCustomizer().customize(new Operation(), handlerMethod);
@@ -61,7 +67,8 @@ class OpenApiConfigTest {
   void shouldDocumentApiErrorEnumCodes() throws Exception {
     OpenApiConfig config = new OpenApiConfig();
     HandlerMethod handlerMethod =
-        new HandlerMethod(new DummyController(), DummyController.class.getMethod("withErrors"));
+        new HandlerMethod(
+            new DummyController(), DummyController.class.getDeclaredMethod("withErrors"));
 
     Operation customized =
         config.apiErrorEnumCustomizer().customize(new Operation(), handlerMethod);

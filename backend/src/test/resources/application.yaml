@@ -3,6 +3,13 @@ fluxnova:
     metrics:
       enabled: false
 
+auth:
+  bootstrap:
+    enabled: true
+    username: admin
+    email: admin@local.invalid
+    password: ${AUTH_BOOTSTRAP_PASSWORD}
+
 # Keep Camunda-compatible aliases as a fallback in case FluxNova still binds these keys.
 camunda:
   bpm:
@@ -11,3 +18,13 @@ camunda:
 
 storage:
   local-root: ./build/test-uploads
+
+spring:
+  servlet:
+    multipart:
+      max-file-size: 2KB
+      max-request-size: 2KB
+
+documenttemplates:
+  upload:
+    max-size-bytes: 1024

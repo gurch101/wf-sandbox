@@ -46,6 +46,10 @@ checkstyle {
 	maxWarnings = 0
 }
 
+spotbugs {
+	excludeFilter = file("config/spotbugs/exclude.xml")
+}
+
 spotless {
 	java {
 		target 'src/**/*.java'
@@ -64,9 +68,11 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-data-jdbc'
 	implementation 'org.springframework.boot:spring-boot-starter-jdbc'
 	implementation 'org.springframework.boot:spring-boot-starter-security'
+	implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-web'
 	implementation 'org.springframework.boot:spring-boot-starter-aop'
+	implementation 'org.springframework.security:spring-security-oauth2-authorization-server:1.5.3'
 	implementation 'org.finos.fluxnova.bpm.springboot:fluxnova-bpm-spring-boot-starter:1.0.0'
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.5'
 	implementation 'org.flywaydb:flyway-core'
@@ -92,13 +98,13 @@ tasks.named('test') {
 	useJUnitPlatform()
 	def xdgRuntimeDir = System.getenv('XDG_RUNTIME_DIR')
 	def dockerHost = System.getenv('DOCKER_HOST')
-	def podmanSocket = xdgRuntimeDir ? new File("${xdgRuntimeDir}/podman/podman.sock") : null
-	def usePodman = !dockerHost && podmanSocket?.exists()
+	def usePodman = !dockerHost && xdgRuntimeDir && new File("${xdgRuntimeDir}/podman/podman.sock").exists()
 	if (usePodman) {
-		environment 'DOCKER_HOST', "unix://${podmanSocket.absolutePath}"
-		environment 'TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE', '/var/run/docker.sock'
+		environment 'DOCKER_HOST', "unix://${xdgRuntimeDir}/podman/podman.sock"
+		// environment 'TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE', '/var/run/docker.sock'
 		environment 'TESTCONTAINERS_RYUK_DISABLED', 'true'
 	}
+	environment 'AUTH_BOOTSTRAP_PASSWORD', System.getenv('AUTH_BOOTSTRAP_PASSWORD') ?: 'AdminPass123!'
 }
 
 jacoco {

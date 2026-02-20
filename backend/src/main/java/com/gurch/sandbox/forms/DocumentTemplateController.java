@@ -22,9 +22,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
-/**
- * REST controller for document-template upload, metadata lookup, download, search, and deletion.
- */
 @RestController
 @RequestMapping("/api/document-templates")
 @RequiredArgsConstructor
@@ -32,7 +29,6 @@ public class DocumentTemplateController {
 
   private final DocumentTemplateApi documentTemplateApi;
 
-  /** Uploads a PDF or Word document template. */
   @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   // Multipart uploads are excluded from idempotency replay because the request body is streamed.
   @NotIdempotent
@@ -58,7 +54,6 @@ public class DocumentTemplateController {
     return new CreateResponse(documentTemplateApi.upload(request).getId());
   }
 
-  /** Gets file metadata by ID. */
   @GetMapping("/{id}")
   public DocumentTemplateResponse getById(@PathVariable Long id) {
     return documentTemplateApi
@@ -66,7 +61,6 @@ public class DocumentTemplateController {
         .orElseThrow(() -> new NotFoundException("Document template not found with id: " + id));
   }
 
-  /** Downloads stored file bytes by ID. */
   @GetMapping("/{id}/download")
   public ResponseEntity<StreamingResponseBody> download(@PathVariable Long id) {
     DocumentTemplateDownload download = documentTemplateApi.download(id);
@@ -93,13 +87,11 @@ public class DocumentTemplateController {
         .body(body);
   }
 
-  /** Searches document templates using optional filters and pagination. */
   @GetMapping("/search")
   public DocumentTemplateSearchResponse search(DocumentTemplateSearchCriteria criteria) {
     return new DocumentTemplateSearchResponse(documentTemplateApi.search(criteria));
   }
 
-  /** Deletes file metadata and stored bytes by ID. */
   @DeleteMapping("/{id}")
   @ResponseStatus(HttpStatus.NO_CONTENT)
   public void delete(@PathVariable Long id) {

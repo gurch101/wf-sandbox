@@ -64,6 +64,9 @@ Do not batch multiple work items into one loop.
 4. Use production services/repositories for straightforward setup where practical.
 5. Create dedicated test support helpers only when setup becomes repetitive or noisy.
 6. Use mocks sparingly; prefer real collaborators unless isolation is essential for the specific test intent.
+7. Avoid per-test-class context customizations (`@TestPropertySource`, ad hoc `@ActiveProfiles`, class-local dynamic properties) unless absolutely necessary; these create additional Spring contexts and can amplify Testcontainers flakiness.
+8. Prefer shared test configuration via `src/test/resources/application.yaml` over class-level overrides so most integration tests reuse one context key.
+9. If rootless Podman/Testcontainers is flaky, reduce context churn first before adding runtime workarounds.
 
 ## 4. Spring Stack Conventions
 

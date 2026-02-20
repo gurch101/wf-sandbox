@@ -77,12 +77,17 @@ public class RequestSearchCriteria {
     return normalized.isEmpty() ? null : normalized;
   }
 
-  /**
-   * Returns normalized request type key filters for SQL IN matching.
-   *
-   * @return key list, or null when no key filters are provided
-   */
+  /** Returns normalized request type key filters for SQL IN matching. */
   public List<String> getNormalizedRequestTypeKeys() {
     return SearchCriteriaUtils.normalizeStringList(requestTypeKeys);
+  }
+
+  /**
+   * Returns true when criteria contains task-level filters.
+   *
+   * @return true if task assignee filters are present
+   */
+  public boolean hasTaskFilters() {
+    return getNormalizedTaskAssignees() != null;
   }
 }
