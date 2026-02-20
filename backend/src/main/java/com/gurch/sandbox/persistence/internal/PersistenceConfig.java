@@ -1,4 +1,4 @@
-package com.gurch.sandbox.config.internal;
+package com.gurch.sandbox.persistence.internal;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.postgresql.util.PGobject;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.convert.converter.Converter;
@@ -18,7 +17,6 @@ import org.springframework.data.convert.WritingConverter;
 import org.springframework.data.domain.AuditorAware;
 import org.springframework.data.jdbc.core.convert.JdbcCustomConversions;
 import org.springframework.data.jdbc.repository.config.EnableJdbcAuditing;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 @Configuration
@@ -41,21 +39,20 @@ public class PersistenceConfig {
   }
 
   @Bean
-  public AuditorAware<Long> jdbcAuditorAware(
-      @Value("${app.audit.system-user-id:1}") Long systemUserId) {
+  public AuditorAware<Integer> jdbcAuditorAware() {
     return () ->
         Optional.ofNullable(SecurityContextHolder.getContext().getAuthentication())
-            .map(Authentication::getName)
-            .flatMap(PersistenceConfig::parseAuditorId)
-            .or(() -> Optional.of(systemUserId));
+            .filter(authentication -> authentication.isAuthenticated())
+            .map(authentication -> authentication.getName())
+            .flatMap(PersistenceConfig::parseAuditorId);
   }
 
-  private static Optional<Long> parseAuditorId(String principalName) {
+  private static Optional<Integer> parseAuditorId(String principalName) {
     if (principalName == null || principalName.isBlank()) {
       return Optional.empty();
     }
     try {
-      return Optional.of(Long.parseLong(principalName));
+      return Optional.of(Integer.parseInt(principalName));
     } catch (NumberFormatException ignored) {
       return Optional.empty();
     }

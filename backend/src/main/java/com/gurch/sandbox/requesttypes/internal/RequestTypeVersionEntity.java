@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
+import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
 @Data
@@ -15,7 +16,10 @@ import org.springframework.data.relational.core.mapping.Table;
 @Table("request_type_versions")
 public class RequestTypeVersionEntity extends MutableEntity<Long> {
   private Long requestTypeId;
-  private Integer version;
+
+  @Column("type_version")
+  private Integer typeVersion;
+
   private String payloadHandlerId;
   private String processDefinitionKey;
   private JsonNode configJson;

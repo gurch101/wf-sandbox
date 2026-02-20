@@ -509,9 +509,9 @@ class SqlQueryBuilderTest extends AbstractJdbcIntegrationTest {
             .addValue("requestTypeKey", requestTypeKey)
             .addValue("status", status)
             .addValue("processInstanceId", processInstanceId)
-            .addValue("createdBy", 1L)
+            .addValue("createdBy", 1)
             .addValue("createdAt", OffsetDateTime.now(ZoneOffset.UTC))
-            .addValue("updatedBy", 1L)
+            .addValue("updatedBy", 1)
             .addValue("updatedAt", OffsetDateTime.now(ZoneOffset.UTC))
             .addValue("version", version));
   }

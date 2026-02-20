@@ -7,7 +7,6 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
-import org.springframework.data.annotation.Version;
 import org.springframework.data.relational.core.mapping.Table;
 
 @Data
@@ -21,5 +20,4 @@ public class RequestEntity extends MutableEntity<Long> {
   private JsonNode payloadJson;
   private RequestStatus status;
   private String processInstanceId;
-  @Version private Long version;
 }

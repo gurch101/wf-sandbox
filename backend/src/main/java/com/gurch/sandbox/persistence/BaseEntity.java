@@ -10,7 +10,7 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 
 /**
- * Generic immutable audit base for all aggregates.
+ * Generic immutable audit base for all entities.
  *
  * @param <ID> aggregate identifier type
  */
@@ -20,6 +20,6 @@ import org.springframework.data.annotation.Id;
 @EqualsAndHashCode
 public class BaseEntity<ID> {
   @Id private ID id;
-  @CreatedBy private Long createdBy;
+  @CreatedBy private Integer createdBy;
   @CreatedDate private Instant createdAt;
 }

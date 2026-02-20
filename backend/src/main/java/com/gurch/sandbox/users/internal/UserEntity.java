@@ -1,6 +1,6 @@
 package com.gurch.sandbox.users.internal;
 
-import com.gurch.sandbox.persistence.BaseEntity;
+import com.gurch.sandbox.persistence.MutableEntity;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
@@ -12,8 +12,8 @@ import org.springframework.data.relational.core.mapping.Table;
 @SuperBuilder(toBuilder = true)
 @EqualsAndHashCode(callSuper = true)
 @Table("users")
-public class UserEntity extends BaseEntity<Long> {
+public class UserEntity extends MutableEntity<Integer> {
   private String username;
-  private String displayName;
+  private String email;
   private boolean active;
 }

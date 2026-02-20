@@ -1,4 +1,4 @@
-package com.gurch.sandbox.config.internal;
+package com.gurch.sandbox.persistence.internal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

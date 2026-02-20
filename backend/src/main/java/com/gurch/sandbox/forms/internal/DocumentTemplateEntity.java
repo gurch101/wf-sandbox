@@ -7,7 +7,6 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
-import org.springframework.data.annotation.Version;
 import org.springframework.data.relational.core.mapping.Table;
 
 @Data
@@ -24,5 +23,4 @@ public class DocumentTemplateEntity extends MutableEntity<Long> {
   private DocumentTemplateType documentType;
   private StorageProviderType storageProvider;
   private String storagePath;
-  @Version private Long version;
 }
