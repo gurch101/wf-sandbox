@@ -43,3 +43,6 @@ out/
 # Local uploaded form files
 /uploads/
 /backend/uploads/
+
+CHANGELOG.md
+
