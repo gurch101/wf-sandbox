@@ -515,8 +515,7 @@ class SqlQueryBuilderTest extends AbstractJdbcIntegrationTest {
             .buildCount();
 
     assertThat(query.sql())
-        .isEqualTo(
-            "SELECT COUNT(*) FROM (SELECT DISTINCT r.status FROM requests r) AS count_target");
+        .isEqualTo("SELECT COUNT(*) FROM (SELECT DISTINCT r.status FROM requests r) count_target");
     assertThat(jdbcTemplate.queryForObject(query.sql(), query.params(), Long.class)).isEqualTo(3L);
   }
 
@@ -530,8 +529,37 @@ class SqlQueryBuilderTest extends AbstractJdbcIntegrationTest {
 
     assertThat(query.sql())
         .isEqualTo(
-            "SELECT COUNT(*) FROM (SELECT r.status, count(*) FROM requests r GROUP BY r.status) AS count_target");
+            "SELECT COUNT(*) FROM (SELECT r.status, count(*) FROM requests r GROUP BY r.status) count_target");
     assertThat(jdbcTemplate.queryForObject(query.sql(), query.params(), Long.class)).isEqualTo(3L);
+  }
+
+  @Test
+  void buildWithTotalCountWindowAddsWindowCountColumn() {
+    BuiltQuery query =
+        SQLQueryBuilder.select("r.id")
+            .from("requests", "r")
+            .orderBy("r.id")
+            .page(0, 2)
+            .buildWithTotalCountWindow("__total_count");
+
+    assertThat(query.sql()).contains("COUNT(*) OVER() AS __total_count");
+    assertThat(query.sql()).contains("FETCH NEXT 2 ROWS ONLY");
+
+    List<Long> totals =
+        jdbcTemplate.query(
+            query.sql(), query.params(), (rs, rowNum) -> rs.getLong("__total_count"));
+    assertThat(totals).isNotEmpty().allMatch(total -> total == 3L);
+  }
+
+  @Test
+  void buildWithTotalCountWindowRejectsDistinctSelect() {
+    assertThatThrownBy(
+            () ->
+                SQLQueryBuilder.select("DISTINCT r.status")
+                    .from("requests", "r")
+                    .buildWithTotalCountWindow("__total_count"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("Window total count");
   }
 
   @Test

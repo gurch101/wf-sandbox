@@ -326,13 +326,43 @@ public final class SQLQueryBuilder {
     StringBuilder sqlBuilder = new StringBuilder();
     appendCtes(sqlBuilder, finalParams);
 
-    StringBuilder queryBuilder = new StringBuilder(buildBaseSql(selectClause, true));
-    if (!orderByClauses.isEmpty()) {
-      queryBuilder.append(" ORDER BY ").append(String.join(", ", orderByClauses));
-    }
-    sqlDialect.appendPagination(queryBuilder, limit, offset);
-    sqlBuilder.append(queryBuilder);
+    sqlBuilder.append(buildSelectSql(selectClause));
     return new BuiltQuery(sqlBuilder.toString(), finalParams);
+  }
+
+  /**
+   * Builds a paged query that also returns total rows using a window function.
+   *
+   * @param totalAlias alias for total count column
+   * @return the built query containing SQL and parameters
+   */
+  public BuiltQuery buildWithTotalCountWindow(String totalAlias) {
+    validateFromClause();
+    if (!supportsWindowCount()) {
+      throw new IllegalStateException("Window total count is not supported for this query");
+    }
+    if (totalAlias == null || totalAlias.isBlank()) {
+      throw new IllegalArgumentException("totalAlias must not be blank");
+    }
+    if (!totalAlias.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+      throw new IllegalArgumentException("totalAlias must be a valid SQL identifier");
+    }
+
+    Map<String, Object> finalParams = new LinkedHashMap<>(params);
+    StringBuilder sqlBuilder = new StringBuilder();
+    appendCtes(sqlBuilder, finalParams);
+
+    sqlBuilder.append(buildSelectSql(selectClause + ", COUNT(*) OVER() AS " + totalAlias));
+    return new BuiltQuery(sqlBuilder.toString(), finalParams);
+  }
+
+  /**
+   * Indicates if {@link #buildWithTotalCountWindow(String)} is supported for current select.
+   *
+   * @return true when the current query can safely use window total count
+   */
+  public boolean supportsWindowCount() {
+    return !selectClause.trim().toUpperCase(Locale.ROOT).startsWith("DISTINCT");
   }
 
   /**
@@ -352,7 +382,7 @@ public final class SQLQueryBuilder {
     if (selectClause.trim().toUpperCase(Locale.ROOT).startsWith("DISTINCT")
         || !groupByClauses.isEmpty()) {
       String innerSql = buildBaseSql(selectClause, true);
-      sqlBuilder.append("SELECT COUNT(*) FROM (").append(innerSql).append(") AS count_target");
+      sqlBuilder.append("SELECT COUNT(*) FROM (").append(innerSql).append(") count_target");
     } else {
       sqlBuilder.append(buildBaseSql("COUNT(*)", false));
     }
@@ -392,6 +422,15 @@ public final class SQLQueryBuilder {
       sb.append(" GROUP BY ").append(String.join(", ", groupByClauses));
     }
     return sb.toString();
+  }
+
+  private String buildSelectSql(String select) {
+    StringBuilder queryBuilder = new StringBuilder(buildBaseSql(select, true));
+    if (!orderByClauses.isEmpty()) {
+      queryBuilder.append(" ORDER BY ").append(String.join(", ", orderByClauses));
+    }
+    sqlDialect.appendPagination(queryBuilder, limit, offset);
+    return queryBuilder.toString();
   }
 
   private SortInfo parseSortToken(String token) {
