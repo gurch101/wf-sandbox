@@ -1,0 +1,61 @@
+plugins {
+  id 'jacoco'
+  id 'com.github.spotbugs'
+  id 'pmd'
+  id 'checkstyle'
+  id 'com.diffplug.spotless'
+  id 'net.ltgt.errorprone'
+}
+
+pmd {
+  ruleSetFiles = files(rootProject.file('config/pmd/custom-ruleset.xml'))
+}
+
+checkstyle {
+  configFile = rootProject.file('config/checkstyle/checkstyle.xml')
+  ignoreFailures = false
+  maxWarnings = 0
+}
+
+spotbugs {
+  excludeFilter = rootProject.file('config/spotbugs/exclude.xml')
+}
+
+spotless {
+  java {
+    target 'src/**/*.java'
+    googleJavaFormat('1.27.0')
+    importOrder()
+    removeUnusedImports()
+    trimTrailingWhitespace()
+    endWithNewline()
+  }
+}
+
+dependencies {
+  errorprone 'com.google.errorprone:error_prone_core:2.42.0'
+}
+
+tasks.withType(JavaCompile).configureEach {
+  options.compilerArgs += ['-Werror']
+}
+
+jacoco {
+  toolVersion = '0.8.13'
+}
+
+jacocoTestCoverageVerification {
+  violationRules {
+    rule {
+      limit {
+        counter = 'INSTRUCTION'
+        value = 'COVEREDRATIO'
+        minimum = 0.75
+      }
+    }
+  }
+}
+
+tasks.named('check') {
+  dependsOn tasks.named('jacocoTestCoverageVerification')
+}

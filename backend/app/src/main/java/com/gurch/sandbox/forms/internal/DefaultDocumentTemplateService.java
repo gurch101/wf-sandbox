@@ -9,7 +9,7 @@ import com.gurch.sandbox.forms.DocumentTemplateType;
 import com.gurch.sandbox.forms.DocumentTemplateUploadRequest;
 import com.gurch.sandbox.query.Operator;
 import com.gurch.sandbox.query.SQLQueryBuilder;
-import com.gurch.sandbox.query.SearchExecutor;
+import com.gurch.sandbox.search.SearchExecutor;
 import com.gurch.sandbox.storage.StorageApi;
 import com.gurch.sandbox.storage.StorageWriteRequest;
 import com.gurch.sandbox.storage.StorageWriteResult;

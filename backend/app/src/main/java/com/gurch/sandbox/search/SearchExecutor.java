@@ -1,7 +1,10 @@
-package com.gurch.sandbox.query;
+package com.gurch.sandbox.search;
 
 import com.gurch.sandbox.dto.PagedResponse;
 import com.gurch.sandbox.dto.SearchCriteria;
+import com.gurch.sandbox.query.BuiltQuery;
+import com.gurch.sandbox.query.QueryLoggingHelper;
+import com.gurch.sandbox.query.SQLQueryBuilder;
 import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
