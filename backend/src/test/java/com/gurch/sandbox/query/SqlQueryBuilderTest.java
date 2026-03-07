@@ -126,7 +126,7 @@ class SqlQueryBuilderTest extends AbstractJdbcIntegrationTest {
             .page(1, 2)
             .build();
 
-    assertThat(query.sql()).contains("LIMIT 2").contains("OFFSET 2");
+    assertThat(query.sql()).contains("OFFSET 2 ROWS").contains("FETCH NEXT 2 ROWS ONLY");
 
     List<Long> ids = jdbcTemplate.queryForList(query.sql(), query.params(), Long.class);
     assertThat(ids).hasSize(1);
@@ -148,8 +148,8 @@ class SqlQueryBuilderTest extends AbstractJdbcIntegrationTest {
             .page(0, null)
             .build();
 
-    assertThat(nullPageQuery.sql()).contains("LIMIT 2").contains("OFFSET 0");
-    assertThat(nullSizeQuery.sql()).doesNotContain("LIMIT").doesNotContain("OFFSET");
+    assertThat(nullPageQuery.sql()).contains("OFFSET 0 ROWS").contains("FETCH NEXT 2 ROWS ONLY");
+    assertThat(nullSizeQuery.sql()).doesNotContain("FETCH").doesNotContain("OFFSET");
   }
 
   @Test
@@ -275,8 +275,21 @@ class SqlQueryBuilderTest extends AbstractJdbcIntegrationTest {
 
     assertThat(query.sql()).contains("GROUP BY r.status");
     assertThat(query.sql()).contains("ORDER BY r.status ASC");
-    assertThat(query.sql()).contains("LIMIT 2");
-    assertThat(query.sql()).contains("OFFSET 0");
+    assertThat(query.sql()).contains("OFFSET 0 ROWS");
+    assertThat(query.sql()).contains("FETCH NEXT 2 ROWS ONLY");
+  }
+
+  @Test
+  void postgresDialectUsesLimitAndOffsetSyntax() {
+    BuiltQuery query =
+        SQLQueryBuilder.select("r.id")
+            .from("requests", "r")
+            .dialect(SqlDialect.POSTGRES)
+            .limit(2)
+            .offset(1)
+            .build();
+
+    assertThat(query.sql()).contains("LIMIT 2").contains("OFFSET 1");
   }
 
   @Test
