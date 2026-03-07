@@ -1,1 +1,3 @@
 rootProject.name = 'sandbox'
+include 'app'
+include 'query-lib'

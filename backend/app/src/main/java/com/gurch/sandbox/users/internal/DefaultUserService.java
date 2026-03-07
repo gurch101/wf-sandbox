@@ -4,7 +4,7 @@ import com.gurch.sandbox.dto.PagedResponse;
 import com.gurch.sandbox.persistence.PersistenceExceptionUtils;
 import com.gurch.sandbox.query.Operator;
 import com.gurch.sandbox.query.SQLQueryBuilder;
-import com.gurch.sandbox.query.SearchExecutor;
+import com.gurch.sandbox.search.SearchExecutor;
 import com.gurch.sandbox.users.UserApi;
 import com.gurch.sandbox.users.UserCommand;
 import com.gurch.sandbox.users.UserErrorCode;
