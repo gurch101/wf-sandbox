@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.StringJoiner;
 
 /**
@@ -24,6 +25,7 @@ public final class SQLQueryBuilder {
   private final Map<String, Object> params = new LinkedHashMap<>();
   private final List<String> whereClauses = new ArrayList<>();
   private final List<String> orderByClauses = new ArrayList<>();
+  private SqlDialect sqlDialect = SqlDialect.ANSI;
   private Integer limit;
   private Integer offset;
 
@@ -270,6 +272,17 @@ public final class SQLQueryBuilder {
   }
 
   /**
+   * Selects SQL dialect used for dialect-specific clauses (for example pagination).
+   *
+   * @param dialect sql dialect to use
+   * @return this builder
+   */
+  public SQLQueryBuilder dialect(SqlDialect dialect) {
+    this.sqlDialect = Objects.requireNonNull(dialect, "dialect must not be null");
+    return this;
+  }
+
+  /**
    * Adds an ORDER BY clause using a whitelist for safety.
    *
    * @param sortToken the sort token from the client
@@ -317,12 +330,7 @@ public final class SQLQueryBuilder {
     if (!orderByClauses.isEmpty()) {
       queryBuilder.append(" ORDER BY ").append(String.join(", ", orderByClauses));
     }
-    if (limit != null) {
-      queryBuilder.append(" LIMIT ").append(limit);
-    }
-    if (offset != null) {
-      queryBuilder.append(" OFFSET ").append(offset);
-    }
+    sqlDialect.appendPagination(queryBuilder, limit, offset);
     sqlBuilder.append(queryBuilder);
     return new BuiltQuery(sqlBuilder.toString(), finalParams);
   }
