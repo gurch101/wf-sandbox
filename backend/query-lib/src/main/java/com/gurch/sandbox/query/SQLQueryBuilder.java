@@ -1,6 +1,8 @@
 package com.gurch.sandbox.query;
 
 import com.gurch.sandbox.query.internal.ParameterRewriter;
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -468,6 +470,9 @@ public final class SQLQueryBuilder {
     }
     if (value instanceof Enum<?> enumValue) {
       return enumValue.name();
+    }
+    if (value instanceof Instant instant) {
+      return Timestamp.from(instant);
     }
     if (value instanceof Collection<?> collection) {
       return collection.stream().map(SQLQueryBuilder::normalizeParameterValue).toList();

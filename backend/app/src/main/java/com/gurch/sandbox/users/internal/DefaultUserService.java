@@ -1,5 +1,6 @@
 package com.gurch.sandbox.users.internal;
 
+import com.gurch.sandbox.audit.AuditLogApi;
 import com.gurch.sandbox.dto.PagedResponse;
 import com.gurch.sandbox.persistence.PersistenceExceptionUtils;
 import com.gurch.sandbox.query.Operator;
@@ -23,8 +24,11 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class DefaultUserService implements UserApi {
 
+  private static final String USERS_RESOURCE_TYPE = "users";
+
   private final UserRepository repository;
   private final SearchExecutor searchExecutor;
+  private final AuditLogApi auditLogApi;
 
   @Override
   @Transactional(readOnly = true)
@@ -44,6 +48,7 @@ public class DefaultUserService implements UserApi {
                   .active(Optional.ofNullable(command.getActive()).orElse(true))
                   .tenantId(command.getTenantId())
                   .build());
+      auditLogApi.recordCreate(USERS_RESOURCE_TYPE, created.getId(), created);
       return created.getId();
     } catch (RuntimeException ex) {
       throw mapPersistenceFailure(ex);
@@ -57,6 +62,7 @@ public class DefaultUserService implements UserApi {
         repository.findById(id).orElseThrow(() -> new NotFoundException("User not found"));
 
     try {
+      UserEntity beforeState = existing;
       UserEntity updated =
           repository.save(
               existing.toBuilder()
@@ -66,6 +72,7 @@ public class DefaultUserService implements UserApi {
                   .tenantId(command.getTenantId())
                   .version(version)
                   .build());
+      auditLogApi.recordUpdate(USERS_RESOURCE_TYPE, updated.getId(), beforeState, updated);
       return updated.getId();
     } catch (RuntimeException ex) {
       throw mapPersistenceFailure(ex);
@@ -78,6 +85,7 @@ public class DefaultUserService implements UserApi {
     UserEntity existing =
         repository.findById(id).orElseThrow(() -> new NotFoundException("User not found"));
     repository.delete(existing);
+    auditLogApi.recordDelete(USERS_RESOURCE_TYPE, id, existing);
   }
 
   @Override

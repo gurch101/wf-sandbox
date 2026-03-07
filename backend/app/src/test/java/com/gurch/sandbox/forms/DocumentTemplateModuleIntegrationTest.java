@@ -1,5 +1,6 @@
 package com.gurch.sandbox.forms;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -109,6 +110,8 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
         .perform(get("/api/document-templates/{id}", id))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.detail").value("Document template not found with id: " + id));
+
+    assertThat(auditActionsFor("forms", id.toString())).containsExactly("DELETE", "CREATE");
   }
 
   @Test

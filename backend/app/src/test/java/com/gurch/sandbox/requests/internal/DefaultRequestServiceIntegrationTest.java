@@ -3,6 +3,7 @@ package com.gurch.sandbox.requests.internal;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gurch.sandbox.AbstractJdbcIntegrationTest;
 import com.gurch.sandbox.dto.PagedResponse;
@@ -12,16 +13,22 @@ import com.gurch.sandbox.requests.RequestResponse;
 import com.gurch.sandbox.requests.RequestSearchCriteria;
 import com.gurch.sandbox.requests.RequestSearchResponse;
 import com.gurch.sandbox.requests.RequestStatus;
-import com.gurch.sandbox.requests.TaskAction;
+import com.gurch.sandbox.requests.tasks.dto.TaskAction;
+import com.gurch.sandbox.requests.tasks.internal.RequestTaskEntity;
+import com.gurch.sandbox.requests.tasks.internal.RequestTaskRepository;
+import com.gurch.sandbox.requests.tasks.internal.RequestTaskStatus;
 import com.gurch.sandbox.requesttypes.RequestTypeApi;
 import com.gurch.sandbox.requesttypes.RequestTypeCommand;
 import com.gurch.sandbox.requesttypes.internal.RequestTypeRepository;
+import com.gurch.sandbox.web.NotFoundException;
 import com.gurch.sandbox.web.ValidationErrorException;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 class DefaultRequestServiceIntegrationTest extends AbstractJdbcIntegrationTest {
 
@@ -31,6 +38,7 @@ class DefaultRequestServiceIntegrationTest extends AbstractJdbcIntegrationTest {
   @Autowired private RequestTypeApi requestTypeApi;
   @Autowired private RequestTypeRepository requestTypeRepository;
   @Autowired private ObjectMapper objectMapper;
+  @Autowired private JdbcTemplate jdbcTemplate;
 
   @BeforeEach
   void setUp() {
@@ -45,6 +53,11 @@ class DefaultRequestServiceIntegrationTest extends AbstractJdbcIntegrationTest {
             .payloadHandlerId("amount-positive")
             .processDefinitionKey("requestTypeV1Process")
             .build());
+  }
+
+  @AfterEach
+  void tearDown() {
+    jdbcTemplate.update("DELETE FROM audit_log_events");
   }
 
   @Test
@@ -125,6 +138,8 @@ class DefaultRequestServiceIntegrationTest extends AbstractJdbcIntegrationTest {
     assertThat(draft.getStatus()).isEqualTo(RequestStatus.DRAFT);
     assertThat(draft.getRequestTypeVersion()).isEqualTo(1);
     assertThat(draft.getProcessInstanceId()).isNull();
+    assertThat(auditActionsFor("requests", draftId.toString())).containsExactly("CREATE");
+    assertThat(latestAuditActorForRequest(draftId)).isEqualTo(1);
 
     assertThatThrownBy(() -> requestApi.submitDraft(draftId))
         .isInstanceOf(ValidationErrorException.class)
@@ -170,7 +185,7 @@ class DefaultRequestServiceIntegrationTest extends AbstractJdbcIntegrationTest {
   }
 
   @Test
-  void shouldUpdateAndSubmitDraft() {
+  void shouldUpdateAndSubmitDraft() throws Exception {
     Long draftId =
         requestApi.createDraft(
             CreateRequestCommand.builder()
@@ -179,6 +194,14 @@ class DefaultRequestServiceIntegrationTest extends AbstractJdbcIntegrationTest {
                 .build());
 
     requestApi.updateDraft(draftId, objectMapper.valueToTree(Map.of("amount", 25)), 0L);
+    Map<String, Object> updateAuditRow = updateAuditDiffRow(draftId);
+    JsonNode beforeState = objectMapper.readTree((String) updateAuditRow.get("before_state"));
+    JsonNode afterState = objectMapper.readTree((String) updateAuditRow.get("after_state"));
+    assertThat(beforeState.path("payloadJson").path("amount").asInt()).isEqualTo(0);
+    assertThat(afterState.path("payloadJson").path("amount").asInt()).isEqualTo(25);
+    assertThat(beforeState.has("requestTypeKey")).isFalse();
+    assertThat(afterState.has("requestTypeKey")).isFalse();
+
     RequestResponse submitted = requestApi.submitDraft(draftId);
 
     assertThat(submitted.getStatus()).isEqualTo(RequestStatus.IN_PROGRESS);
@@ -210,5 +233,55 @@ class DefaultRequestServiceIntegrationTest extends AbstractJdbcIntegrationTest {
     RequestTaskEntity completedTask = requestTaskRepository.findById(task.getId()).orElseThrow();
     assertThat(completedTask.getStatus()).isEqualTo(RequestTaskStatus.COMPLETED);
     assertThat(completedTask.getAction()).isEqualTo(TaskAction.APPROVED.name());
+  }
+
+  @Test
+  void shouldDeleteDraft() {
+    Long draftId =
+        requestApi.createDraft(
+            CreateRequestCommand.builder()
+                .requestTypeKey("loan")
+                .payload(objectMapper.valueToTree(Map.of("amount", 42)))
+                .build());
+
+    requestApi.deleteById(draftId);
+
+    assertThat(requestRepository.findById(draftId)).isEmpty();
+    assertThat(auditActionsFor("requests", draftId.toString())).containsExactly("DELETE", "CREATE");
+  }
+
+  @Test
+  void shouldFailDeleteForMissingRequest() {
+    assertThatThrownBy(() -> requestApi.deleteById(Long.MAX_VALUE))
+        .isInstanceOf(NotFoundException.class)
+        .hasMessageContaining("Request not found with id");
+  }
+
+  private Integer latestAuditActorForRequest(Long requestId) {
+    return jdbcTemplate.queryForObject(
+        """
+        SELECT actor_user_id
+        FROM audit_log_events
+        WHERE resource_type = 'requests'
+          AND resource_id = ?
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1
+        """,
+        Integer.class,
+        requestId.toString());
+  }
+
+  private Map<String, Object> updateAuditDiffRow(Long requestId) {
+    return jdbcTemplate.queryForMap(
+        """
+        SELECT before_state::text AS before_state, after_state::text AS after_state
+        FROM audit_log_events
+        WHERE resource_type = 'requests'
+          AND resource_id = ?
+          AND action = 'UPDATE'
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1
+        """,
+        requestId.toString());
   }
 }

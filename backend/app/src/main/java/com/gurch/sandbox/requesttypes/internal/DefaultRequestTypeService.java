@@ -1,5 +1,6 @@
 package com.gurch.sandbox.requesttypes.internal;
 
+import com.gurch.sandbox.audit.AuditLogApi;
 import com.gurch.sandbox.dto.PagedResponse;
 import com.gurch.sandbox.query.JoinType;
 import com.gurch.sandbox.query.Operator;
@@ -25,12 +26,16 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class DefaultRequestTypeService implements RequestTypeApi {
 
+  private static final String REQUEST_TYPES_RESOURCE_TYPE = "request_types";
+  private static final String REQUEST_TYPE_VERSIONS_RESOURCE_TYPE = "request_type_versions";
+
   private final RequestTypeRepository requestTypeRepository;
   private final RequestTypeVersionRepository versionRepository;
   private final NamedParameterJdbcTemplate jdbcTemplate;
   private final WorkflowApi workflowApi;
   private final PayloadHandlerCatalog payloadHandlerCatalog;
   private final SearchExecutor searchExecutor;
+  private final AuditLogApi auditLogApi;
 
   @Override
   @Transactional(readOnly = true)
@@ -106,9 +111,12 @@ public class DefaultRequestTypeService implements RequestTypeApi {
                 .processDefinitionKey(command.getProcessDefinitionKey())
                 .build());
 
-    requestTypeRepository.save(type.toBuilder().activeVersionId(version.getId()).build());
+    RequestTypeEntity updatedType =
+        requestTypeRepository.save(type.toBuilder().activeVersionId(version.getId()).build());
+    auditLogApi.recordCreate(REQUEST_TYPES_RESOURCE_TYPE, updatedType.getId(), updatedType);
+    auditLogApi.recordCreate(REQUEST_TYPE_VERSIONS_RESOURCE_TYPE, version.getId(), version);
 
-    return toResolved(type.getTypeKey(), version);
+    return toResolved(updatedType.getTypeKey(), version);
   }
 
   @Override
@@ -133,6 +141,7 @@ public class DefaultRequestTypeService implements RequestTypeApi {
             .findById(activeVersionId)
             .orElseThrow(
                 () -> ValidationErrorException.of(RequestTypeErrorCode.REQUEST_TYPE_NOT_FOUND));
+    RequestTypeEntity beforeTypeState = type;
 
     RequestTypeVersionEntity newVersion =
         versionRepository.save(
@@ -142,16 +151,20 @@ public class DefaultRequestTypeService implements RequestTypeApi {
                 .payloadHandlerId(command.getPayloadHandlerId())
                 .processDefinitionKey(command.getProcessDefinitionKey())
                 .build());
+    auditLogApi.recordCreate(REQUEST_TYPE_VERSIONS_RESOURCE_TYPE, newVersion.getId(), newVersion);
 
-    requestTypeRepository.save(
-        type.toBuilder()
-            .name(command.getName())
-            .description(command.getDescription())
-            .activeVersionId(newVersion.getId())
-            .active(true)
-            .build());
+    RequestTypeEntity updatedType =
+        requestTypeRepository.save(
+            type.toBuilder()
+                .name(command.getName())
+                .description(command.getDescription())
+                .activeVersionId(newVersion.getId())
+                .active(true)
+                .build());
+    auditLogApi.recordUpdate(
+        REQUEST_TYPES_RESOURCE_TYPE, updatedType.getId(), beforeTypeState, updatedType);
 
-    return toResolved(type.getTypeKey(), newVersion);
+    return toResolved(updatedType.getTypeKey(), newVersion);
   }
 
   @Override
@@ -189,6 +202,7 @@ public class DefaultRequestTypeService implements RequestTypeApi {
     }
 
     requestTypeRepository.deleteById(type.getId());
+    auditLogApi.recordDelete(REQUEST_TYPES_RESOURCE_TYPE, type.getId(), type);
   }
 
   private void validateProcessDefinitionKey(String processDefinitionKey) {

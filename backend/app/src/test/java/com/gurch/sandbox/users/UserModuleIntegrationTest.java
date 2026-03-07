@@ -77,6 +77,9 @@ class UserModuleIntegrationTest extends AbstractJdbcIntegrationTest {
         .andExpect(status().isNoContent());
 
     mockMvc.perform(get("/api/admin/users/{id}", userId)).andExpect(status().isNotFound());
+
+    assertThat(auditActionsFor("users", userId.toString()))
+        .containsExactly("DELETE", "UPDATE", "CREATE");
   }
 
   @Test

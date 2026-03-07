@@ -1,5 +1,6 @@
 package com.gurch.sandbox.forms.internal;
 
+import com.gurch.sandbox.audit.AuditLogApi;
 import com.gurch.sandbox.dto.PagedResponse;
 import com.gurch.sandbox.forms.DocumentTemplateApi;
 import com.gurch.sandbox.forms.DocumentTemplateDownload;
@@ -32,10 +33,12 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
   private static final String MIME_DOCX =
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
   private static final String STORAGE_NAMESPACE_DOCUMENT_TEMPLATES = "document-templates";
+  private static final String FORMS_RESOURCE_TYPE = "forms";
 
   private final DocumentTemplateRepository repository;
   private final StorageApi storageApi;
   private final SearchExecutor searchExecutor;
+  private final AuditLogApi auditLogApi;
 
   @Value("${documenttemplates.upload.max-size-bytes:26214400}")
   private long maxUploadSizeBytes;
@@ -77,7 +80,9 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
             .build();
 
     try {
-      return toResponse(repository.save(entity));
+      DocumentTemplateEntity saved = repository.save(entity);
+      auditLogApi.recordCreate(FORMS_RESOURCE_TYPE, saved.getId(), saved);
+      return toResponse(saved);
     } catch (RuntimeException e) {
       try {
         storageApi.delete(stored.storagePath());
@@ -147,6 +152,7 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
     }
 
     repository.delete(entity);
+    auditLogApi.recordDelete(FORMS_RESOURCE_TYPE, id, entity);
   }
 
   private static void validateUploadRequest(DocumentTemplateUploadRequest request) {
