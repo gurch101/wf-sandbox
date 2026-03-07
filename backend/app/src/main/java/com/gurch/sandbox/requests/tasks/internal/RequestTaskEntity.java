@@ -1,4 +1,4 @@
-package com.gurch.sandbox.requests.internal;
+package com.gurch.sandbox.requests.tasks.internal;
 
 import com.gurch.sandbox.persistence.MutableEntity;
 import lombok.Data;

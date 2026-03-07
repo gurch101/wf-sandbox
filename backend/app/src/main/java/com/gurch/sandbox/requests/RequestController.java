@@ -2,6 +2,8 @@ package com.gurch.sandbox.requests;
 
 import com.gurch.sandbox.dto.CreateResponse;
 import com.gurch.sandbox.dto.PagedResponse;
+import com.gurch.sandbox.requests.activity.dto.RequestActivityEventResponse;
+import com.gurch.sandbox.requests.activity.dto.RequestActivitySearchCriteria;
 import com.gurch.sandbox.requesttypes.RequestTypeResolutionErrorCode;
 import com.gurch.sandbox.web.ApiErrorEnum;
 import com.gurch.sandbox.web.NotFoundException;
@@ -72,6 +74,12 @@ public class RequestController {
   @GetMapping("/{id}")
   public RequestResponse getById(@PathVariable Long id) {
     return requestApi.findById(id).orElseThrow(() -> new NotFoundException("Request not found"));
+  }
+
+  @GetMapping("/{id}/activity")
+  public PagedResponse<RequestActivityEventResponse> activity(
+      @PathVariable Long id, RequestActivitySearchCriteria criteria) {
+    return requestApi.searchActivity(id, criteria);
   }
 
   @DeleteMapping("/{id}")

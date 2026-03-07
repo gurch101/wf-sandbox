@@ -1,5 +1,6 @@
 package com.gurch.sandbox.tenants.internal;
 
+import com.gurch.sandbox.audit.AuditLogApi;
 import com.gurch.sandbox.dto.PagedResponse;
 import com.gurch.sandbox.persistence.PersistenceExceptionUtils;
 import com.gurch.sandbox.query.Operator;
@@ -23,8 +24,11 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class DefaultTenantService implements TenantApi {
 
+  private static final String TENANTS_RESOURCE_TYPE = "tenants";
+
   private final TenantRepository repository;
   private final SearchExecutor searchExecutor;
+  private final AuditLogApi auditLogApi;
 
   @Override
   @Transactional(readOnly = true)
@@ -43,6 +47,7 @@ public class DefaultTenantService implements TenantApi {
                   .name(command.getName().trim())
                   .active(Optional.ofNullable(command.getActive()).orElse(true))
                   .build());
+      auditLogApi.recordCreate(TENANTS_RESOURCE_TYPE, created.getId(), created);
       return created.getId();
     } catch (RuntimeException ex) {
       throw mapPersistenceFailure(ex);
@@ -56,6 +61,7 @@ public class DefaultTenantService implements TenantApi {
         repository.findById(id).orElseThrow(() -> new NotFoundException("Tenant not found"));
 
     try {
+      TenantEntity beforeState = existing;
       TenantEntity updated =
           repository.save(
               existing.toBuilder()
@@ -63,6 +69,7 @@ public class DefaultTenantService implements TenantApi {
                   .active(Optional.ofNullable(command.getActive()).orElse(existing.isActive()))
                   .version(version)
                   .build());
+      auditLogApi.recordUpdate(TENANTS_RESOURCE_TYPE, updated.getId(), beforeState, updated);
       return updated.getId();
     } catch (RuntimeException ex) {
       throw mapPersistenceFailure(ex);
@@ -76,6 +83,7 @@ public class DefaultTenantService implements TenantApi {
         repository.findById(id).orElseThrow(() -> new NotFoundException("Tenant not found"));
     try {
       repository.delete(existing);
+      auditLogApi.recordDelete(TENANTS_RESOURCE_TYPE, id, existing);
     } catch (RuntimeException ex) {
       throw mapPersistenceFailure(ex);
     }

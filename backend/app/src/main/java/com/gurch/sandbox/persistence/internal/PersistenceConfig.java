@@ -2,6 +2,7 @@ package com.gurch.sandbox.persistence.internal;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.gurch.sandbox.security.CurrentUserProvider;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -17,7 +18,6 @@ import org.springframework.data.convert.WritingConverter;
 import org.springframework.data.domain.AuditorAware;
 import org.springframework.data.jdbc.core.convert.JdbcCustomConversions;
 import org.springframework.data.jdbc.repository.config.EnableJdbcAuditing;
-import org.springframework.security.core.context.SecurityContextHolder;
 
 @Configuration
 @EnableJdbcAuditing(
@@ -27,6 +27,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 public class PersistenceConfig {
 
   private final ObjectMapper objectMapper;
+  private final CurrentUserProvider currentUserProvider;
 
   @Bean
   public Clock utcClock() {
@@ -40,22 +41,7 @@ public class PersistenceConfig {
 
   @Bean
   public AuditorAware<Integer> jdbcAuditorAware() {
-    return () ->
-        Optional.ofNullable(SecurityContextHolder.getContext().getAuthentication())
-            .filter(authentication -> authentication.isAuthenticated())
-            .map(authentication -> authentication.getName())
-            .flatMap(PersistenceConfig::parseAuditorId);
-  }
-
-  private static Optional<Integer> parseAuditorId(String principalName) {
-    if (principalName == null || principalName.isBlank()) {
-      return Optional.empty();
-    }
-    try {
-      return Optional.of(Integer.parseInt(principalName));
-    } catch (NumberFormatException ignored) {
-      return Optional.empty();
-    }
+    return currentUserProvider::currentUserId;
   }
 
   @Bean

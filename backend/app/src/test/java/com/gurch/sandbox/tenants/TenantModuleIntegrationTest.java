@@ -72,6 +72,9 @@ class TenantModuleIntegrationTest extends AbstractJdbcIntegrationTest {
         .andExpect(status().isNoContent());
 
     mockMvc.perform(get("/api/admin/tenants/{id}", tenantId)).andExpect(status().isNotFound());
+
+    assertThat(auditActionsFor("tenants", tenantId.toString()))
+        .containsExactly("DELETE", "UPDATE", "CREATE");
   }
 
   @Test

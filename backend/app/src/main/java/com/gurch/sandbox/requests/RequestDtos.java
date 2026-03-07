@@ -1,6 +1,7 @@
 package com.gurch.sandbox.requests;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.gurch.sandbox.requests.tasks.dto.TaskAction;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;

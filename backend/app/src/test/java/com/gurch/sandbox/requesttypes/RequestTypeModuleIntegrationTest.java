@@ -1,5 +1,6 @@
 package com.gurch.sandbox.requesttypes;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -29,6 +31,7 @@ class RequestTypeModuleIntegrationTest extends AbstractJdbcIntegrationTest {
   @Autowired private ObjectMapper objectMapper;
   @Autowired private RequestTypeRepository requestTypeRepository;
   @Autowired private RequestRepository requestRepository;
+  @Autowired private JdbcTemplate jdbcTemplate;
 
   @BeforeEach
   void setUp() {
@@ -123,6 +126,37 @@ class RequestTypeModuleIntegrationTest extends AbstractJdbcIntegrationTest {
                             "Loan", "desc", "amount-positive", "missing-process-definition-key"))))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.errors[0].code").value("INVALID_PROCESS_DEFINITION_KEY"));
+  }
+
+  @Test
+  void shouldWriteAuditEventsForCreateChangeAndDeleteRequestType() throws Exception {
+    createType("audit-type", "Audit Type", "noop", "requestTypeV2Process");
+
+    Long typeId =
+        jdbcTemplate.queryForObject(
+            "SELECT id FROM request_types WHERE type_key = ?", Long.class, "audit-type");
+
+    mockMvc
+        .perform(
+            put("/api/internal/request-types/{typeKey}", "audit-type")
+                .with(csrf())
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        new RequestTypeDtos.ChangeTypeRequest(
+                            "Audit Type Updated", "desc", "noop", "requestTypeV1Process"))))
+        .andExpect(status().isOk());
+
+    mockMvc
+        .perform(
+            delete("/api/internal/request-types/{typeKey}", "audit-type")
+                .with(csrf())
+                .header("Idempotency-Key", UUID.randomUUID().toString()))
+        .andExpect(status().isNoContent());
+
+    assertThat(auditActionsFor("request_types", typeId.toString()))
+        .containsExactly("DELETE", "UPDATE", "CREATE");
   }
 
   private void createType(

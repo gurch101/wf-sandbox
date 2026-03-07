@@ -1,6 +1,7 @@
 package com.gurch.sandbox.requests.internal;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.gurch.sandbox.audit.AuditLogApi;
 import com.gurch.sandbox.dto.PagedResponse;
 import com.gurch.sandbox.query.JoinType;
 import com.gurch.sandbox.query.Operator;
@@ -12,23 +13,24 @@ import com.gurch.sandbox.requests.RequestResponse;
 import com.gurch.sandbox.requests.RequestSearchCriteria;
 import com.gurch.sandbox.requests.RequestSearchResponse;
 import com.gurch.sandbox.requests.RequestStatus;
-import com.gurch.sandbox.requests.RequestTaskResponse;
-import com.gurch.sandbox.requests.TaskAction;
+import com.gurch.sandbox.requests.activity.RequestActivityApi;
+import com.gurch.sandbox.requests.activity.dto.RequestActivityEventResponse;
+import com.gurch.sandbox.requests.activity.dto.RequestActivitySearchCriteria;
+import com.gurch.sandbox.requests.tasks.RequestTaskApi;
+import com.gurch.sandbox.requests.tasks.dto.RequestTaskResponse;
+import com.gurch.sandbox.requests.tasks.dto.TaskAction;
 import com.gurch.sandbox.requesttypes.RequestTypeApi;
 import com.gurch.sandbox.requesttypes.ResolvedRequestTypeVersion;
 import com.gurch.sandbox.search.SearchExecutor;
+import com.gurch.sandbox.web.CorrelationIdResolver;
 import com.gurch.sandbox.web.NotFoundException;
 import com.gurch.sandbox.web.ValidationErrorException;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.finos.fluxnova.bpm.engine.RuntimeService;
-import org.finos.fluxnova.bpm.engine.TaskService;
 import org.finos.fluxnova.bpm.engine.runtime.ProcessInstance;
-import org.finos.fluxnova.bpm.engine.task.Task;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,14 +39,18 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class DefaultRequestService implements RequestApi {
 
+  private static final String REQUESTS_RESOURCE_TYPE = "requests";
+
   private final RequestRepository repository;
-  private final RequestTaskRepository requestTaskRepository;
+  private final RequestTaskApi requestTaskApi;
   private final RuntimeService runtimeService;
-  private final TaskService taskService;
 
   private final RequestTypeApi requestTypeApi;
   private final RequestPayloadHandlerRegistry payloadHandlerRegistry;
   private final SearchExecutor searchExecutor;
+  private final AuditLogApi auditLogApi;
+  private final RequestActivityApi requestActivityApi;
+  private final CorrelationIdResolver correlationIdResolver;
 
   @Override
   public Optional<RequestResponse> findById(Long id) {
@@ -66,6 +72,10 @@ public class DefaultRequestService implements RequestApi {
                 .payloadJson(command.getPayload())
                 .status(RequestStatus.DRAFT)
                 .build());
+    String correlationId = correlationIdResolver.resolve(null);
+    auditLogApi.recordCreate(REQUESTS_RESOURCE_TYPE, saved.getId(), saved, correlationId);
+    requestActivityApi.recordStatusChanged(
+        saved.getId(), null, saved.getStatus(), null, saved.getProcessInstanceId(), correlationId);
     return saved.getId();
   }
 
@@ -80,8 +90,15 @@ public class DefaultRequestService implements RequestApi {
       throw ValidationErrorException.of(RequestDraftErrorCode.INVALID_DRAFT_UPDATE_STATUS);
     }
 
+    RequestEntity beforeState = draft;
     RequestEntity updated =
         repository.save(draft.toBuilder().payloadJson(payload).version(version).build());
+    auditLogApi.recordUpdate(
+        REQUESTS_RESOURCE_TYPE,
+        updated.getId(),
+        beforeState,
+        updated,
+        correlationIdResolver.resolve(null));
 
     return updated.getId();
   }
@@ -119,6 +136,10 @@ public class DefaultRequestService implements RequestApi {
                 .payloadJson(command.getPayload())
                 .status(RequestStatus.DRAFT)
                 .build());
+    String correlationId = correlationIdResolver.resolve(null);
+    auditLogApi.recordCreate(REQUESTS_RESOURCE_TYPE, draft.getId(), draft, correlationId);
+    requestActivityApi.recordStatusChanged(
+        draft.getId(), null, draft.getStatus(), null, draft.getProcessInstanceId(), correlationId);
 
     return submitPersistedRequest(draft, resolved, command.getPayload());
   }
@@ -126,39 +147,25 @@ public class DefaultRequestService implements RequestApi {
   @Override
   @Transactional
   public void deleteById(Long id) {
-    repository.deleteById(id);
+    RequestEntity existing =
+        repository
+            .findById(id)
+            .orElseThrow(() -> new NotFoundException("Request not found with id: " + id));
+    repository.delete(existing);
+    auditLogApi.recordDelete(
+        REQUESTS_RESOURCE_TYPE, id, existing, correlationIdResolver.resolve(null));
   }
 
   @Override
   @Transactional
   public void completeTask(Long requestId, Long taskId, TaskAction action, String comment) {
-    RequestEntity request =
-        repository
-            .findById(requestId)
-            .orElseThrow(() -> new NotFoundException("Request not found with id: " + requestId));
+    requestTaskApi.completeTask(requestId, taskId, action, comment);
+  }
 
-    RequestTaskEntity requestTask =
-        requestTaskRepository
-            .findById(taskId)
-            .orElseThrow(() -> new NotFoundException("Task not found with id: " + taskId));
-    if (!requestTask.getRequestId().equals(requestId)) {
-      throw new NotFoundException("Task " + taskId + " does not belong to request " + requestId);
-    }
-
-    Task task = taskService.createTaskQuery().taskId(requestTask.getTaskId()).singleResult();
-    if (task == null) {
-      throw new NotFoundException("Task not found with id: " + taskId);
-    }
-    if (!task.getProcessInstanceId().equals(request.getProcessInstanceId())) {
-      throw new NotFoundException("Task " + taskId + " does not belong to request " + requestId);
-    }
-
-    Map<String, Object> variables = new HashMap<>();
-    variables.put("action", action.name());
-    if (comment != null && !comment.isBlank()) {
-      taskService.createComment(requestTask.getTaskId(), request.getProcessInstanceId(), comment);
-    }
-    taskService.complete(requestTask.getTaskId(), variables);
+  @Override
+  public PagedResponse<RequestActivityEventResponse> searchActivity(
+      Long id, RequestActivitySearchCriteria criteria) {
+    return requestActivityApi.search(id, criteria);
   }
 
   @Override
@@ -198,24 +205,15 @@ public class DefaultRequestService implements RequestApi {
   }
 
   private List<RequestTaskResponse> findUserTasks(Long requestId) {
-    return requestTaskRepository.findByRequestId(requestId).stream()
-        .map(this::toTaskResponse)
-        .toList();
-  }
-
-  private RequestTaskResponse toTaskResponse(RequestTaskEntity task) {
-    return RequestTaskResponse.builder()
-        .id(task.getId())
-        .name(task.getName())
-        .status(task.getStatus().name())
-        .assignee(task.getAssignee())
-        .build();
+    return requestTaskApi.findByRequestId(requestId);
   }
 
   private RequestResponse submitPersistedRequest(
       RequestEntity baseEntity, ResolvedRequestTypeVersion resolved, JsonNode payload) {
     payloadHandlerRegistry.validate(resolved.getPayloadHandlerId(), payload);
+    String correlationId = correlationIdResolver.resolve(null);
 
+    RequestEntity beforeSubmittedState = baseEntity;
     RequestEntity submitted =
         repository.save(
             baseEntity.toBuilder()
@@ -224,17 +222,42 @@ public class DefaultRequestService implements RequestApi {
                 .payloadJson(payload)
                 .status(RequestStatus.SUBMITTED)
                 .build());
+    auditLogApi.recordUpdate(
+        REQUESTS_RESOURCE_TYPE, submitted.getId(), beforeSubmittedState, submitted, correlationId);
+    requestActivityApi.recordStatusChanged(
+        submitted.getId(),
+        baseEntity.getStatus(),
+        submitted.getStatus(),
+        null,
+        submitted.getProcessInstanceId(),
+        correlationId);
 
     ProcessInstance processInstance =
         runtimeService.startProcessInstanceByKey(
             resolved.getProcessDefinitionKey(), submitted.getId().toString());
 
+    RequestEntity beforeInProgressState = submitted;
     RequestEntity inProgress =
         repository.save(
             submitted.toBuilder()
                 .status(RequestStatus.IN_PROGRESS)
                 .processInstanceId(processInstance.getProcessInstanceId())
                 .build());
+    String inProgressCorrelation =
+        correlationId != null ? correlationId : processInstance.getProcessInstanceId();
+    auditLogApi.recordUpdate(
+        REQUESTS_RESOURCE_TYPE,
+        inProgress.getId(),
+        beforeInProgressState,
+        inProgress,
+        inProgressCorrelation);
+    requestActivityApi.recordStatusChanged(
+        inProgress.getId(),
+        submitted.getStatus(),
+        inProgress.getStatus(),
+        null,
+        inProgress.getProcessInstanceId(),
+        inProgressCorrelation);
 
     return toResponse(inProgress, false, false);
   }

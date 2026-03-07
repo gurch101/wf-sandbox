@@ -2,6 +2,7 @@ package com.gurch.sandbox.requests;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -13,9 +14,10 @@ import com.gurch.sandbox.AbstractJdbcIntegrationTest;
 import com.gurch.sandbox.dto.CreateResponse;
 import com.gurch.sandbox.requests.internal.RequestEntity;
 import com.gurch.sandbox.requests.internal.RequestRepository;
-import com.gurch.sandbox.requests.internal.RequestTaskEntity;
-import com.gurch.sandbox.requests.internal.RequestTaskRepository;
-import com.gurch.sandbox.requests.internal.RequestTaskStatus;
+import com.gurch.sandbox.requests.tasks.dto.TaskAction;
+import com.gurch.sandbox.requests.tasks.internal.RequestTaskEntity;
+import com.gurch.sandbox.requests.tasks.internal.RequestTaskRepository;
+import com.gurch.sandbox.requests.tasks.internal.RequestTaskStatus;
 import com.gurch.sandbox.requesttypes.RequestTypeDtos;
 import com.gurch.sandbox.requesttypes.internal.RequestTypeRepository;
 import java.time.Duration;
@@ -29,6 +31,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -40,6 +43,7 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
   @Autowired private RequestTaskRepository requestTaskRepository;
   @Autowired private ExternalTaskService externalTaskService;
   @Autowired private RequestTypeRepository requestTypeRepository;
+  @Autowired private JdbcTemplate jdbcTemplate;
 
   @BeforeEach
   void setUp() {
@@ -293,6 +297,142 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
         .andExpect(status().isNoContent());
 
     assertTaskStatusEventually(task.getId(), RequestTaskStatus.COMPLETED);
+  }
+
+  @Test
+  void shouldPopulateCorrelationIdFromIdempotencyKeyForAuditEvents() throws Exception {
+    createType("loan", "Loan", "amount-positive", "requestTypeV1Process");
+    String idempotencyKey = UUID.randomUUID().toString();
+
+    MvcResult result =
+        mockMvc
+            .perform(
+                post("/api/requests/drafts")
+                    .with(csrf())
+                    .header("Idempotency-Key", idempotencyKey)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        objectMapper.writeValueAsString(
+                            new RequestDtos.CreateRequest(
+                                "loan", objectMapper.readTree("{\"amount\":25}")))))
+            .andExpect(status().isCreated())
+            .andReturn();
+
+    Long requestId =
+        objectMapper
+            .readValue(result.getResponse().getContentAsString(), CreateResponse.class)
+            .getId();
+    String correlationId =
+        jdbcTemplate.queryForObject(
+            """
+            SELECT correlation_id
+            FROM audit_log_events
+            WHERE resource_type = 'requests'
+              AND resource_id = ?
+            ORDER BY created_at DESC, id DESC
+            LIMIT 1
+            """,
+            String.class,
+            requestId.toString());
+
+    assertThat(correlationId).isEqualTo(idempotencyKey);
+  }
+
+  @Test
+  void shouldExposeRequestActivityEvents() throws Exception {
+    createType("manual", "Manual", "noop", "simpleUserTaskProcess");
+    Long requestId = createRequest("manual", Map.of("value", "x"));
+
+    RequestTaskEntity task = requestTaskRepository.findByRequestId(requestId).getFirst();
+    mockMvc
+        .perform(
+            post("/api/requests/{requestId}/tasks/{taskId}/complete", requestId, task.getId())
+                .with(csrf())
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        new RequestDtos.CompleteTaskRequest(TaskAction.APPROVED, "approved"))))
+        .andExpect(status().isNoContent());
+    assertTaskStatusEventually(task.getId(), RequestTaskStatus.COMPLETED);
+
+    MvcResult activityResult =
+        mockMvc
+            .perform(get("/api/requests/{id}/activity", requestId))
+            .andExpect(status().isOk())
+            .andReturn();
+
+    JsonNode body = objectMapper.readTree(activityResult.getResponse().getContentAsString());
+    List<String> eventTypes = body.path("items").findValuesAsText("eventType").stream().toList();
+
+    assertThat(eventTypes).contains("TASK_COMPLETED", "STATUS_CHANGED");
+    assertThat(eventTypes).doesNotContain("TASK_ASSIGNED");
+  }
+
+  @Test
+  void shouldReturnNotFoundWhenDeletingMissingRequest() throws Exception {
+    mockMvc
+        .perform(
+            delete("/api/requests/{id}", Long.MAX_VALUE)
+                .with(csrf())
+                .header("Idempotency-Key", UUID.randomUUID().toString()))
+        .andExpect(status().isNotFound());
+  }
+
+  @Test
+  void shouldFilterRequestActivityByEventTypeAndDateRange() throws Exception {
+    createType("manual", "Manual", "noop", "simpleUserTaskProcess");
+    Long requestId = createRequest("manual", Map.of("value", "x"));
+
+    RequestTaskEntity task = requestTaskRepository.findByRequestId(requestId).getFirst();
+    mockMvc
+        .perform(
+            post("/api/requests/{requestId}/tasks/{taskId}/complete", requestId, task.getId())
+                .with(csrf())
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        new RequestDtos.CompleteTaskRequest(TaskAction.APPROVED, "approved"))))
+        .andExpect(status().isNoContent());
+    assertTaskStatusEventually(task.getId(), RequestTaskStatus.COMPLETED);
+
+    JsonNode allEvents =
+        objectMapper.readTree(
+            mockMvc
+                .perform(get("/api/requests/{id}/activity", requestId))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+
+    JsonNode completedEvent = null;
+    for (JsonNode item : allEvents.path("items")) {
+      if ("TASK_COMPLETED".equals(item.path("eventType").asText())) {
+        completedEvent = item;
+        break;
+      }
+    }
+    assertThat(completedEvent).isNotNull();
+    Instant completedAt = Instant.parse(completedEvent.path("createdAt").asText());
+
+    JsonNode filtered =
+        objectMapper.readTree(
+            mockMvc
+                .perform(
+                    get("/api/requests/{id}/activity", requestId)
+                        .param("eventTypes", "TASK_COMPLETED")
+                        .param("createdAtFrom", completedAt.minusMillis(1).toString())
+                        .param("createdAtTo", completedAt.plusMillis(1).toString()))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+
+    List<String> filteredTypes =
+        filtered.path("items").findValuesAsText("eventType").stream().toList();
+    assertThat(filteredTypes).isNotEmpty();
+    assertThat(filteredTypes).allMatch("TASK_COMPLETED"::equals);
   }
 
   private void createType(
