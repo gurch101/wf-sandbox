@@ -48,11 +48,9 @@ dependencies {
 	testImplementation 'com.tngtech.archunit:archunit-junit5:1.4.1'
 	testImplementation 'org.testcontainers:junit-jupiter'
 	testImplementation 'org.testcontainers:postgresql'
-	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 tasks.named('test') {
-	useJUnitPlatform()
 	def xdgRuntimeDir = System.getenv('XDG_RUNTIME_DIR')
 	def dockerHost = System.getenv('DOCKER_HOST')
 	def podmanSocket = xdgRuntimeDir ? new File("${xdgRuntimeDir}/podman/podman.sock") : null
