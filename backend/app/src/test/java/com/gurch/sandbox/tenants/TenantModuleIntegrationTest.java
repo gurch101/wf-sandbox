@@ -11,9 +11,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gurch.sandbox.AbstractJdbcIntegrationTest;
+import com.gurch.sandbox.documenttemplates.internal.DocumentTemplateRepository;
 import com.gurch.sandbox.dto.CreateResponse;
 import com.gurch.sandbox.tenants.internal.TenantEntity;
 import com.gurch.sandbox.tenants.internal.TenantRepository;
+import com.gurch.sandbox.users.internal.UserRepository;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,9 +29,15 @@ class TenantModuleIntegrationTest extends AbstractJdbcIntegrationTest {
   @Autowired private MockMvc mockMvc;
   @Autowired private ObjectMapper objectMapper;
   @Autowired private TenantRepository tenantRepository;
+  @Autowired private DocumentTemplateRepository documentTemplateRepository;
+  @Autowired private UserRepository userRepository;
 
   @BeforeEach
   void setUp() {
+    userRepository.findAll().stream()
+        .filter(user -> user.getId() > 1)
+        .forEach(userRepository::delete);
+    documentTemplateRepository.deleteAll();
     tenantRepository.deleteAll();
   }
 
