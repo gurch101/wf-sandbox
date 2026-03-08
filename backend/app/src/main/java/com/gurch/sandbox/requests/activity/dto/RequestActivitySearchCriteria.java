@@ -4,7 +4,6 @@ import com.gurch.sandbox.dto.SearchCriteria;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.List;
-import java.util.stream.Collectors;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -33,12 +32,4 @@ public class RequestActivitySearchCriteria extends SearchCriteria {
 
   @Schema(description = "Optional upper bound (inclusive) for event timestamp")
   private Instant createdAtTo;
-
-  /** Returns event type names for SQL filtering. */
-  public List<String> getEventTypeNames() {
-    if (eventTypes == null || eventTypes.isEmpty()) {
-      return null;
-    }
-    return eventTypes.stream().map(Enum::name).collect(Collectors.toList());
-  }
 }

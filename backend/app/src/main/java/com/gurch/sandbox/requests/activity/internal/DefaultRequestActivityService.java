@@ -42,7 +42,7 @@ public class DefaultRequestActivityService implements RequestActivityApi {
                     + "rae.payload::text AS payloadText, rae.created_at AS createdAt")
             .from("request_activity_events", "rae")
             .where("rae.request_id", Operator.EQ, requestId)
-            .where("rae.event_type", Operator.IN, criteria.getEventTypeNames())
+            .where("rae.event_type", Operator.IN, criteria.getEventTypes())
             .where("rae.created_at", Operator.GTE, criteria.getCreatedAtFrom())
             .where("rae.created_at", Operator.LTE, criteria.getCreatedAtTo())
             .orderBy("-rae.created_at")
