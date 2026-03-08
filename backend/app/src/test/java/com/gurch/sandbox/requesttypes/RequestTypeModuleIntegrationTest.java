@@ -138,6 +138,42 @@ class RequestTypeModuleIntegrationTest extends AbstractJdbcIntegrationTest {
   }
 
   @Test
+  void shouldRejectCreateTypeWithInvalidTenantRulesInConfigJson() throws Exception {
+    var invalidConfig =
+        objectMapper.valueToTree(
+            Map.of(
+                "documentGeneration",
+                Map.of(
+                    "documents",
+                    List.of(
+                        Map.of(
+                            "templateKey",
+                            "consent-template",
+                            "fieldBindings",
+                            Map.of("name", "payload.name"),
+                            "tenantRules",
+                            List.of(Map.of("tenantId", "x", "required", false)))))));
+
+    mockMvc
+        .perform(
+            post("/api/internal/request-types")
+                .with(csrf())
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        new RequestTypeDtos.CreateTypeRequest(
+                            "bad-rules",
+                            "Bad Rules",
+                            "desc",
+                            "noop",
+                            "requestTypeV1Process",
+                            invalidConfig))))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.errors[0].code").value("INVALID_CONFIG_JSON"));
+  }
+
+  @Test
   void shouldRejectUpdateTypeWithInvalidProcessDefinitionKey() throws Exception {
     createType("loan", "Loan", "amount-positive", "requestTypeV1Process");
 

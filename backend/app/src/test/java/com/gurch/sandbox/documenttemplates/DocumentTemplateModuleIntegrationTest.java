@@ -452,6 +452,70 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
   }
 
   @Test
+  void shouldAllowTenantOverrideToMakeDocumentOptional() throws Exception {
+    Integer tenantId =
+        tenantApi.create(
+            TenantCommand.builder()
+                .name("tenant-optional-" + UUID.randomUUID())
+                .active(true)
+                .build());
+    org.mockito.Mockito.when(currentUserProvider.currentTenantId())
+        .thenReturn(Optional.of(tenantId));
+
+    uploadTemplateWithTenantAndKey(
+        "base.docx",
+        "base-template",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        createTemplatedDocx("BASE {{client.firstName}}"),
+        tenantId);
+    createRequestTypeWithMappings(
+        "tenant-optional-type",
+        List.of(
+            Map.of(
+                "templateKey",
+                "base-template",
+                "fieldBindings",
+                Map.of("client.firstName", "payload.client.firstName")),
+            Map.of(
+                "templateKey",
+                "consent-template",
+                "required",
+                true,
+                "tenantRules",
+                List.of(Map.of("tenantId", tenantId, "required", false)),
+                "fieldBindings",
+                Map.of("client.firstName", "payload.client.firstName"))));
+
+    Long requestId =
+        requestApi.createDraft(
+            CreateRequestCommand.builder()
+                .requestTypeKey("tenant-optional-type")
+                .payload(objectMapper.valueToTree(Map.of("client", Map.of("firstName", "Ada"))))
+                .build());
+
+    DocumentTemplateDownload output =
+        documentTemplateApi.generateFromRequests(
+            new DocumentTemplateGenerateFromRequestsRequest(List.of(requestId)));
+    byte[] generated;
+    try (java.io.InputStream in = output.getContentStream()) {
+      generated = in.readAllBytes();
+    }
+    try (PDDocument document = org.apache.pdfbox.Loader.loadPDF(generated)) {
+      String text = new PDFTextStripper().getText(document);
+      assertThat(text).contains("BASE Ada");
+      assertThat(text).doesNotContain("consent-template");
+    }
+
+    org.mockito.Mockito.when(currentUserProvider.currentTenantId()).thenReturn(Optional.empty());
+    assertThatThrownBy(
+            () ->
+                documentTemplateApi.generateFromRequests(
+                    new DocumentTemplateGenerateFromRequestsRequest(List.of(requestId))))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("No template found for key 'consent-template'");
+  }
+
+  @Test
   void shouldRestrictReadDownloadDeleteAndSearchToUsersTenantScope() throws Exception {
     Integer tenantId =
         tenantApi.create(

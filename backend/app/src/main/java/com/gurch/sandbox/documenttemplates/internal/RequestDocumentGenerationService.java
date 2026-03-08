@@ -49,18 +49,26 @@ public class RequestDocumentGenerationService {
               ? requestTypeApi.resolveLatestActive(request.getRequestTypeKey())
               : requestTypeApi.resolveVersion(
                   request.getRequestTypeKey(), request.getRequestTypeVersion());
-      List<DocumentMapping> mappings = parseMappings(resolvedType.getConfigJson(), requestId);
+      List<DocumentMapping> mappings =
+          parseMappings(resolvedType.getConfigJson(), requestId, currentTenantId);
       if (mappings.isEmpty()) {
         throw new IllegalArgumentException(
             "No document generation mappings configured for request id: " + requestId);
       }
       for (DocumentMapping mapping : mappings) {
-        DocumentTemplateEntity template =
-            resolveTemplate(mapping.templateKey(), currentTenantId)
-                .orElseThrow(
-                    () ->
-                        new IllegalArgumentException(
-                            "No template found for key '" + mapping.templateKey() + "'"));
+        Optional<DocumentTemplateEntity> resolvedTemplate =
+            resolveTemplate(mapping.templateKey(), currentTenantId);
+        if (resolvedTemplate.isEmpty()) {
+          if (!mapping.required()) {
+            continue;
+          }
+          throw new IllegalArgumentException(
+              "No template found for key '"
+                  + mapping.templateKey()
+                  + "' on request id "
+                  + requestId);
+        }
+        DocumentTemplateEntity template = resolvedTemplate.orElseThrow();
         Map<String, Object> fields =
             resolveFields(
                 mapping.fieldBindings(), request.getPayload(), requestId, mapping.templateKey());
@@ -73,7 +81,8 @@ public class RequestDocumentGenerationService {
     return generationService.generateComposedPdf(renderSources);
   }
 
-  private List<DocumentMapping> parseMappings(JsonNode configJson, Long requestId) {
+  private List<DocumentMapping> parseMappings(
+      JsonNode configJson, Long requestId, Integer tenantId) {
     if (configJson == null || configJson.isNull()) {
       return List.of();
     }
@@ -112,9 +121,65 @@ public class RequestDocumentGenerationService {
                 }
                 bindings.put(fieldKey, payloadPath);
               });
-      mappings.add(new DocumentMapping(templateKey, bindings));
+      boolean required = resolveRequired(node, tenantId);
+      boolean enabled = resolveEnabled(node, tenantId);
+      if (!enabled) {
+        continue;
+      }
+      mappings.add(new DocumentMapping(templateKey, bindings, required));
     }
     return mappings;
+  }
+
+  private static boolean resolveRequired(JsonNode documentNode, Integer tenantId) {
+    boolean required =
+        !documentNode.has("required") || documentNode.path("required").asBoolean(true);
+    JsonNode tenantRules = documentNode.path("tenantRules");
+    if (!tenantRules.isArray() || tenantId == null) {
+      return required;
+    }
+    for (JsonNode tenantRule : tenantRules) {
+      if (!tenantRule.isObject()) {
+        continue;
+      }
+      JsonNode tenantIdNode = tenantRule.path("tenantId");
+      if (!tenantIdNode.canConvertToInt()) {
+        continue;
+      }
+      if (!tenantId.equals(tenantIdNode.asInt())) {
+        continue;
+      }
+      if (tenantRule.has("required")) {
+        return tenantRule.path("required").asBoolean(required);
+      }
+      return required;
+    }
+    return required;
+  }
+
+  private static boolean resolveEnabled(JsonNode documentNode, Integer tenantId) {
+    boolean enabled = !documentNode.has("enabled") || documentNode.path("enabled").asBoolean(true);
+    JsonNode tenantRules = documentNode.path("tenantRules");
+    if (!tenantRules.isArray() || tenantId == null) {
+      return enabled;
+    }
+    for (JsonNode tenantRule : tenantRules) {
+      if (!tenantRule.isObject()) {
+        continue;
+      }
+      JsonNode tenantIdNode = tenantRule.path("tenantId");
+      if (!tenantIdNode.canConvertToInt()) {
+        continue;
+      }
+      if (!tenantId.equals(tenantIdNode.asInt())) {
+        continue;
+      }
+      if (tenantRule.has("enabled")) {
+        return tenantRule.path("enabled").asBoolean(enabled);
+      }
+      return enabled;
+    }
+    return enabled;
   }
 
   private Optional<DocumentTemplateEntity> resolveTemplate(String templateKey, Integer tenantId) {
@@ -290,5 +355,6 @@ public class RequestDocumentGenerationService {
     return trimmed.isEmpty() ? null : trimmed;
   }
 
-  private record DocumentMapping(String templateKey, Map<String, String> fieldBindings) {}
+  private record DocumentMapping(
+      String templateKey, Map<String, String> fieldBindings, boolean required) {}
 }

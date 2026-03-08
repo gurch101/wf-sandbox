@@ -262,6 +262,37 @@ public class DefaultRequestTypeService implements RequestTypeApi {
       if (!fieldBindings.isObject()) {
         throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
       }
+      JsonNode required = document.path("required");
+      if (!required.isMissingNode() && !required.isBoolean()) {
+        throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
+      }
+      JsonNode enabled = document.path("enabled");
+      if (!enabled.isMissingNode() && !enabled.isBoolean()) {
+        throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
+      }
+      JsonNode tenantRules = document.path("tenantRules");
+      if (!tenantRules.isMissingNode() && !tenantRules.isArray()) {
+        throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
+      }
+      if (tenantRules.isArray()) {
+        for (JsonNode tenantRule : tenantRules) {
+          if (!tenantRule.isObject()) {
+            throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
+          }
+          JsonNode tenantId = tenantRule.path("tenantId");
+          if (!tenantId.canConvertToInt()) {
+            throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
+          }
+          JsonNode tenantRequired = tenantRule.path("required");
+          if (!tenantRequired.isMissingNode() && !tenantRequired.isBoolean()) {
+            throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
+          }
+          JsonNode tenantEnabled = tenantRule.path("enabled");
+          if (!tenantEnabled.isMissingNode() && !tenantEnabled.isBoolean()) {
+            throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
+          }
+        }
+      }
       fieldBindings
           .fields()
           .forEachRemaining(
