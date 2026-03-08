@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.gurch.sandbox.AbstractJdbcIntegrationTest;
+import com.gurch.sandbox.documenttemplates.internal.DocumentTemplateRepository;
 import com.gurch.sandbox.tenants.TenantApi;
 import com.gurch.sandbox.tenants.TenantCommand;
 import com.gurch.sandbox.users.UserApi;
@@ -19,6 +20,7 @@ class DefaultTenantServiceIntegrationTest extends AbstractJdbcIntegrationTest {
   @Autowired private TenantApi tenantApi;
   @Autowired private UserApi userApi;
   @Autowired private TenantRepository tenantRepository;
+  @Autowired private DocumentTemplateRepository documentTemplateRepository;
   @Autowired private UserRepository userRepository;
 
   @BeforeEach
@@ -26,6 +28,7 @@ class DefaultTenantServiceIntegrationTest extends AbstractJdbcIntegrationTest {
     userRepository.findAll().stream()
         .filter(user -> user.getId() > 1)
         .forEach(userRepository::delete);
+    documentTemplateRepository.deleteAll();
     tenantRepository.deleteAll();
   }
 

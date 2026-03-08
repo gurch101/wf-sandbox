@@ -155,8 +155,7 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
         .perform(multipart("/api/admin/document-templates").file(file).with(csrf()))
         .andExpect(status().isBadRequest())
         .andExpect(
-            jsonPath("$.detail")
-                .value("Unsupported file type. Only PDF and Word documents are allowed"));
+            jsonPath("$.detail").value("Unsupported file type. Only PDF and DOCX are allowed"));
   }
 
   @Test

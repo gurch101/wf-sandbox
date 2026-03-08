@@ -4,6 +4,7 @@ import com.gurch.sandbox.security.CurrentUserProvider;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -24,8 +25,8 @@ public abstract class AbstractJdbcIntegrationTest {
 
   @BeforeEach
   void initDefaultCurrentUserContext() {
-    org.mockito.Mockito.when(currentUserProvider.currentUserId()).thenReturn(Optional.of(1));
-    org.mockito.Mockito.when(currentUserProvider.currentTenantId()).thenReturn(Optional.empty());
+    Mockito.when(currentUserProvider.currentUserId()).thenReturn(Optional.of(1));
+    Mockito.when(currentUserProvider.currentTenantId()).thenReturn(Optional.empty());
   }
 
   protected List<String> auditActionsFor(String resourceType, String resourceId) {
