@@ -1,4 +1,4 @@
-package com.gurch.sandbox.forms;
+package com.gurch.sandbox.documenttemplates;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.io.InputStream;
@@ -13,6 +13,9 @@ public class DocumentTemplateUploadRequest {
 
   @Schema(description = "Optional file description", example = "Client onboarding template")
   String description;
+
+  @Schema(description = "Optional tenant identifier; null means global template", example = "1")
+  Integer tenantId;
 
   @Schema(description = "Original filename from multipart upload", example = "intake-form.pdf")
   String originalFilename;

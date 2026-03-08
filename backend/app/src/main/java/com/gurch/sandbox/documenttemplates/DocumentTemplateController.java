@@ -1,4 +1,4 @@
-package com.gurch.sandbox.forms;
+package com.gurch.sandbox.documenttemplates;
 
 import com.gurch.sandbox.dto.CreateResponse;
 import com.gurch.sandbox.dto.PagedResponse;
@@ -24,7 +24,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 @RestController
-@RequestMapping("/api/document-templates")
+@RequestMapping("/api/admin/document-templates")
 @RequiredArgsConstructor
 public class DocumentTemplateController {
 
@@ -37,13 +37,15 @@ public class DocumentTemplateController {
   public CreateResponse upload(
       @RequestPart("file") MultipartFile file,
       @RequestParam(value = "name", required = false) String name,
-      @RequestParam(value = "description", required = false) String description) {
+      @RequestParam(value = "description", required = false) String description,
+      @RequestParam(value = "tenantId", required = false) Integer tenantId) {
     DocumentTemplateUploadRequest request;
     try {
       request =
           new DocumentTemplateUploadRequest(
               name,
               description,
+              tenantId,
               file.getOriginalFilename(),
               file.getContentType(),
               file.getSize(),

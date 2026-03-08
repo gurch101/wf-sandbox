@@ -19,9 +19,9 @@ storage:
 spring:
   servlet:
     multipart:
-      max-file-size: 2KB
-      max-request-size: 2KB
+      max-file-size: 200KB
+      max-request-size: 200KB
 
 documenttemplates:
   upload:
-    max-size-bytes: 1024
+    max-size-bytes: 100000

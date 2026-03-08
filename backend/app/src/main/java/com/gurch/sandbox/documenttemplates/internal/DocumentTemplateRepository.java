@@ -1,4 +1,4 @@
-package com.gurch.sandbox.forms.internal;
+package com.gurch.sandbox.documenttemplates.internal;
 
 import org.springframework.data.repository.ListCrudRepository;
 import org.springframework.stereotype.Repository;

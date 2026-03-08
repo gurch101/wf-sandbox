@@ -1,4 +1,4 @@
-package com.gurch.sandbox.forms;
+package com.gurch.sandbox.documenttemplates;
 
 import com.gurch.sandbox.dto.PagedResponse;
 import java.util.Optional;
@@ -14,6 +14,9 @@ public interface DocumentTemplateApi {
 
   /** Loads file metadata and content for download. */
   DocumentTemplateDownload download(Long id);
+
+  /** Generates one composed PDF from rendered template documents. */
+  DocumentTemplateDownload generate(DocumentTemplateGenerateRequest request);
 
   /** Searches document templates by optional filters and pagination. */
   PagedResponse<DocumentTemplateResponse> search(DocumentTemplateSearchCriteria criteria);

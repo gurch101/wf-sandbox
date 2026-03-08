@@ -1,8 +1,7 @@
-package com.gurch.sandbox.forms;
+package com.gurch.sandbox.documenttemplates;
 
 import com.gurch.sandbox.dto.SearchCriteria;
 import io.swagger.v3.oas.annotations.media.Schema;
-import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import lombok.AccessLevel;
@@ -25,8 +24,8 @@ public class DocumentTemplateSearchCriteria extends SearchCriteria {
   @Schema(description = "Partial name match (case-insensitive)", example = "intake")
   private String nameContains;
 
-  @Schema(description = "Optional document type filters")
-  private List<DocumentTemplateType> documentTypes;
+  @Schema(description = "Optional tenant filter. Null returns all templates")
+  private Integer tenantId;
 
   public String getNamePattern() {
     return Optional.ofNullable(nameContains)
