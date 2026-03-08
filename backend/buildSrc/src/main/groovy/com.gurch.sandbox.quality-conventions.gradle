@@ -34,10 +34,17 @@ spotless {
 
 dependencies {
   errorprone 'com.google.errorprone:error_prone_core:2.42.0'
+  testImplementation 'org.junit.jupiter:junit-jupiter:5.12.2'
+  testImplementation 'org.assertj:assertj-core:3.27.3'
+  testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.12.2'
 }
 
 tasks.withType(JavaCompile).configureEach {
   options.compilerArgs += ['-Werror']
+}
+
+tasks.named('test') {
+  useJUnitPlatform()
 }
 
 jacoco {
