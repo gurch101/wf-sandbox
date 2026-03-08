@@ -14,7 +14,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gurch.sandbox.AbstractJdbcIntegrationTest;
 import com.gurch.sandbox.documenttemplates.internal.DocumentTemplateRepository;
 import com.gurch.sandbox.dto.CreateResponse;
-import com.gurch.sandbox.security.CurrentUserProvider;
 import com.gurch.sandbox.tenants.TenantApi;
 import com.gurch.sandbox.tenants.TenantCommand;
 import java.io.ByteArrayOutputStream;
@@ -50,7 +49,6 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.test.context.support.WithMockUser;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -63,15 +61,12 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
   @Autowired private DocumentTemplateRepository repository;
   @Autowired private DocumentTemplateApi documentTemplateApi;
   @Autowired private TenantApi tenantApi;
-  @MockitoBean private CurrentUserProvider currentUserProvider;
 
   @Value("${storage.local-root}")
   private String storageRoot;
 
   @BeforeEach
   void setUp() throws IOException {
-    org.mockito.Mockito.when(currentUserProvider.currentUserId()).thenReturn(Optional.of(1));
-    org.mockito.Mockito.when(currentUserProvider.currentTenantId()).thenReturn(Optional.empty());
     repository.deleteAll();
     Path root = Path.of(storageRoot);
     if (Files.exists(root)) {
