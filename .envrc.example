@@ -1,0 +1,11 @@
+# For direnv: copy to .envrc, edit values, then run `direnv allow`.
+
+# Keep Gradle caches/wrapper files under this repo to avoid global permission issues.
+export GRADLE_USER_HOME="$PWD/.gradle-home"
+
+export POSTGRES_HOST=localhost
+export POSTGRES_PORT=5432
+export POSTGRES_USER=sandbox
+export POSTGRES_PASSWORD=changeme
+export POSTGRES_DB=sandboxdb
+export ADMINER_PORT=8085

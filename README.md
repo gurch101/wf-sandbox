@@ -1,10 +1,11 @@
 # Local development using Docker Compose
 
-Copy the example env file and provide secrets:
+Copy the example direnv file and provide secrets:
 
 ```bash
-cp .env.example .env
-# edit .env and set a secure POSTGRES_PASSWORD
+cp .envrc.example .envrc
+# edit .envrc and set a secure POSTGRES_PASSWORD
+direnv allow
 ```
 
 Start the database and Adminer:
@@ -29,7 +30,7 @@ Services
 
 | Service | URL | Description |
 |---|---|---|
-| Adminer | http://localhost:8085 | Database GUI for Postgres (port from `ADMINER_PORT` in `.env`) |
+| Adminer | http://localhost:8085 | Database GUI for Postgres (port from `ADMINER_PORT` in `.envrc`) |
 | Spring Boot app | http://localhost:8080 | The application running on port 8080 |
 
 ## Conventional commits, branch naming, and changelog
