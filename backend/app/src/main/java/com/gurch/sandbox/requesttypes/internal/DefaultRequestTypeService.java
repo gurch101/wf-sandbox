@@ -1,5 +1,6 @@
 package com.gurch.sandbox.requesttypes.internal;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.gurch.sandbox.audit.AuditLogApi;
 import com.gurch.sandbox.dto.PagedResponse;
 import com.gurch.sandbox.query.JoinType;
@@ -92,6 +93,7 @@ public class DefaultRequestTypeService implements RequestTypeApi {
   public ResolvedRequestTypeVersion createType(RequestTypeCommand command) {
     validateProcessDefinitionKey(command.getProcessDefinitionKey());
     validatePayloadHandlerId(command.getPayloadHandlerId());
+    validateConfigJson(command.getConfigJson());
 
     RequestTypeEntity type =
         requestTypeRepository.save(
@@ -109,6 +111,7 @@ public class DefaultRequestTypeService implements RequestTypeApi {
                 .typeVersion(1)
                 .payloadHandlerId(command.getPayloadHandlerId())
                 .processDefinitionKey(command.getProcessDefinitionKey())
+                .configJson(command.getConfigJson())
                 .build());
 
     RequestTypeEntity updatedType =
@@ -124,6 +127,7 @@ public class DefaultRequestTypeService implements RequestTypeApi {
   public ResolvedRequestTypeVersion changeType(String typeKey, RequestTypeCommand command) {
     validateProcessDefinitionKey(command.getProcessDefinitionKey());
     validatePayloadHandlerId(command.getPayloadHandlerId());
+    validateConfigJson(command.getConfigJson());
 
     RequestTypeEntity type =
         requestTypeRepository
@@ -150,6 +154,7 @@ public class DefaultRequestTypeService implements RequestTypeApi {
                 .typeVersion(previous.getTypeVersion() + 1)
                 .payloadHandlerId(command.getPayloadHandlerId())
                 .processDefinitionKey(command.getProcessDefinitionKey())
+                .configJson(command.getConfigJson())
                 .build());
     auditLogApi.recordCreate(REQUEST_TYPE_VERSIONS_RESOURCE_TYPE, newVersion.getId(), newVersion);
 
@@ -223,6 +228,51 @@ public class DefaultRequestTypeService implements RequestTypeApi {
         .version(version.getTypeVersion())
         .payloadHandlerId(version.getPayloadHandlerId())
         .processDefinitionKey(version.getProcessDefinitionKey())
+        .configJson(version.getConfigJson())
         .build();
+  }
+
+  private void validateConfigJson(JsonNode configJson) {
+    if (configJson == null || configJson.isNull()) {
+      return;
+    }
+    if (!configJson.isObject()) {
+      throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
+    }
+    JsonNode documentGeneration = configJson.path("documentGeneration");
+    if (!documentGeneration.isMissingNode() && !documentGeneration.isObject()) {
+      throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
+    }
+    JsonNode documents = documentGeneration.path("documents");
+    if (!documents.isMissingNode() && !documents.isArray()) {
+      throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
+    }
+    if (!documents.isArray()) {
+      return;
+    }
+    for (JsonNode document : documents) {
+      if (!document.isObject()) {
+        throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
+      }
+      JsonNode templateKey = document.path("templateKey");
+      if (!templateKey.isTextual() || templateKey.asText().isBlank()) {
+        throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
+      }
+      JsonNode fieldBindings = document.path("fieldBindings");
+      if (!fieldBindings.isObject()) {
+        throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
+      }
+      fieldBindings
+          .fields()
+          .forEachRemaining(
+              entry -> {
+                if (entry.getKey() == null
+                    || entry.getKey().isBlank()
+                    || !entry.getValue().isTextual()
+                    || entry.getValue().asText().isBlank()) {
+                  throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
+                }
+              });
+    }
   }
 }

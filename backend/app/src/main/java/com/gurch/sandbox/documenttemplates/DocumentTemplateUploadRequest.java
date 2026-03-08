@@ -8,6 +8,11 @@ import lombok.Value;
 @Value
 @Schema(description = "Upload command for a document template")
 public class DocumentTemplateUploadRequest {
+  @Schema(
+      description = "Optional stable template key used for request-driven document generation",
+      example = "loan-cover-letter")
+  String templateKey;
+
   @Schema(description = "Optional display name override", example = "Client Intake Form.pdf")
   String name;
 

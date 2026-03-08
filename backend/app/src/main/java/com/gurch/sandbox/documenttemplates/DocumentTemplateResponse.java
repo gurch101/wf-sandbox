@@ -14,6 +14,11 @@ public class DocumentTemplateResponse {
   @Schema(description = "Unique identifier of the file", example = "123")
   Long id;
 
+  @Schema(
+      description = "Optional stable template key used for request-driven document generation",
+      example = "loan-cover-letter")
+  String templateKey;
+
   @Schema(description = "Display name for the file", example = "Client Intake Form.pdf")
   String name;
 

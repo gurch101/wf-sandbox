@@ -1,5 +1,6 @@
 package com.gurch.sandbox.requesttypes;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 import lombok.Value;
@@ -20,4 +21,7 @@ public class ResolvedRequestTypeVersion {
 
   @Schema(description = "Workflow process definition key", example = "requestTypeV2Process")
   String processDefinitionKey;
+
+  @Schema(description = "Optional immutable config JSON for this request type version")
+  JsonNode configJson;
 }

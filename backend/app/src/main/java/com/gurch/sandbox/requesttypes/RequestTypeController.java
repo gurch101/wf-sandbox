@@ -34,6 +34,7 @@ public class RequestTypeController {
             .description(req.getDescription())
             .payloadHandlerId(req.getPayloadHandlerId())
             .processDefinitionKey(req.getProcessDefinitionKey())
+            .configJson(req.getConfigJson())
             .build());
   }
 
@@ -49,6 +50,7 @@ public class RequestTypeController {
             .description(req.getDescription())
             .payloadHandlerId(req.getPayloadHandlerId())
             .processDefinitionKey(req.getProcessDefinitionKey())
+            .configJson(req.getConfigJson())
             .build());
   }
 

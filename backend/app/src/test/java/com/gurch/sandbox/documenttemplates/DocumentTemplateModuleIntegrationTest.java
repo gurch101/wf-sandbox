@@ -1,6 +1,7 @@
 package com.gurch.sandbox.documenttemplates;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -14,6 +15,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gurch.sandbox.AbstractJdbcIntegrationTest;
 import com.gurch.sandbox.documenttemplates.internal.DocumentTemplateRepository;
 import com.gurch.sandbox.dto.CreateResponse;
+import com.gurch.sandbox.requests.CreateRequestCommand;
+import com.gurch.sandbox.requests.RequestApi;
+import com.gurch.sandbox.requests.internal.RequestRepository;
+import com.gurch.sandbox.requesttypes.RequestTypeApi;
+import com.gurch.sandbox.requesttypes.RequestTypeCommand;
+import com.gurch.sandbox.requesttypes.internal.RequestTypeRepository;
 import com.gurch.sandbox.tenants.TenantApi;
 import com.gurch.sandbox.tenants.TenantCommand;
 import java.io.ByteArrayOutputStream;
@@ -23,6 +30,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -60,6 +68,10 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
   @Autowired private ObjectMapper objectMapper;
   @Autowired private DocumentTemplateRepository repository;
   @Autowired private DocumentTemplateApi documentTemplateApi;
+  @Autowired private RequestApi requestApi;
+  @Autowired private RequestTypeApi requestTypeApi;
+  @Autowired private RequestRepository requestRepository;
+  @Autowired private RequestTypeRepository requestTypeRepository;
   @Autowired private TenantApi tenantApi;
 
   @Value("${storage.local-root}")
@@ -68,6 +80,8 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
   @BeforeEach
   void setUp() throws IOException {
     repository.deleteAll();
+    requestRepository.deleteAll();
+    requestTypeRepository.deleteAll();
     Path root = Path.of(storageRoot);
     if (Files.exists(root)) {
       try (Stream<Path> stream = Files.walk(root)) {
@@ -284,6 +298,160 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
   }
 
   @Test
+  void shouldGenerateComposedPdfFromRequestBundleInOrder() throws Exception {
+    uploadTemplateWithTenantAndKey(
+        "fillable.pdf", "bundle-fillable", "application/pdf", createFillablePdfWithAnchor(), null);
+    uploadTemplateWithTenantAndKey(
+        "template.docx",
+        "bundle-word",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        createTemplatedDocx("Client {{client.firstName}} ${client.lastName}"),
+        null);
+
+    createRequestTypeWithMappings(
+        "bundle-loan",
+        List.of(
+            Map.of(
+                "templateKey",
+                "bundle-fillable",
+                "fieldBindings",
+                Map.of(
+                    "clientName", "payload.client.firstName",
+                    "consent", "payload.flags.consent",
+                    "state", "payload.address.state")),
+            Map.of(
+                "templateKey",
+                "bundle-word",
+                "fieldBindings",
+                Map.of(
+                    "client.firstName", "payload.client.firstName",
+                    "client.lastName", "payload.client.lastName"))));
+
+    Long requestOne =
+        requestApi.createDraft(
+            CreateRequestCommand.builder()
+                .requestTypeKey("bundle-loan")
+                .payload(
+                    objectMapper.valueToTree(
+                        Map.of(
+                            "client", Map.of("firstName", "Ada", "lastName", "Lovelace"),
+                            "flags", Map.of("consent", true),
+                            "address", Map.of("state", "NY"))))
+                .build());
+    Long requestTwo =
+        requestApi.createDraft(
+            CreateRequestCommand.builder()
+                .requestTypeKey("bundle-loan")
+                .payload(
+                    objectMapper.valueToTree(
+                        Map.of(
+                            "client", Map.of("firstName", "Grace", "lastName", "Hopper"),
+                            "flags", Map.of("consent", true),
+                            "address", Map.of("state", "CA"))))
+                .build());
+
+    DocumentTemplateDownload output =
+        documentTemplateApi.generateFromRequests(
+            new DocumentTemplateGenerateFromRequestsRequest(List.of(requestOne, requestTwo)));
+    byte[] generated;
+    try (java.io.InputStream in = output.getContentStream()) {
+      generated = in.readAllBytes();
+    }
+
+    try (PDDocument document = org.apache.pdfbox.Loader.loadPDF(generated)) {
+      String text = new PDFTextStripper().getText(document);
+      assertThat(document.getNumberOfPages()).isGreaterThanOrEqualTo(4);
+      assertThat(text).contains("Ada");
+      assertThat(text).contains("Lovelace");
+      assertThat(text).contains("Grace");
+      assertThat(text).contains("Hopper");
+    }
+  }
+
+  @Test
+  void shouldPreferTenantTemplateOverGlobalForRequestDrivenGeneration() throws Exception {
+    Integer tenantId =
+        tenantApi.create(
+            TenantCommand.builder().name("tenant-docs-" + UUID.randomUUID()).active(true).build());
+
+    uploadTemplateWithTenantAndKey(
+        "global.docx",
+        "offer-letter",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        createTemplatedDocx("GLOBAL {{client.firstName}}"),
+        null);
+    org.mockito.Mockito.when(currentUserProvider.currentTenantId())
+        .thenReturn(Optional.of(tenantId));
+    uploadTemplateWithTenantAndKey(
+        "tenant.docx",
+        "offer-letter",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        createTemplatedDocx("TENANT {{client.firstName}}"),
+        tenantId);
+
+    createRequestTypeWithMappings(
+        "tenant-mapping",
+        List.of(
+            Map.of(
+                "templateKey",
+                "offer-letter",
+                "fieldBindings",
+                Map.of("client.firstName", "payload.client.firstName"))));
+
+    Long requestId =
+        requestApi.createDraft(
+            CreateRequestCommand.builder()
+                .requestTypeKey("tenant-mapping")
+                .payload(objectMapper.valueToTree(Map.of("client", Map.of("firstName", "Ada"))))
+                .build());
+
+    DocumentTemplateDownload output =
+        documentTemplateApi.generateFromRequests(
+            new DocumentTemplateGenerateFromRequestsRequest(List.of(requestId)));
+    byte[] generated;
+    try (java.io.InputStream in = output.getContentStream()) {
+      generated = in.readAllBytes();
+    }
+    try (PDDocument document = org.apache.pdfbox.Loader.loadPDF(generated)) {
+      String text = new PDFTextStripper().getText(document);
+      assertThat(text).contains("TENANT Ada");
+      assertThat(text).doesNotContain("GLOBAL Ada");
+    }
+  }
+
+  @Test
+  void shouldFailBundleGenerationWhenRequiredPayloadBindingIsMissing() throws Exception {
+    uploadTemplateWithTenantAndKey(
+        "template.docx",
+        "strict-template",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        createTemplatedDocx("Name {{name}}"),
+        null);
+    createRequestTypeWithMappings(
+        "strict-type",
+        List.of(
+            Map.of(
+                "templateKey",
+                "strict-template",
+                "fieldBindings",
+                Map.of("name", "payload.missing.name"))));
+
+    Long requestId =
+        requestApi.createDraft(
+            CreateRequestCommand.builder()
+                .requestTypeKey("strict-type")
+                .payload(objectMapper.valueToTree(Map.of("name", "Ada")))
+                .build());
+
+    assertThatThrownBy(
+            () ->
+                documentTemplateApi.generateFromRequests(
+                    new DocumentTemplateGenerateFromRequestsRequest(List.of(requestId))))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("Missing required payload path");
+  }
+
+  @Test
   void shouldRestrictReadDownloadDeleteAndSearchToUsersTenantScope() throws Exception {
     Integer tenantId =
         tenantApi.create(
@@ -395,11 +563,16 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
   }
 
   private static byte[] createTemplatedDocx() throws IOException {
+    return createTemplatedDocx(
+        "Client First Name: {{client.firstName}} | Last Name: ${client.lastName}");
+  }
+
+  private static byte[] createTemplatedDocx(String templateText) throws IOException {
     try (XWPFDocument document = new XWPFDocument();
         ByteArrayOutputStream out = new ByteArrayOutputStream()) {
       XWPFParagraph paragraph = document.createParagraph();
       XWPFRun run = paragraph.createRun();
-      run.setText("Client First Name: {{client.firstName}} | Last Name: ${client.lastName}");
+      run.setText(templateText);
       document.write(out);
       return out.toByteArray();
     }
@@ -424,13 +597,22 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
   }
 
   private Long uploadTemplate(String name, String mimeType, byte[] payload) throws Exception {
-    return uploadTemplateWithTenant(name, mimeType, payload, null);
+    return uploadTemplateWithTenantAndKey(name, null, mimeType, payload, null);
   }
 
   private Long uploadTemplateWithTenant(
       String name, String mimeType, byte[] payload, Integer tenantId) throws Exception {
+    return uploadTemplateWithTenantAndKey(name, null, mimeType, payload, tenantId);
+  }
+
+  private Long uploadTemplateWithTenantAndKey(
+      String name, String templateKey, String mimeType, byte[] payload, Integer tenantId)
+      throws Exception {
     MockMultipartFile file = new MockMultipartFile("file", name, mimeType, payload);
     var builder = multipart("/api/admin/document-templates").file(file).with(csrf());
+    if (templateKey != null) {
+      builder = builder.param("templateKey", templateKey);
+    }
     if (tenantId != null) {
       builder = builder.param("tenantId", String.valueOf(tenantId));
     }
@@ -438,5 +620,19 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
     return objectMapper
         .readValue(uploadResult.getResponse().getContentAsString(), CreateResponse.class)
         .getId();
+  }
+
+  private void createRequestTypeWithMappings(String typeKey, List<Map<String, Object>> documents) {
+    requestTypeApi.createType(
+        RequestTypeCommand.builder()
+            .typeKey(typeKey)
+            .name(typeKey)
+            .description("desc")
+            .payloadHandlerId("noop")
+            .processDefinitionKey("requestTypeV1Process")
+            .configJson(
+                objectMapper.valueToTree(
+                    Map.of("documentGeneration", Map.of("documents", documents))))
+            .build());
   }
 }

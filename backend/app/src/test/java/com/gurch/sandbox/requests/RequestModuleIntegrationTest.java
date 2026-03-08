@@ -447,7 +447,7 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
                 .content(
                     objectMapper.writeValueAsString(
                         new RequestTypeDtos.CreateTypeRequest(
-                            typeKey, name, "desc", payloadHandlerId, processDefinitionKey))))
+                            typeKey, name, "desc", payloadHandlerId, processDefinitionKey, null))))
         .andExpect(status().isCreated());
   }
 

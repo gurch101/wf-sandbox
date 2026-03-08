@@ -36,6 +36,7 @@ public class DocumentTemplateController {
   @ResponseStatus(HttpStatus.CREATED)
   public CreateResponse upload(
       @RequestPart("file") MultipartFile file,
+      @RequestParam(value = "templateKey", required = false) String templateKey,
       @RequestParam(value = "name", required = false) String name,
       @RequestParam(value = "description", required = false) String description,
       @RequestParam(value = "tenantId", required = false) Integer tenantId) {
@@ -43,6 +44,7 @@ public class DocumentTemplateController {
     try {
       request =
           new DocumentTemplateUploadRequest(
+              templateKey,
               name,
               description,
               tenantId,

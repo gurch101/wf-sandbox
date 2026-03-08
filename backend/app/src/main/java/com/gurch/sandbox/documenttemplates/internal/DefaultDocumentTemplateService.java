@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gurch.sandbox.audit.AuditLogApi;
 import com.gurch.sandbox.documenttemplates.DocumentTemplateApi;
 import com.gurch.sandbox.documenttemplates.DocumentTemplateDownload;
+import com.gurch.sandbox.documenttemplates.DocumentTemplateGenerateFromRequestsRequest;
 import com.gurch.sandbox.documenttemplates.DocumentTemplateGenerateRequest;
 import com.gurch.sandbox.documenttemplates.DocumentTemplateResponse;
 import com.gurch.sandbox.documenttemplates.DocumentTemplateSearchCriteria;
@@ -49,6 +50,7 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
   private final AuditLogApi auditLogApi;
   private final DocumentTemplateIntrospectionService introspectionService;
   private final DocumentTemplateGenerationService generationService;
+  private final RequestDocumentGenerationService requestDocumentGenerationService;
   private final ObjectMapper objectMapper;
   private final CurrentUserProvider currentUserProvider;
 
@@ -88,6 +90,7 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
 
     DocumentTemplateEntity entity =
         DocumentTemplateEntity.builder()
+            .templateKey(trimToNull(request.getTemplateKey()))
             .name(displayName)
             .description(trimToNull(request.getDescription()))
             .mimeType(mimeType)
@@ -168,6 +171,22 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
     }
 
     byte[] mergedPdf = generationService.generateComposedPdf(renderSources);
+    return DocumentTemplateDownload.builder()
+        .name("generated-document-bundle.pdf")
+        .mimeType(MIME_PDF)
+        .contentSize((long) mergedPdf.length)
+        .contentStream(new ByteArrayInputStream(mergedPdf))
+        .build();
+  }
+
+  @Override
+  public DocumentTemplateDownload generateFromRequests(
+      DocumentTemplateGenerateFromRequestsRequest request) {
+    if (request == null || request.getRequestIds() == null || request.getRequestIds().isEmpty()) {
+      throw new IllegalArgumentException("At least one request id is required");
+    }
+    byte[] mergedPdf =
+        requestDocumentGenerationService.generateForRequestIds(request.getRequestIds());
     return DocumentTemplateDownload.builder()
         .name("generated-document-bundle.pdf")
         .mimeType(MIME_PDF)
@@ -291,6 +310,7 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
   private DocumentTemplateResponse toResponse(DocumentTemplateEntity entity) {
     return DocumentTemplateResponse.builder()
         .id(entity.getId())
+        .templateKey(entity.getTemplateKey())
         .name(entity.getName())
         .description(entity.getDescription())
         .mimeType(entity.getMimeType())

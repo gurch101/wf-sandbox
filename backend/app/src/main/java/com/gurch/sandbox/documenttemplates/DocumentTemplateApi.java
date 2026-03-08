@@ -18,6 +18,10 @@ public interface DocumentTemplateApi {
   /** Generates one composed PDF from rendered template documents. */
   DocumentTemplateDownload generate(DocumentTemplateGenerateRequest request);
 
+  /** Generates one composed PDF from request-driven template mappings. */
+  DocumentTemplateDownload generateFromRequests(
+      DocumentTemplateGenerateFromRequestsRequest request);
+
   /** Searches document templates by optional filters and pagination. */
   PagedResponse<DocumentTemplateResponse> search(DocumentTemplateSearchCriteria criteria);
 

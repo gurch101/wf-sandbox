@@ -15,6 +15,7 @@ import com.gurch.sandbox.dto.CreateResponse;
 import com.gurch.sandbox.requests.RequestDtos;
 import com.gurch.sandbox.requests.internal.RequestRepository;
 import com.gurch.sandbox.requesttypes.internal.RequestTypeRepository;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -89,7 +90,7 @@ class RequestTypeModuleIntegrationTest extends AbstractJdbcIntegrationTest {
                 .content(
                     objectMapper.writeValueAsString(
                         new RequestTypeDtos.CreateTypeRequest(
-                            "bad", "Bad", "desc", "noop", "missing-process-definition-key"))))
+                            "bad", "Bad", "desc", "noop", "missing-process-definition-key", null))))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.errors[0].code").value("INVALID_PROCESS_DEFINITION_KEY"));
   }
@@ -105,9 +106,35 @@ class RequestTypeModuleIntegrationTest extends AbstractJdbcIntegrationTest {
                 .content(
                     objectMapper.writeValueAsString(
                         new RequestTypeDtos.CreateTypeRequest(
-                            "bad", "Bad", "desc", "unknown-handler", "requestTypeV1Process"))))
+                            "bad",
+                            "Bad",
+                            "desc",
+                            "unknown-handler",
+                            "requestTypeV1Process",
+                            null))))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.errors[0].code").value("INVALID_PAYLOAD_HANDLER_ID"));
+  }
+
+  @Test
+  void shouldRejectCreateTypeWithInvalidConfigJson() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/internal/request-types")
+                .with(csrf())
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        new RequestTypeDtos.CreateTypeRequest(
+                            "bad",
+                            "Bad",
+                            "desc",
+                            "noop",
+                            "requestTypeV1Process",
+                            objectMapper.valueToTree(List.of("invalid"))))))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.errors[0].code").value("INVALID_CONFIG_JSON"));
   }
 
   @Test
@@ -123,7 +150,11 @@ class RequestTypeModuleIntegrationTest extends AbstractJdbcIntegrationTest {
                 .content(
                     objectMapper.writeValueAsString(
                         new RequestTypeDtos.ChangeTypeRequest(
-                            "Loan", "desc", "amount-positive", "missing-process-definition-key"))))
+                            "Loan",
+                            "desc",
+                            "amount-positive",
+                            "missing-process-definition-key",
+                            null))))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.errors[0].code").value("INVALID_PROCESS_DEFINITION_KEY"));
   }
@@ -145,7 +176,7 @@ class RequestTypeModuleIntegrationTest extends AbstractJdbcIntegrationTest {
                 .content(
                     objectMapper.writeValueAsString(
                         new RequestTypeDtos.ChangeTypeRequest(
-                            "Audit Type Updated", "desc", "noop", "requestTypeV1Process"))))
+                            "Audit Type Updated", "desc", "noop", "requestTypeV1Process", null))))
         .andExpect(status().isOk());
 
     mockMvc
@@ -171,7 +202,7 @@ class RequestTypeModuleIntegrationTest extends AbstractJdbcIntegrationTest {
                 .content(
                     objectMapper.writeValueAsString(
                         new RequestTypeDtos.CreateTypeRequest(
-                            typeKey, name, "desc", payloadHandlerId, processDefinitionKey))))
+                            typeKey, name, "desc", payloadHandlerId, processDefinitionKey, null))))
         .andExpect(status().isCreated());
   }
 
