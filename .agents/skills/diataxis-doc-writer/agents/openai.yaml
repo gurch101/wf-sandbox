@@ -1,0 +1,4 @@
+interface:
+  display_name: "Diataxis Doc Writer"
+  short_description: "Write project docs using Diataxis"
+  default_prompt: "Use $diataxis-doc-writer to create Markdown documentation for this project using the Diátaxis framework."
