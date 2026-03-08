@@ -1,0 +1,3 @@
+ALTER TABLE forms
+  ADD COLUMN form_map_json TEXT,
+  ADD COLUMN esignable BOOLEAN NOT NULL DEFAULT FALSE;
