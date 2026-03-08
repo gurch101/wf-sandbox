@@ -297,10 +297,36 @@ public class DefaultRequestTypeService implements RequestTypeApi {
           .fields()
           .forEachRemaining(
               entry -> {
-                if (entry.getKey() == null
-                    || entry.getKey().isBlank()
-                    || !entry.getValue().isTextual()
-                    || entry.getValue().asText().isBlank()) {
+                if (entry.getKey() == null || entry.getKey().isBlank()) {
+                  throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
+                }
+                JsonNode value = entry.getValue();
+                if (value.isTextual()) {
+                  if (value.asText().isBlank()) {
+                    throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
+                  }
+                  return;
+                }
+                if (!value.isObject()) {
+                  throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
+                }
+                JsonNode pathNode = value.path("path");
+                boolean hasPath = pathNode.isTextual() && !pathNode.asText().isBlank();
+                boolean hasResolver = value.path("resolver").isTextual();
+                boolean hasInputPath = value.path("inputPath").isTextual();
+                boolean hasOutputPath = value.path("outputPath").isTextual();
+                if (hasPath) {
+                  if (hasResolver || hasInputPath || hasOutputPath) {
+                    throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
+                  }
+                  return;
+                }
+                if (!hasResolver || !hasInputPath || !hasOutputPath) {
+                  throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
+                }
+                if (value.path("resolver").asText().isBlank()
+                    || value.path("inputPath").asText().isBlank()
+                    || value.path("outputPath").asText().isBlank()) {
                   throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
                 }
               });

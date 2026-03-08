@@ -24,8 +24,6 @@ import org.apache.pdfbox.pdmodel.interactive.form.PDNonTerminalField;
 import org.apache.pdfbox.pdmodel.interactive.form.PDRadioButton;
 import org.apache.pdfbox.pdmodel.interactive.form.PDTextField;
 import org.apache.pdfbox.text.PDFTextStripper;
-import org.apache.poi.hwpf.HWPFDocument;
-import org.apache.poi.hwpf.extractor.WordExtractor;
 import org.apache.poi.xwpf.extractor.XWPFWordExtractor;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.springframework.stereotype.Service;
@@ -40,7 +38,6 @@ public class DocumentTemplateIntrospectionService {
 
   private static final List<String> PDF_ESIGN_ANCHORS = List.of("s1", "s2", "d1", "d2");
   private static final String MIME_PDF = "application/pdf";
-  private static final String MIME_DOC = "application/msword";
   private static final String MIME_DOCX =
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
@@ -50,8 +47,8 @@ public class DocumentTemplateIntrospectionService {
     if (MIME_PDF.equals(mimeType)) {
       return introspectPdf(payload);
     }
-    if (MIME_DOC.equals(mimeType) || MIME_DOCX.equals(mimeType)) {
-      return introspectWord(mimeType, payload);
+    if (MIME_DOCX.equals(mimeType)) {
+      return introspectWord(payload);
     }
     return empty();
   }
@@ -94,13 +91,8 @@ public class DocumentTemplateIntrospectionService {
     }
   }
 
-  private TemplateIntrospectionResult introspectWord(String mimeType, byte[] payload) {
-    String normalizedMimeType = mimeType == null ? "" : mimeType.toLowerCase(Locale.ROOT);
-    Set<String> keys =
-        normalizedMimeType.equals("application/msword")
-            ? extractPlaceholdersFromDoc(payload)
-            : extractPlaceholdersFromDocx(payload);
-
+  private TemplateIntrospectionResult introspectWord(byte[] payload) {
+    Set<String> keys = extractPlaceholdersFromDocx(payload);
     ArrayNode fieldsNode = objectMapper.createArrayNode();
     for (String key : keys) {
       ObjectNode fieldNode = objectMapper.createObjectNode();
@@ -121,15 +113,6 @@ public class DocumentTemplateIntrospectionService {
       return extractPlaceholderKeys(extractor.getText());
     } catch (IOException e) {
       throw new IllegalArgumentException("Uploaded Word document is not a valid .docx file", e);
-    }
-  }
-
-  private Set<String> extractPlaceholdersFromDoc(byte[] payload) {
-    try (HWPFDocument document = new HWPFDocument(new ByteArrayInputStream(payload));
-        WordExtractor extractor = new WordExtractor(document)) {
-      return extractPlaceholderKeys(extractor.getText());
-    } catch (IOException e) {
-      throw new IllegalArgumentException("Uploaded Word document is not a valid .doc file", e);
     }
   }
 

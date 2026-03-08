@@ -39,7 +39,6 @@ dependencies {
 	implementation 'org.flywaydb:flyway-database-postgresql'
 	implementation 'org.apache.pdfbox:pdfbox:3.0.4'
 	implementation 'org.apache.poi:poi-ooxml:5.4.1'
-	implementation 'org.apache.poi:poi-scratchpad:5.4.1'
 	compileOnly 'org.projectlombok:lombok'
 	implementation 'org.postgresql:postgresql'
 

@@ -23,6 +23,8 @@ import com.gurch.sandbox.requesttypes.RequestTypeCommand;
 import com.gurch.sandbox.requesttypes.internal.RequestTypeRepository;
 import com.gurch.sandbox.tenants.TenantApi;
 import com.gurch.sandbox.tenants.TenantCommand;
+import com.gurch.sandbox.users.UserApi;
+import com.gurch.sandbox.users.UserCommand;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -34,6 +36,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Stream;
+import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
@@ -51,6 +54,7 @@ import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.apache.poi.xwpf.usermodel.XWPFRun;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -73,6 +77,7 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
   @Autowired private RequestRepository requestRepository;
   @Autowired private RequestTypeRepository requestTypeRepository;
   @Autowired private TenantApi tenantApi;
+  @Autowired private UserApi userApi;
 
   @Value("${storage.local-root}")
   private String storageRoot;
@@ -169,8 +174,7 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
         .perform(multipart("/api/admin/document-templates").file(file).with(csrf()))
         .andExpect(status().isBadRequest())
         .andExpect(
-            jsonPath("$.detail")
-                .value("Unsupported file type. Only PDF and Word documents are allowed"));
+            jsonPath("$.detail").value("Unsupported file type. Only PDF and DOCX are allowed"));
   }
 
   @Test
@@ -282,7 +286,7 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
     assertThat(output.getMimeType()).isEqualTo("application/pdf");
     assertThat(generated).isNotEmpty();
 
-    try (PDDocument document = org.apache.pdfbox.Loader.loadPDF(generated)) {
+    try (PDDocument document = Loader.loadPDF(generated)) {
       String text = new PDFTextStripper().getText(document);
       assertThat(document.getNumberOfPages()).isGreaterThanOrEqualTo(2);
       assertThat(text).contains("Ada");
@@ -358,7 +362,7 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
       generated = in.readAllBytes();
     }
 
-    try (PDDocument document = org.apache.pdfbox.Loader.loadPDF(generated)) {
+    try (PDDocument document = Loader.loadPDF(generated)) {
       String text = new PDFTextStripper().getText(document);
       assertThat(document.getNumberOfPages()).isGreaterThanOrEqualTo(4);
       assertThat(text).contains("Ada");
@@ -380,8 +384,7 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         createTemplatedDocx("GLOBAL {{client.firstName}}"),
         null);
-    org.mockito.Mockito.when(currentUserProvider.currentTenantId())
-        .thenReturn(Optional.of(tenantId));
+    Mockito.when(currentUserProvider.currentTenantId()).thenReturn(Optional.of(tenantId));
     uploadTemplateWithTenantAndKey(
         "tenant.docx",
         "offer-letter",
@@ -412,7 +415,7 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
     try (java.io.InputStream in = output.getContentStream()) {
       generated = in.readAllBytes();
     }
-    try (PDDocument document = org.apache.pdfbox.Loader.loadPDF(generated)) {
+    try (PDDocument document = Loader.loadPDF(generated)) {
       String text = new PDFTextStripper().getText(document);
       assertThat(text).contains("TENANT Ada");
       assertThat(text).doesNotContain("GLOBAL Ada");
@@ -459,8 +462,7 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
                 .name("tenant-optional-" + UUID.randomUUID())
                 .active(true)
                 .build());
-    org.mockito.Mockito.when(currentUserProvider.currentTenantId())
-        .thenReturn(Optional.of(tenantId));
+    Mockito.when(currentUserProvider.currentTenantId()).thenReturn(Optional.of(tenantId));
 
     uploadTemplateWithTenantAndKey(
         "base.docx",
@@ -500,19 +502,124 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
     try (java.io.InputStream in = output.getContentStream()) {
       generated = in.readAllBytes();
     }
-    try (PDDocument document = org.apache.pdfbox.Loader.loadPDF(generated)) {
+    try (PDDocument document = Loader.loadPDF(generated)) {
       String text = new PDFTextStripper().getText(document);
       assertThat(text).contains("BASE Ada");
       assertThat(text).doesNotContain("consent-template");
     }
 
-    org.mockito.Mockito.when(currentUserProvider.currentTenantId()).thenReturn(Optional.empty());
+    Mockito.when(currentUserProvider.currentTenantId()).thenReturn(Optional.empty());
     assertThatThrownBy(
             () ->
                 documentTemplateApi.generateFromRequests(
                     new DocumentTemplateGenerateFromRequestsRequest(List.of(requestId))))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("No template found for key 'consent-template'");
+  }
+
+  @Test
+  void shouldResolveComputedFieldsViaUserByIdResolver() throws Exception {
+    Integer userId =
+        userApi.create(
+            UserCommand.builder()
+                .username("client-" + UUID.randomUUID())
+                .email("client-" + UUID.randomUUID() + "@example.com")
+                .active(true)
+                .tenantId(null)
+                .build());
+
+    uploadTemplateWithTenantAndKey(
+        "computed.docx",
+        "computed-template",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        createTemplatedDocx("User {{client.username}} Email {{client.email}}"),
+        null);
+    createRequestTypeWithMappings(
+        "computed-type",
+        List.of(
+            Map.of(
+                "templateKey",
+                "computed-template",
+                "fieldBindings",
+                Map.of(
+                    "client.username",
+                    Map.of(
+                        "resolver",
+                        "user-by-id",
+                        "inputPath",
+                        "payload.clientId",
+                        "outputPath",
+                        "username"),
+                    "client.email",
+                    Map.of(
+                        "resolver",
+                        "user-by-id",
+                        "inputPath",
+                        "payload.clientId",
+                        "outputPath",
+                        "email")))));
+
+    Long requestId =
+        requestApi.createDraft(
+            CreateRequestCommand.builder()
+                .requestTypeKey("computed-type")
+                .payload(objectMapper.valueToTree(Map.of("clientId", userId)))
+                .build());
+
+    DocumentTemplateDownload output =
+        documentTemplateApi.generateFromRequests(
+            new DocumentTemplateGenerateFromRequestsRequest(List.of(requestId)));
+    byte[] generated;
+    try (java.io.InputStream in = output.getContentStream()) {
+      generated = in.readAllBytes();
+    }
+
+    try (PDDocument document = Loader.loadPDF(generated)) {
+      String text = new PDFTextStripper().getText(document);
+      assertThat(text).contains("User");
+      assertThat(text).contains(userApi.findById(userId).orElseThrow().getUsername());
+      assertThat(text).contains(userApi.findById(userId).orElseThrow().getEmail());
+    }
+  }
+
+  @Test
+  void shouldFailWhenComputedResolverInputEntityIsMissing() throws Exception {
+    uploadTemplateWithTenantAndKey(
+        "computed.docx",
+        "computed-missing-user",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        createTemplatedDocx("User {{client.username}}"),
+        null);
+    createRequestTypeWithMappings(
+        "computed-missing-type",
+        List.of(
+            Map.of(
+                "templateKey",
+                "computed-missing-user",
+                "fieldBindings",
+                Map.of(
+                    "client.username",
+                    Map.of(
+                        "resolver",
+                        "user-by-id",
+                        "inputPath",
+                        "payload.clientId",
+                        "outputPath",
+                        "username")))));
+
+    Long requestId =
+        requestApi.createDraft(
+            CreateRequestCommand.builder()
+                .requestTypeKey("computed-missing-type")
+                .payload(objectMapper.valueToTree(Map.of("clientId", 999_999)))
+                .build());
+
+    assertThatThrownBy(
+            () ->
+                documentTemplateApi.generateFromRequests(
+                    new DocumentTemplateGenerateFromRequestsRequest(List.of(requestId))))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("User not found for id");
   }
 
   @Test
@@ -527,8 +634,7 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
         uploadTemplateWithTenant("tenant.pdf", "application/pdf", createFlatPdf(), tenantId);
     uploadTemplateWithTenant("global.pdf", "application/pdf", createFlatPdf(), null);
 
-    org.mockito.Mockito.when(currentUserProvider.currentTenantId())
-        .thenReturn(Optional.of(tenantId + 1));
+    Mockito.when(currentUserProvider.currentTenantId()).thenReturn(Optional.of(tenantId + 1));
 
     mockMvc
         .perform(get("/api/admin/document-templates/{id}", tenantTwoTemplateId))
@@ -554,7 +660,7 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
 
   @Test
   void shouldRejectUploadWhenTenantIdDoesNotMatchUsersTenant() throws Exception {
-    org.mockito.Mockito.when(currentUserProvider.currentTenantId()).thenReturn(Optional.of(1));
+    Mockito.when(currentUserProvider.currentTenantId()).thenReturn(Optional.of(1));
     MockMultipartFile file =
         new MockMultipartFile("file", "tenant2.pdf", "application/pdf", createFlatPdf());
 

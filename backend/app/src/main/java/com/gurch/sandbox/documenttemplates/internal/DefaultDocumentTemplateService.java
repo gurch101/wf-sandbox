@@ -38,7 +38,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class DefaultDocumentTemplateService implements DocumentTemplateApi {
 
   private static final String MIME_PDF = "application/pdf";
-  private static final String MIME_DOC = "application/msword";
   private static final String MIME_DOCX =
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
   private static final String STORAGE_NAMESPACE_DOCUMENT_TEMPLATES = "document-templates";
@@ -119,7 +118,9 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
 
   @Override
   public Optional<DocumentTemplateResponse> findById(Long id) {
-    return repository.findById(id).filter(this::isAccessibleToCurrentTenant).map(this::toResponse);
+    Optional<DocumentTemplateEntity> entity = repository.findById(id);
+    entity.ifPresent(value -> ensureAccessible(value, id));
+    return entity.map(this::toResponse);
   }
 
   @Override
@@ -263,34 +264,24 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
     String fileName = originalFilename.toLowerCase(Locale.ROOT);
     if (mimeType != null && !mimeType.isBlank()) {
       String normalized = mimeType.trim().toLowerCase(Locale.ROOT);
-      if (MIME_PDF.equals(normalized)
-          || MIME_DOC.equals(normalized)
-          || MIME_DOCX.equals(normalized)) {
+      if (MIME_PDF.equals(normalized) || MIME_DOCX.equals(normalized)) {
         return normalized;
       }
       if (fileName.endsWith(".pdf")) {
         return MIME_PDF;
       }
-      if (fileName.endsWith(".doc")) {
-        return MIME_DOC;
-      }
       if (fileName.endsWith(".docx")) {
         return MIME_DOCX;
       }
-      throw new IllegalArgumentException(
-          "Unsupported file type. Only PDF and Word documents are allowed");
+      throw new IllegalArgumentException("Unsupported file type. Only PDF and DOCX are allowed");
     }
     if (fileName.endsWith(".pdf")) {
       return MIME_PDF;
     }
-    if (fileName.endsWith(".doc")) {
-      return MIME_DOC;
-    }
     if (fileName.endsWith(".docx")) {
       return MIME_DOCX;
     }
-    throw new IllegalArgumentException(
-        "Unsupported file type. Only PDF and Word documents are allowed");
+    throw new IllegalArgumentException("Unsupported file type. Only PDF and DOCX are allowed");
   }
 
   private static String resolveDisplayName(String name, String originalFilename) {

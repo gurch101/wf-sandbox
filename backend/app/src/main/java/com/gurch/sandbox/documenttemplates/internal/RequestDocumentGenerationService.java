@@ -30,6 +30,7 @@ public class RequestDocumentGenerationService {
   private final DocumentTemplateRepository templateRepository;
   private final StorageApi storageApi;
   private final DocumentTemplateGenerationService generationService;
+  private final ComputedFieldResolverRegistry computedFieldResolverRegistry;
   private final CurrentUserProvider currentUserProvider;
   private final ObjectMapper objectMapper;
 
@@ -71,7 +72,11 @@ public class RequestDocumentGenerationService {
         DocumentTemplateEntity template = resolvedTemplate.orElseThrow();
         Map<String, Object> fields =
             resolveFields(
-                mapping.fieldBindings(), request.getPayload(), requestId, mapping.templateKey());
+                mapping.bindings(),
+                request.getPayload(),
+                requestId,
+                mapping.templateKey(),
+                currentTenantId);
         validateTemplateFields(template, fields.keySet(), mapping.templateKey());
         renderSources.add(
             new DocumentTemplateGenerationService.TemplateRenderSource(
@@ -106,20 +111,16 @@ public class RequestDocumentGenerationService {
         throw new IllegalArgumentException(
             "Document mapping fieldBindings must be an object for templateKey: " + templateKey);
       }
-      Map<String, String> bindings = new LinkedHashMap<>();
+      List<FieldBinding> bindings = new ArrayList<>();
       bindingsNode
           .fields()
           .forEachRemaining(
               entry -> {
                 String fieldKey = trimToNull(entry.getKey());
-                String payloadPath =
-                    entry.getValue().isTextual() ? trimToNull(entry.getValue().asText()) : null;
-                if (fieldKey == null || payloadPath == null) {
-                  throw new IllegalArgumentException(
-                      "Field bindings must map field key to payload path for templateKey: "
-                          + templateKey);
+                if (fieldKey == null) {
+                  throw new IllegalArgumentException("Field binding key is required");
                 }
-                bindings.put(fieldKey, payloadPath);
+                bindings.add(parseFieldBinding(fieldKey, entry.getValue(), templateKey));
               });
       boolean required = resolveRequired(node, tenantId);
       boolean enabled = resolveEnabled(node, tenantId);
@@ -208,15 +209,56 @@ public class RequestDocumentGenerationService {
     return Optional.empty();
   }
 
+  private FieldBinding parseFieldBinding(
+      String fieldKey, JsonNode bindingNode, String templateKey) {
+    if (bindingNode.isTextual()) {
+      String payloadPath = trimToNull(bindingNode.asText());
+      if (payloadPath == null) {
+        throw new IllegalArgumentException(
+            "Field binding path is required for field '" + fieldKey + "'");
+      }
+      return FieldBinding.payload(fieldKey, payloadPath);
+    }
+    if (!bindingNode.isObject()) {
+      throw new IllegalArgumentException(
+          "Field binding for field '"
+              + fieldKey
+              + "' must be either path string or object for templateKey: "
+              + templateKey);
+    }
+    JsonNode pathNode = bindingNode.path("path");
+    if (pathNode.isTextual() && !pathNode.asText().isBlank()) {
+      return FieldBinding.payload(fieldKey, pathNode.asText().trim());
+    }
+    String resolverId = trimToNull(bindingNode.path("resolver").asText(null));
+    String inputPath = trimToNull(bindingNode.path("inputPath").asText(null));
+    String outputPath = trimToNull(bindingNode.path("outputPath").asText(null));
+    if (resolverId == null || inputPath == null || outputPath == null) {
+      throw new IllegalArgumentException(
+          "Computed binding for field '"
+              + fieldKey
+              + "' must define resolver, inputPath, and outputPath");
+    }
+    return FieldBinding.computed(fieldKey, new ComputedBinding(resolverId, inputPath, outputPath));
+  }
+
   private Map<String, Object> resolveFields(
-      Map<String, String> bindings, JsonNode payload, Long requestId, String templateKey) {
+      List<FieldBinding> bindings,
+      JsonNode payload,
+      Long requestId,
+      String templateKey,
+      Integer tenantId) {
     Map<String, Object> fields = new LinkedHashMap<>();
-    for (Map.Entry<String, String> binding : bindings.entrySet()) {
-      JsonNode resolvedValue = resolvePayloadPath(payload, binding.getValue());
+    for (FieldBinding binding : bindings) {
+      JsonNode resolvedValue =
+          binding.computed() == null
+              ? resolvePayloadPath(payload, binding.payloadPath())
+              : resolveComputedBinding(
+                  binding.computed(), payload, tenantId, requestId, templateKey);
       if (resolvedValue == null || resolvedValue.isMissingNode() || resolvedValue.isNull()) {
         throw new IllegalArgumentException(
             "Missing required payload path '"
-                + binding.getValue()
+                + binding.describeSource()
                 + "' for request id "
                 + requestId
                 + ", templateKey '"
@@ -226,16 +268,51 @@ public class RequestDocumentGenerationService {
       if (resolvedValue.isContainerNode()) {
         throw new IllegalArgumentException(
             "Payload path '"
-                + binding.getValue()
+                + binding.describeSource()
                 + "' resolved to non-scalar value for request id "
                 + requestId
                 + ", templateKey '"
                 + templateKey
                 + "'");
       }
-      fields.put(binding.getKey(), scalarValue(resolvedValue));
+      fields.put(binding.fieldKey(), scalarValue(resolvedValue));
     }
     return fields;
+  }
+
+  private JsonNode resolveComputedBinding(
+      ComputedBinding computed,
+      JsonNode payload,
+      Integer tenantId,
+      Long requestId,
+      String templateKey) {
+    JsonNode input = resolvePayloadPath(payload, computed.inputPath());
+    if (input == null || input.isMissingNode() || input.isNull()) {
+      throw new IllegalArgumentException(
+          "Missing computed input path '"
+              + computed.inputPath()
+              + "' for request id "
+              + requestId
+              + ", templateKey '"
+              + templateKey
+              + "'");
+    }
+    JsonNode resolvedContext =
+        computedFieldResolverRegistry.resolve(computed.resolverId(), input, tenantId);
+    JsonNode output = resolvePayloadPath(resolvedContext, computed.outputPath());
+    if (output == null || output.isMissingNode() || output.isNull()) {
+      throw new IllegalArgumentException(
+          "Missing computed output path '"
+              + computed.outputPath()
+              + "' from resolver '"
+              + computed.resolverId()
+              + "' for request id "
+              + requestId
+              + ", templateKey '"
+              + templateKey
+              + "'");
+    }
+    return output;
   }
 
   private void validateTemplateFields(
@@ -356,5 +433,24 @@ public class RequestDocumentGenerationService {
   }
 
   private record DocumentMapping(
-      String templateKey, Map<String, String> fieldBindings, boolean required) {}
+      String templateKey, List<FieldBinding> bindings, boolean required) {}
+
+  private record ComputedBinding(String resolverId, String inputPath, String outputPath) {}
+
+  private record FieldBinding(String fieldKey, String payloadPath, ComputedBinding computed) {
+    private static FieldBinding payload(String fieldKey, String payloadPath) {
+      return new FieldBinding(fieldKey, payloadPath, null);
+    }
+
+    private static FieldBinding computed(String fieldKey, ComputedBinding computed) {
+      return new FieldBinding(fieldKey, null, computed);
+    }
+
+    private String describeSource() {
+      if (computed != null) {
+        return computed.resolverId() + ":" + computed.inputPath() + "->" + computed.outputPath();
+      }
+      return payloadPath;
+    }
+  }
 }

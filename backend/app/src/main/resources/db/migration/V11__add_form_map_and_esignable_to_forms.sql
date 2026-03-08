@@ -1,3 +1,25 @@
 ALTER TABLE forms
   ADD COLUMN form_map_json TEXT,
   ADD COLUMN esignable BOOLEAN NOT NULL DEFAULT FALSE;
+
+ALTER TABLE forms
+  ADD COLUMN tenant_id INTEGER;
+
+ALTER TABLE forms
+  ADD CONSTRAINT fk_forms_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants(id);
+
+CREATE INDEX idx_forms_tenant_id ON forms(tenant_id);
+
+DROP INDEX IF EXISTS idx_forms_document_type;
+ALTER TABLE forms DROP COLUMN IF EXISTS document_type;
+
+ALTER TABLE forms RENAME TO document_templates;
+
+ALTER INDEX IF EXISTS idx_forms_upper_name RENAME TO idx_document_templates_upper_name;
+ALTER INDEX IF EXISTS idx_forms_upper_mime_type RENAME TO idx_document_templates_upper_mime_type;
+ALTER INDEX IF EXISTS idx_forms_created_at_desc RENAME TO idx_document_templates_created_at_desc;
+ALTER INDEX IF EXISTS idx_forms_tenant_id RENAME TO idx_document_templates_tenant_id;
+
+ALTER TABLE document_templates RENAME CONSTRAINT fk_forms_created_by TO fk_document_templates_created_by;
+ALTER TABLE document_templates RENAME CONSTRAINT fk_forms_updated_by TO fk_document_templates_updated_by;
+ALTER TABLE document_templates RENAME CONSTRAINT fk_forms_tenant_id TO fk_document_templates_tenant_id;

@@ -174,6 +174,46 @@ class RequestTypeModuleIntegrationTest extends AbstractJdbcIntegrationTest {
   }
 
   @Test
+  void shouldRejectCreateTypeWithInvalidComputedBindingConfigJson() throws Exception {
+    var invalidConfig =
+        objectMapper.valueToTree(
+            Map.of(
+                "documentGeneration",
+                Map.of(
+                    "documents",
+                    List.of(
+                        Map.of(
+                            "templateKey",
+                            "computed-template",
+                            "fieldBindings",
+                            Map.of(
+                                "client.username",
+                                Map.of(
+                                    "resolver",
+                                    "user-by-id",
+                                    "inputPath",
+                                    "payload.clientId")))))));
+
+    mockMvc
+        .perform(
+            post("/api/internal/request-types")
+                .with(csrf())
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        new RequestTypeDtos.CreateTypeRequest(
+                            "bad-computed",
+                            "Bad Computed",
+                            "desc",
+                            "noop",
+                            "requestTypeV1Process",
+                            invalidConfig))))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.errors[0].code").value("INVALID_CONFIG_JSON"));
+  }
+
+  @Test
   void shouldRejectUpdateTypeWithInvalidProcessDefinitionKey() throws Exception {
     createType("loan", "Loan", "amount-positive", "requestTypeV1Process");
 

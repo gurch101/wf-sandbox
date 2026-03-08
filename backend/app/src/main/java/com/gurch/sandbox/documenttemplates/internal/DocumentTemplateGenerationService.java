@@ -25,8 +25,6 @@ import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.apache.pdfbox.pdmodel.interactive.form.PDAcroForm;
 import org.apache.pdfbox.pdmodel.interactive.form.PDCheckBox;
 import org.apache.pdfbox.pdmodel.interactive.form.PDField;
-import org.apache.poi.hwpf.HWPFDocument;
-import org.apache.poi.hwpf.extractor.WordExtractor;
 import org.apache.poi.xwpf.extractor.XWPFWordExtractor;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.springframework.stereotype.Service;
@@ -37,7 +35,6 @@ import org.springframework.stereotype.Service;
 public class DocumentTemplateGenerationService {
 
   private static final String MIME_PDF = "application/pdf";
-  private static final String MIME_DOC = "application/msword";
   private static final String MIME_DOCX =
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
   private static final Pattern HANDLEBARS_PLACEHOLDER =
@@ -57,10 +54,10 @@ public class DocumentTemplateGenerationService {
       String mimeType, byte[] sourceBytes, Map<String, String> fields) {
     return switch (mimeType) {
       case MIME_PDF -> fillAndFlattenPdf(sourceBytes, fields);
-      case MIME_DOC, MIME_DOCX -> renderWordAsPdf(mimeType, sourceBytes, fields);
+      case MIME_DOCX -> renderWordAsPdf(sourceBytes, fields);
       default ->
           throw new IllegalArgumentException(
-              "Unsupported file type. Only PDF and Word documents are allowed");
+              "Unsupported file type. Only PDF and DOCX are allowed");
     };
   }
 
@@ -101,20 +98,14 @@ public class DocumentTemplateGenerationService {
     field.setValue(value);
   }
 
-  private byte[] renderWordAsPdf(String mimeType, byte[] sourceBytes, Map<String, String> fields) {
-    String rawText = extractWordText(mimeType, sourceBytes);
+  private byte[] renderWordAsPdf(byte[] sourceBytes, Map<String, String> fields) {
+    String rawText = extractWordText(sourceBytes);
     String mergedText = mergeWordText(rawText, fields);
     return textToPdf(mergedText);
   }
 
-  private String extractWordText(String mimeType, byte[] sourceBytes) {
+  private String extractWordText(byte[] sourceBytes) {
     try {
-      if (MIME_DOC.equals(mimeType)) {
-        try (HWPFDocument document = new HWPFDocument(new ByteArrayInputStream(sourceBytes));
-            WordExtractor extractor = new WordExtractor(document)) {
-          return extractor.getText();
-        }
-      }
       try (XWPFDocument document = new XWPFDocument(new ByteArrayInputStream(sourceBytes));
           XWPFWordExtractor extractor = new XWPFWordExtractor(document)) {
         return extractor.getText();
