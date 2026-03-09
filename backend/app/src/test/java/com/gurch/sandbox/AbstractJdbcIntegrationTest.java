@@ -1,5 +1,6 @@
 package com.gurch.sandbox;
 
+import com.gurch.sandbox.esign.internal.DocusignEsignGateway;
 import com.gurch.sandbox.security.CurrentUserProvider;
 import java.util.List;
 import java.util.Optional;
@@ -22,6 +23,7 @@ public abstract class AbstractJdbcIntegrationTest {
 
   @Autowired private JdbcTemplate jdbcTemplate;
   @MockitoBean protected CurrentUserProvider currentUserProvider;
+  @MockitoBean protected DocusignEsignGateway docusignEsignGateway;
 
   @BeforeEach
   void initDefaultCurrentUserContext() {
