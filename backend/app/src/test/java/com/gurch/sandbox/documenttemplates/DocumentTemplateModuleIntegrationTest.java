@@ -329,8 +329,8 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
                       return request;
                     }))
         .andExpect(status().isBadRequest())
-        .andExpect(
-            jsonPath("$.detail").value("Template field map changed and update is not allowed"));
+        .andExpect(jsonPath("$.detail").value("Request has invalid fields"))
+        .andExpect(jsonPath("$.errors[0].code").value("TEMPLATE_FIELD_MAP_CHANGED"));
   }
 
   @Test

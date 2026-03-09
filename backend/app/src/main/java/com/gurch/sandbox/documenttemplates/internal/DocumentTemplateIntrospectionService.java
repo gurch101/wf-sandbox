@@ -201,6 +201,4 @@ public class DocumentTemplateIntrospectionService {
     formMapNode.set("fields", objectMapper.createArrayNode());
     return new TemplateIntrospectionResult(formMapNode.toString(), false);
   }
-
-  public record TemplateIntrospectionResult(String formMapJson, boolean esignable) {}
 }

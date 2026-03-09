@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gurch.sandbox.audit.AuditLogApi;
 import com.gurch.sandbox.documenttemplates.DocumentTemplateApi;
 import com.gurch.sandbox.documenttemplates.DocumentTemplateDownload;
+import com.gurch.sandbox.documenttemplates.DocumentTemplateErrorCode;
 import com.gurch.sandbox.documenttemplates.DocumentTemplateGenerateRequest;
 import com.gurch.sandbox.documenttemplates.DocumentTemplateResponse;
 import com.gurch.sandbox.documenttemplates.DocumentTemplateSearchCriteria;
@@ -20,6 +21,7 @@ import com.gurch.sandbox.storage.StorageWriteRequest;
 import com.gurch.sandbox.storage.StorageWriteResult;
 import com.gurch.sandbox.web.NotFoundException;
 import com.gurch.sandbox.web.PayloadTooLargeException;
+import com.gurch.sandbox.web.ValidationErrorException;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -27,6 +29,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -59,7 +62,6 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
   @Transactional
   public DocumentTemplateResponse upload(DocumentTemplateUploadRequest request) {
     validateUploadRequest(request);
-    validateUploadSize(request.getContentSize());
     validateUploadTenantAccess(request.getTenantId());
 
     String mimeType = normalizeMimeType(request.getMimeType(), request.getOriginalFilename());
@@ -70,8 +72,7 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
     } catch (IOException e) {
       throw new IllegalArgumentException("Could not read uploaded file content", e);
     }
-    DocumentTemplateIntrospectionService.TemplateIntrospectionResult introspection =
-        introspectionService.introspect(mimeType, payload);
+    TemplateIntrospectionResult introspection = introspectionService.introspect(mimeType, payload);
 
     StorageWriteResult stored;
     try {
@@ -143,7 +144,6 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
     }
 
     validateReplacementRequest(request);
-    validateUploadSize(request.getContentSize());
     byte[] payload;
     try {
       payload = request.getContentStream().readAllBytes();
@@ -152,10 +152,10 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
     }
     String replacementMimeType =
         normalizeMimeType(request.getMimeType(), request.getOriginalFilename());
-    DocumentTemplateIntrospectionService.TemplateIntrospectionResult introspection =
+    TemplateIntrospectionResult introspection =
         introspectionService.introspect(replacementMimeType, payload);
     if (!hasUnchangedFieldMap(existing.getFormMapJson(), introspection.formMapJson())) {
-      throw new IllegalArgumentException("Template field map changed and update is not allowed");
+      throw ValidationErrorException.of(DocumentTemplateErrorCode.TEMPLATE_FIELD_MAP_CHANGED);
     }
 
     StorageWriteResult stored;
@@ -241,7 +241,7 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
       throw new IllegalArgumentException("At least one document is required");
     }
 
-    List<DocumentTemplateGenerationService.TemplateRenderSource> renderSources = new ArrayList<>();
+    List<TemplateRenderSource> renderSources = new ArrayList<>();
     for (DocumentTemplateGenerateRequest.GenerateInput input : request.getDocuments()) {
       if (input == null || input.getDocumentTemplateId() == null) {
         throw new IllegalArgumentException("Each document must include documentTemplateId");
@@ -257,8 +257,7 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
 
       byte[] sourceBytes = readStoredBytes(entity.getStoragePath());
       renderSources.add(
-          new DocumentTemplateGenerationService.TemplateRenderSource(
-              entity.getMimeType(), sourceBytes, input.getFields()));
+          new TemplateRenderSource(entity.getMimeType(), sourceBytes, input.getFields()));
     }
 
     byte[] mergedPdf = generationService.generateComposedPdf(renderSources);
@@ -276,7 +275,7 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
         SQLQueryBuilder.select("f.*")
             .from("document_templates", "f")
             .where("upper(f.name)", Operator.LIKE, criteria.getNamePattern());
-    Integer userTenantId = currentUserProvider.currentTenantId().orElse(null);
+    Integer userTenantId = currentTenantId();
     if (userTenantId != null) {
       builder.rawWhere(
           "(f.tenant_id = :currentTenantId OR f.tenant_id IS NULL)",
@@ -315,31 +314,27 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
     auditLogApi.recordDelete(DOCUMENT_TEMPLATES_RESOURCE_TYPE, id, entity);
   }
 
-  private static void validateUploadRequest(DocumentTemplateUploadRequest request) {
-    if (request == null || request.getContentSize() == null || request.getContentSize() <= 0) {
+  private void validateUploadRequest(DocumentTemplateUploadRequest request) {
+    if (request == null) {
       throw new IllegalArgumentException("file is required");
     }
-    if (request.getContentStream() == null) {
-      throw new IllegalArgumentException("file is required");
-    }
-    if (request.getOriginalFilename() == null || request.getOriginalFilename().isBlank()) {
-      throw new IllegalArgumentException("original filename is required");
-    }
+    validateFilePart(
+        request.getContentSize(), request.getContentStream(), request.getOriginalFilename());
   }
 
-  private static void validateReplacementRequest(DocumentTemplateUpdateRequest request) {
-    if (request.getContentSize() == null || request.getContentSize() <= 0) {
-      throw new IllegalArgumentException("file is required");
-    }
-    if (request.getContentStream() == null) {
-      throw new IllegalArgumentException("file is required");
-    }
-    if (request.getOriginalFilename() == null || request.getOriginalFilename().isBlank()) {
-      throw new IllegalArgumentException("original filename is required");
-    }
+  private void validateReplacementRequest(DocumentTemplateUpdateRequest request) {
+    validateFilePart(
+        request.getContentSize(), request.getContentStream(), request.getOriginalFilename());
   }
 
-  private void validateUploadSize(Long contentSize) {
+  private void validateFilePart(
+      Long contentSize, InputStream contentStream, String originalFilename) {
+    if (contentSize == null || contentSize <= 0 || contentStream == null) {
+      throw new IllegalArgumentException("file is required");
+    }
+    if (originalFilename == null || originalFilename.isBlank()) {
+      throw new IllegalArgumentException("original filename is required");
+    }
     if (contentSize > maxUploadSizeBytes) {
       throw new PayloadTooLargeException(
           "Uploaded file exceeds max allowed size of " + maxUploadSizeBytes + " bytes");
@@ -387,7 +382,7 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
   private boolean hasUnchangedFieldMap(String previousFormMapJson, String nextFormMapJson) {
     JsonNode previous = parseJsonOrNull(previousFormMapJson);
     JsonNode next = parseJsonOrNull(nextFormMapJson);
-    return java.util.Objects.equals(previous, next);
+    return Objects.equals(previous, next);
   }
 
   private JsonNode parseJsonOrNull(String rawJson) {
@@ -430,28 +425,36 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
   }
 
   private void validateUploadTenantAccess(Integer requestTenantId) {
-    Integer userTenantId = currentUserProvider.currentTenantId().orElse(null);
-    if (userTenantId == null) {
-      return;
-    }
-    if (!userTenantId.equals(requestTenantId)) {
+    if (!canAssignTenant(requestTenantId)) {
       throw new IllegalArgumentException(
           "tenantId must match the authenticated user's tenant scope");
     }
   }
 
   private void ensureAccessible(DocumentTemplateEntity entity, Long templateId) {
-    if (!isAccessibleToCurrentTenant(entity)) {
+    if (!canAccessTenant(entity.getTenantId())) {
       throw new NotFoundException("Document template not found with id: " + templateId);
     }
   }
 
-  private boolean isAccessibleToCurrentTenant(DocumentTemplateEntity entity) {
-    Integer userTenantId = currentUserProvider.currentTenantId().orElse(null);
+  private boolean canAssignTenant(Integer requestTenantId) {
+    Integer userTenantId = currentTenantId();
     if (userTenantId == null) {
       return true;
     }
-    return entity.getTenantId() == null || userTenantId.equals(entity.getTenantId());
+    return userTenantId.equals(requestTenantId);
+  }
+
+  private boolean canAccessTenant(Integer resourceTenantId) {
+    Integer userTenantId = currentTenantId();
+    if (userTenantId == null) {
+      return true;
+    }
+    return resourceTenantId == null || userTenantId.equals(resourceTenantId);
+  }
+
+  private Integer currentTenantId() {
+    return currentUserProvider.currentTenantId().orElse(null);
   }
 
   private byte[] readStoredBytes(String storagePath) {
