@@ -8,6 +8,7 @@ import com.gurch.sandbox.documenttemplates.DocumentTemplateDownload;
 import com.gurch.sandbox.documenttemplates.DocumentTemplateGenerateRequest;
 import com.gurch.sandbox.documenttemplates.DocumentTemplateResponse;
 import com.gurch.sandbox.documenttemplates.DocumentTemplateSearchCriteria;
+import com.gurch.sandbox.documenttemplates.DocumentTemplateUpdateRequest;
 import com.gurch.sandbox.documenttemplates.DocumentTemplateUploadRequest;
 import com.gurch.sandbox.dto.PagedResponse;
 import com.gurch.sandbox.query.Operator;
@@ -102,6 +103,98 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
     try {
       DocumentTemplateEntity saved = repository.save(entity);
       auditLogApi.recordCreate(DOCUMENT_TEMPLATES_RESOURCE_TYPE, saved.getId(), saved);
+      return toResponse(saved);
+    } catch (RuntimeException e) {
+      try {
+        storageApi.delete(stored.storagePath());
+      } catch (IOException ignored) {
+        // Intentionally ignored: persistence failure is the root cause.
+      }
+      throw e;
+    }
+  }
+
+  @Override
+  @Transactional
+  public DocumentTemplateResponse update(Long id, DocumentTemplateUpdateRequest request) {
+    DocumentTemplateEntity existing =
+        repository
+            .findById(id)
+            .orElseThrow(() -> new NotFoundException("Document template not found with id: " + id));
+    ensureAccessible(existing, id);
+
+    String updatedName =
+        request.getName() == null || request.getName().isBlank()
+            ? existing.getName()
+            : request.getName().trim();
+    String updatedDescription =
+        request.getDescription() == null
+            ? existing.getDescription()
+            : trimToNull(request.getDescription());
+
+    if (!hasReplacementContent(request)) {
+      DocumentTemplateEntity beforeState = existing;
+      DocumentTemplateEntity updated =
+          repository.save(
+              existing.toBuilder().name(updatedName).description(updatedDescription).build());
+      auditLogApi.recordUpdate(
+          DOCUMENT_TEMPLATES_RESOURCE_TYPE, updated.getId(), beforeState, updated);
+      return toResponse(updated);
+    }
+
+    validateReplacementRequest(request);
+    validateUploadSize(request.getContentSize());
+    byte[] payload;
+    try {
+      payload = request.getContentStream().readAllBytes();
+    } catch (IOException e) {
+      throw new IllegalArgumentException("Could not read uploaded file content", e);
+    }
+    String replacementMimeType =
+        normalizeMimeType(request.getMimeType(), request.getOriginalFilename());
+    DocumentTemplateIntrospectionService.TemplateIntrospectionResult introspection =
+        introspectionService.introspect(replacementMimeType, payload);
+    if (!hasUnchangedFieldMap(existing.getFormMapJson(), introspection.formMapJson())) {
+      throw new IllegalArgumentException("Template field map changed and update is not allowed");
+    }
+
+    StorageWriteResult stored;
+    try {
+      stored =
+          storageApi.write(
+              StorageWriteRequest.builder()
+                  .namespace(STORAGE_NAMESPACE_DOCUMENT_TEMPLATES)
+                  .originalFilename(request.getOriginalFilename())
+                  .contentStream(new ByteArrayInputStream(payload))
+                  .build());
+    } catch (IOException e) {
+      throw new IllegalStateException("Could not persist uploaded file", e);
+    }
+
+    DocumentTemplateEntity beforeState = existing;
+    DocumentTemplateEntity updatedEntity =
+        existing.toBuilder()
+            .name(updatedName)
+            .description(updatedDescription)
+            .mimeType(replacementMimeType)
+            .contentSize(stored.contentSize())
+            .checksumSha256(stored.checksumSha256())
+            .formMapJson(introspection.formMapJson())
+            .esignable(introspection.esignable())
+            .storageProvider(stored.provider())
+            .storagePath(stored.storagePath())
+            .build();
+
+    try {
+      DocumentTemplateEntity saved = repository.save(updatedEntity);
+      auditLogApi.recordUpdate(DOCUMENT_TEMPLATES_RESOURCE_TYPE, saved.getId(), beforeState, saved);
+      if (!existing.getStoragePath().equals(stored.storagePath())) {
+        try {
+          storageApi.delete(existing.getStoragePath());
+        } catch (IOException ignored) {
+          // Best effort cleanup of previous content.
+        }
+      }
       return toResponse(saved);
     } catch (RuntimeException e) {
       try {
@@ -234,6 +327,18 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
     }
   }
 
+  private static void validateReplacementRequest(DocumentTemplateUpdateRequest request) {
+    if (request.getContentSize() == null || request.getContentSize() <= 0) {
+      throw new IllegalArgumentException("file is required");
+    }
+    if (request.getContentStream() == null) {
+      throw new IllegalArgumentException("file is required");
+    }
+    if (request.getOriginalFilename() == null || request.getOriginalFilename().isBlank()) {
+      throw new IllegalArgumentException("original filename is required");
+    }
+  }
+
   private void validateUploadSize(Long contentSize) {
     if (contentSize > maxUploadSizeBytes) {
       throw new PayloadTooLargeException(
@@ -277,6 +382,23 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
       return null;
     }
     return description.trim();
+  }
+
+  private boolean hasUnchangedFieldMap(String previousFormMapJson, String nextFormMapJson) {
+    JsonNode previous = parseJsonOrNull(previousFormMapJson);
+    JsonNode next = parseJsonOrNull(nextFormMapJson);
+    return java.util.Objects.equals(previous, next);
+  }
+
+  private JsonNode parseJsonOrNull(String rawJson) {
+    if (rawJson == null || rawJson.isBlank()) {
+      return null;
+    }
+    try {
+      return objectMapper.readTree(rawJson);
+    } catch (IOException e) {
+      throw new IllegalStateException("Stored template form map is invalid JSON", e);
+    }
   }
 
   private DocumentTemplateResponse toResponse(DocumentTemplateEntity entity) {
@@ -338,5 +460,9 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
     } catch (IOException e) {
       throw new IllegalStateException("Could not read stored file", e);
     }
+  }
+
+  private static boolean hasReplacementContent(DocumentTemplateUpdateRequest request) {
+    return request != null && request.getContentStream() != null;
   }
 }

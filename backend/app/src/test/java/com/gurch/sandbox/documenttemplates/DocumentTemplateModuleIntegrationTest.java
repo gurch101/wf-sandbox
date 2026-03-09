@@ -23,9 +23,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Stream;
+import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
@@ -267,7 +269,7 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
     assertThat(output.getMimeType()).isEqualTo("application/pdf");
     assertThat(generated).isNotEmpty();
 
-    try (PDDocument document = org.apache.pdfbox.Loader.loadPDF(generated)) {
+    try (PDDocument document = Loader.loadPDF(generated)) {
       String text = new PDFTextStripper().getText(document);
       assertThat(document.getNumberOfPages()).isGreaterThanOrEqualTo(2);
       assertThat(text).contains("Ada");
@@ -279,6 +281,102 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
                   assertThat(acroForm.getFieldTree().iterator().hasNext()).isFalse();
                 }
               });
+    }
+  }
+
+  @Test
+  void shouldUpdateMetadataAndTemplateWhenFieldMapIsUnchanged() throws Exception {
+    Long templateId =
+        uploadTemplate("fillable.pdf", "application/pdf", createFillablePdfWithAnchor());
+    MockMultipartFile updatedFile =
+        new MockMultipartFile(
+            "file", "fillable-v2.pdf", "application/pdf", createFillablePdfWithAnchor());
+
+    mockMvc
+        .perform(
+            multipart("/api/admin/document-templates/{id}", templateId)
+                .file(updatedFile)
+                .param("name", "Updated Form Name")
+                .param("description", "Updated description")
+                .with(csrf())
+                .with(
+                    request -> {
+                      request.setMethod("PUT");
+                      return request;
+                    }))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.id").value(templateId))
+        .andExpect(jsonPath("$.name").value("Updated Form Name"))
+        .andExpect(jsonPath("$.description").value("Updated description"))
+        .andExpect(jsonPath("$.formMap.fields.length()").value(3));
+  }
+
+  @Test
+  void shouldRejectUpdateWhenReplacementChangesFieldMap() throws Exception {
+    Long templateId =
+        uploadTemplate("fillable.pdf", "application/pdf", createFillablePdfWithAnchor());
+    MockMultipartFile changedFile =
+        new MockMultipartFile("file", "flat.pdf", "application/pdf", createFlatPdf());
+
+    mockMvc
+        .perform(
+            multipart("/api/admin/document-templates/{id}", templateId)
+                .file(changedFile)
+                .with(csrf())
+                .with(
+                    request -> {
+                      request.setMethod("PUT");
+                      return request;
+                    }))
+        .andExpect(status().isBadRequest())
+        .andExpect(
+            jsonPath("$.detail").value("Template field map changed and update is not allowed"));
+  }
+
+  @Test
+  void shouldRenderDocxTableWithMultipleHoldingsRows() throws Exception {
+    Long docxId =
+        uploadTemplate(
+            "holdings-template.docx",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            createHoldingsTableDocx());
+
+    DocumentTemplateGenerateRequest request =
+        new DocumentTemplateGenerateRequest(
+            List.of(
+                new DocumentTemplateGenerateRequest.GenerateInput(
+                    docxId,
+                    Map.of(
+                        "clientName",
+                        "Ada Lovelace",
+                        "holdings",
+                        Map.of(
+                            "headers",
+                            List.of(
+                                Map.of("key", "symbol", "label", "Ticker", "align", "LEFT"),
+                                Map.of("key", "quantity", "label", "Qty", "align", "RIGHT"),
+                                Map.of("key", "value", "label", "Market Value", "align", "RIGHT")),
+                            "rows",
+                            List.of(
+                                Map.of("symbol", "AAPL", "quantity", 10, "value", "1870.00"),
+                                Map.of("symbol", "MSFT", "quantity", 5, "value", "2060.00")))))));
+
+    DocumentTemplateDownload output = documentTemplateApi.generate(request);
+    byte[] generated;
+    try (java.io.InputStream in = output.getContentStream()) {
+      generated = in.readAllBytes();
+    }
+
+    try (PDDocument document = Loader.loadPDF(generated)) {
+      String text = new PDFTextStripper().getText(document);
+      assertThat(text).contains("Ada Lovelace");
+      assertThat(text).contains("Ticker");
+      assertThat(text).contains("Qty");
+      assertThat(text).contains("Market Value");
+      assertThat(text).contains("AAPL");
+      assertThat(text).contains("MSFT");
+      assertThat(text).contains("1870.00");
+      assertThat(text).contains("2060.00");
     }
   }
 
@@ -394,11 +492,28 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
   }
 
   private static byte[] createTemplatedDocx() throws IOException {
+    return createTemplatedDocx(
+        "Client First Name: {{client.firstName}} | Last Name: {{client.lastName}}");
+  }
+
+  private static byte[] createTemplatedDocx(String templateText) throws IOException {
     try (XWPFDocument document = new XWPFDocument();
         ByteArrayOutputStream out = new ByteArrayOutputStream()) {
       XWPFParagraph paragraph = document.createParagraph();
       XWPFRun run = paragraph.createRun();
-      run.setText("Client First Name: {{client.firstName}} | Last Name: ${client.lastName}");
+      run.setText(templateText);
+      document.write(out);
+      return out.toByteArray();
+    }
+  }
+
+  private static byte[] createHoldingsTableDocx() throws IOException {
+    try (XWPFDocument document = new XWPFDocument();
+        ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+      XWPFParagraph heading = document.createParagraph();
+      heading.createRun().setText("Client Holdings for {{clientName}}");
+      XWPFParagraph tablePlaceholder = document.createParagraph();
+      tablePlaceholder.createRun().setText("{{holdings}}");
       document.write(out);
       return out.toByteArray();
     }
