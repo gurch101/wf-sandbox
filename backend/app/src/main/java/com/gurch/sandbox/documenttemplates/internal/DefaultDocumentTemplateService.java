@@ -66,26 +66,10 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
 
     String mimeType = normalizeMimeType(request.getMimeType(), request.getOriginalFilename());
     String displayName = resolveDisplayName(request.getName(), request.getOriginalFilename());
-    byte[] payload;
-    try {
-      payload = request.getContentStream().readAllBytes();
-    } catch (IOException e) {
-      throw new IllegalArgumentException("Could not read uploaded file content", e);
-    }
+    byte[] payload = readRequestPayload(request.getContentStream());
     TemplateIntrospectionResult introspection = introspectionService.introspect(mimeType, payload);
 
-    StorageWriteResult stored;
-    try {
-      stored =
-          storageApi.write(
-              StorageWriteRequest.builder()
-                  .namespace(STORAGE_NAMESPACE_DOCUMENT_TEMPLATES)
-                  .originalFilename(request.getOriginalFilename())
-                  .contentStream(new ByteArrayInputStream(payload))
-                  .build());
-    } catch (IOException e) {
-      throw new IllegalStateException("Could not persist uploaded file", e);
-    }
+    StorageWriteResult stored = persistPayload(request.getOriginalFilename(), payload);
 
     DocumentTemplateEntity entity =
         DocumentTemplateEntity.builder()
@@ -144,12 +128,7 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
     }
 
     validateReplacementRequest(request);
-    byte[] payload;
-    try {
-      payload = request.getContentStream().readAllBytes();
-    } catch (IOException e) {
-      throw new IllegalArgumentException("Could not read uploaded file content", e);
-    }
+    byte[] payload = readRequestPayload(request.getContentStream());
     String replacementMimeType =
         normalizeMimeType(request.getMimeType(), request.getOriginalFilename());
     TemplateIntrospectionResult introspection =
@@ -158,18 +137,7 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
       throw ValidationErrorException.of(DocumentTemplateErrorCode.TEMPLATE_FIELD_MAP_CHANGED);
     }
 
-    StorageWriteResult stored;
-    try {
-      stored =
-          storageApi.write(
-              StorageWriteRequest.builder()
-                  .namespace(STORAGE_NAMESPACE_DOCUMENT_TEMPLATES)
-                  .originalFilename(request.getOriginalFilename())
-                  .contentStream(new ByteArrayInputStream(payload))
-                  .build());
-    } catch (IOException e) {
-      throw new IllegalStateException("Could not persist uploaded file", e);
-    }
+    StorageWriteResult stored = persistPayload(request.getOriginalFilename(), payload);
 
     DocumentTemplateEntity beforeState = existing;
     DocumentTemplateEntity updatedEntity =
@@ -208,18 +176,12 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
 
   @Override
   public Optional<DocumentTemplateResponse> findById(Long id) {
-    Optional<DocumentTemplateEntity> entity = repository.findById(id);
-    entity.ifPresent(value -> ensureAccessible(value, id));
-    return entity.map(this::toResponse);
+    return Optional.of(loadAccessibleTemplate(id)).map(this::toResponse);
   }
 
   @Override
   public DocumentTemplateDownload download(Long id) {
-    DocumentTemplateEntity entity =
-        repository
-            .findById(id)
-            .orElseThrow(() -> new NotFoundException("Document template not found with id: " + id));
-    ensureAccessible(entity, id);
+    DocumentTemplateEntity entity = loadAccessibleTemplate(id);
 
     try {
       return DocumentTemplateDownload.builder()
@@ -246,14 +208,7 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
       if (input == null || input.getDocumentTemplateId() == null) {
         throw new IllegalArgumentException("Each document must include documentTemplateId");
       }
-      DocumentTemplateEntity entity =
-          repository
-              .findById(input.getDocumentTemplateId())
-              .orElseThrow(
-                  () ->
-                      new NotFoundException(
-                          "Document template not found with id: " + input.getDocumentTemplateId()));
-      ensureAccessible(entity, input.getDocumentTemplateId());
+      DocumentTemplateEntity entity = loadAccessibleTemplate(input.getDocumentTemplateId());
 
       byte[] sourceBytes = readStoredBytes(entity.getStoragePath());
       renderSources.add(
@@ -298,11 +253,7 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
   @Override
   @Transactional
   public void deleteById(Long id) {
-    DocumentTemplateEntity entity =
-        repository
-            .findById(id)
-            .orElseThrow(() -> new NotFoundException("Document template not found with id: " + id));
-    ensureAccessible(entity, id);
+    DocumentTemplateEntity entity = loadAccessibleTemplate(id);
 
     try {
       storageApi.delete(entity.getStoragePath());
@@ -414,14 +365,7 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
   }
 
   private JsonNode parseFormMap(String formMapJson) {
-    if (formMapJson == null || formMapJson.isBlank()) {
-      return null;
-    }
-    try {
-      return objectMapper.readTree(formMapJson);
-    } catch (IOException e) {
-      throw new IllegalStateException("Stored template form map is invalid JSON", e);
-    }
+    return parseJsonOrNull(formMapJson);
   }
 
   private void validateUploadTenantAccess(Integer requestTenantId) {
@@ -455,6 +399,37 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
 
   private Integer currentTenantId() {
     return currentUserProvider.currentTenantId().orElse(null);
+  }
+
+  private DocumentTemplateEntity loadAccessibleTemplate(Long templateId) {
+    DocumentTemplateEntity entity =
+        repository
+            .findById(templateId)
+            .orElseThrow(
+                () -> new NotFoundException("Document template not found with id: " + templateId));
+    ensureAccessible(entity, templateId);
+    return entity;
+  }
+
+  private byte[] readRequestPayload(InputStream contentStream) {
+    try {
+      return contentStream.readAllBytes();
+    } catch (IOException e) {
+      throw new IllegalArgumentException("Could not read uploaded file content", e);
+    }
+  }
+
+  private StorageWriteResult persistPayload(String originalFilename, byte[] payload) {
+    try {
+      return storageApi.write(
+          StorageWriteRequest.builder()
+              .namespace(STORAGE_NAMESPACE_DOCUMENT_TEMPLATES)
+              .originalFilename(originalFilename)
+              .contentStream(new ByteArrayInputStream(payload))
+              .build());
+    } catch (IOException e) {
+      throw new IllegalStateException("Could not persist uploaded file", e);
+    }
   }
 
   private byte[] readStoredBytes(String storagePath) {
