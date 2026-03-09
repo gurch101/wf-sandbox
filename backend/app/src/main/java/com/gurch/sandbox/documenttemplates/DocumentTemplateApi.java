@@ -9,6 +9,9 @@ public interface DocumentTemplateApi {
   /** Persists metadata and bytes for a new uploaded file. */
   DocumentTemplateResponse upload(DocumentTemplateUploadRequest request);
 
+  /** Updates metadata and optionally replaces template content. */
+  DocumentTemplateResponse update(Long id, DocumentTemplateUpdateRequest request);
+
   /** Finds one document template by identifier. */
   Optional<DocumentTemplateResponse> findById(Long id);
 

@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
@@ -57,6 +58,29 @@ public class DocumentTemplateController {
     }
 
     return new CreateResponse(documentTemplateApi.upload(request).getId());
+  }
+
+  @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  @NotIdempotent
+  public DocumentTemplateResponse update(
+      @PathVariable Long id,
+      @RequestPart(value = "file", required = false) MultipartFile file,
+      @RequestParam(value = "name", required = false) String name,
+      @RequestParam(value = "description", required = false) String description) {
+    DocumentTemplateUpdateRequest request;
+    try {
+      request =
+          new DocumentTemplateUpdateRequest(
+              name,
+              description,
+              file == null ? null : file.getOriginalFilename(),
+              file == null ? null : file.getContentType(),
+              file == null ? null : file.getSize(),
+              file == null ? null : file.getInputStream());
+    } catch (Exception e) {
+      throw new IllegalArgumentException("Could not read uploaded file content");
+    }
+    return documentTemplateApi.update(id, request);
   }
 
   @GetMapping("/{id}")
