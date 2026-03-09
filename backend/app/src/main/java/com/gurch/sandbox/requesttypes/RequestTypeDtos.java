@@ -1,5 +1,6 @@
 package com.gurch.sandbox.requesttypes;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Value;
@@ -24,6 +25,9 @@ public interface RequestTypeDtos {
 
     @NotBlank(message = "processDefinitionKey is required")
     String processDefinitionKey;
+
+    @Schema(description = "Optional versioned configuration JSON", implementation = Object.class)
+    JsonNode configJson;
   }
 
   /** Request body for appending a new active version to an existing type. */
@@ -40,5 +44,8 @@ public interface RequestTypeDtos {
 
     @NotBlank(message = "processDefinitionKey is required")
     String processDefinitionKey;
+
+    @Schema(description = "Optional versioned configuration JSON", implementation = Object.class)
+    JsonNode configJson;
   }
 }

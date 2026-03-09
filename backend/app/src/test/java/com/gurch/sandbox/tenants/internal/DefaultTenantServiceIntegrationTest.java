@@ -13,6 +13,7 @@ import com.gurch.sandbox.web.ValidationErrorException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 class DefaultTenantServiceIntegrationTest extends AbstractJdbcIntegrationTest {
 
@@ -20,9 +21,11 @@ class DefaultTenantServiceIntegrationTest extends AbstractJdbcIntegrationTest {
   @Autowired private UserApi userApi;
   @Autowired private TenantRepository tenantRepository;
   @Autowired private UserRepository userRepository;
+  @Autowired private JdbcTemplate jdbcTemplate;
 
   @BeforeEach
   void setUp() {
+    jdbcTemplate.update("DELETE FROM document_templates");
     userRepository.findAll().stream()
         .filter(user -> user.getId() > 1)
         .forEach(userRepository::delete);

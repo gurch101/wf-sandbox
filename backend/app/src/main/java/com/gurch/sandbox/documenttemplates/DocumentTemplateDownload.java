@@ -1,4 +1,4 @@
-package com.gurch.sandbox.forms;
+package com.gurch.sandbox.documenttemplates;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.io.InputStream;

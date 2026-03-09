@@ -1,5 +1,6 @@
 package com.gurch.sandbox.requesttypes.internal;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.gurch.sandbox.audit.AuditLogApi;
 import com.gurch.sandbox.dto.PagedResponse;
 import com.gurch.sandbox.query.JoinType;
@@ -92,6 +93,7 @@ public class DefaultRequestTypeService implements RequestTypeApi {
   public ResolvedRequestTypeVersion createType(RequestTypeCommand command) {
     validateProcessDefinitionKey(command.getProcessDefinitionKey());
     validatePayloadHandlerId(command.getPayloadHandlerId());
+    validateConfigJson(command.getConfigJson());
 
     RequestTypeEntity type =
         requestTypeRepository.save(
@@ -109,6 +111,7 @@ public class DefaultRequestTypeService implements RequestTypeApi {
                 .typeVersion(1)
                 .payloadHandlerId(command.getPayloadHandlerId())
                 .processDefinitionKey(command.getProcessDefinitionKey())
+                .configJson(command.getConfigJson())
                 .build());
 
     RequestTypeEntity updatedType =
@@ -124,6 +127,7 @@ public class DefaultRequestTypeService implements RequestTypeApi {
   public ResolvedRequestTypeVersion changeType(String typeKey, RequestTypeCommand command) {
     validateProcessDefinitionKey(command.getProcessDefinitionKey());
     validatePayloadHandlerId(command.getPayloadHandlerId());
+    validateConfigJson(command.getConfigJson());
 
     RequestTypeEntity type =
         requestTypeRepository
@@ -150,6 +154,7 @@ public class DefaultRequestTypeService implements RequestTypeApi {
                 .typeVersion(previous.getTypeVersion() + 1)
                 .payloadHandlerId(command.getPayloadHandlerId())
                 .processDefinitionKey(command.getProcessDefinitionKey())
+                .configJson(command.getConfigJson())
                 .build());
     auditLogApi.recordCreate(REQUEST_TYPE_VERSIONS_RESOURCE_TYPE, newVersion.getId(), newVersion);
 
@@ -223,6 +228,108 @@ public class DefaultRequestTypeService implements RequestTypeApi {
         .version(version.getTypeVersion())
         .payloadHandlerId(version.getPayloadHandlerId())
         .processDefinitionKey(version.getProcessDefinitionKey())
+        .configJson(version.getConfigJson())
         .build();
+  }
+
+  private void validateConfigJson(JsonNode configJson) {
+    if (configJson == null || configJson.isNull()) {
+      return;
+    }
+    if (!configJson.isObject()) {
+      throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
+    }
+    JsonNode documentGeneration = configJson.path("documentGeneration");
+    if (!documentGeneration.isMissingNode() && !documentGeneration.isObject()) {
+      throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
+    }
+    JsonNode documents = documentGeneration.path("documents");
+    if (!documents.isMissingNode() && !documents.isArray()) {
+      throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
+    }
+    if (!documents.isArray()) {
+      return;
+    }
+    for (JsonNode document : documents) {
+      if (!document.isObject()) {
+        throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
+      }
+      JsonNode templateKey = document.path("templateKey");
+      if (!templateKey.isTextual() || templateKey.asText().isBlank()) {
+        throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
+      }
+      JsonNode fieldBindings = document.path("fieldBindings");
+      if (!fieldBindings.isObject()) {
+        throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
+      }
+      JsonNode required = document.path("required");
+      if (!required.isMissingNode() && !required.isBoolean()) {
+        throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
+      }
+      JsonNode enabled = document.path("enabled");
+      if (!enabled.isMissingNode() && !enabled.isBoolean()) {
+        throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
+      }
+      JsonNode tenantRules = document.path("tenantRules");
+      if (!tenantRules.isMissingNode() && !tenantRules.isArray()) {
+        throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
+      }
+      if (tenantRules.isArray()) {
+        for (JsonNode tenantRule : tenantRules) {
+          if (!tenantRule.isObject()) {
+            throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
+          }
+          JsonNode tenantId = tenantRule.path("tenantId");
+          if (!tenantId.canConvertToInt()) {
+            throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
+          }
+          JsonNode tenantRequired = tenantRule.path("required");
+          if (!tenantRequired.isMissingNode() && !tenantRequired.isBoolean()) {
+            throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
+          }
+          JsonNode tenantEnabled = tenantRule.path("enabled");
+          if (!tenantEnabled.isMissingNode() && !tenantEnabled.isBoolean()) {
+            throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
+          }
+        }
+      }
+      fieldBindings
+          .fields()
+          .forEachRemaining(
+              entry -> {
+                if (entry.getKey() == null || entry.getKey().isBlank()) {
+                  throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
+                }
+                JsonNode value = entry.getValue();
+                if (value.isTextual()) {
+                  if (value.asText().isBlank()) {
+                    throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
+                  }
+                  return;
+                }
+                if (!value.isObject()) {
+                  throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
+                }
+                JsonNode pathNode = value.path("path");
+                boolean hasPath = pathNode.isTextual() && !pathNode.asText().isBlank();
+                boolean hasResolver = value.path("resolver").isTextual();
+                boolean hasInputPath = value.path("inputPath").isTextual();
+                boolean hasOutputPath = value.path("outputPath").isTextual();
+                if (hasPath) {
+                  if (hasResolver || hasInputPath || hasOutputPath) {
+                    throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
+                  }
+                  return;
+                }
+                if (!hasResolver || !hasInputPath || !hasOutputPath) {
+                  throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
+                }
+                if (value.path("resolver").asText().isBlank()
+                    || value.path("inputPath").asText().isBlank()
+                    || value.path("outputPath").asText().isBlank()) {
+                  throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_CONFIG_JSON);
+                }
+              });
+    }
   }
 }

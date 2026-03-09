@@ -1,5 +1,6 @@
-package com.gurch.sandbox.forms;
+package com.gurch.sandbox.documenttemplates;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import lombok.Builder;
@@ -12,6 +13,11 @@ import lombok.Value;
 public class DocumentTemplateResponse {
   @Schema(description = "Unique identifier of the file", example = "123")
   Long id;
+
+  @Schema(
+      description = "Optional stable template key used for request-driven document generation",
+      example = "loan-cover-letter")
+  String templateKey;
 
   @Schema(description = "Display name for the file", example = "Client Intake Form.pdf")
   String name;
@@ -28,8 +34,18 @@ public class DocumentTemplateResponse {
   @Schema(description = "SHA-256 checksum of uploaded content")
   String checksumSha256;
 
-  @Schema(description = "Document type classification")
-  DocumentTemplateType documentType;
+  @Schema(
+      description = "Optional tenant identifier. Null indicates a global template",
+      example = "1")
+  Integer tenantId;
+
+  @Schema(
+      description =
+          "Parsed form map with fields, field types, and possible values for selectable controls")
+  JsonNode formMap;
+
+  @Schema(description = "Whether this template includes configured e-signature anchors")
+  boolean esignable;
 
   @Schema(description = "Timestamp when this record was created")
   Instant createdAt;

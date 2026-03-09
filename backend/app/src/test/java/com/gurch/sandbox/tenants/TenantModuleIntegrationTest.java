@@ -19,6 +19,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -27,9 +28,11 @@ class TenantModuleIntegrationTest extends AbstractJdbcIntegrationTest {
   @Autowired private MockMvc mockMvc;
   @Autowired private ObjectMapper objectMapper;
   @Autowired private TenantRepository tenantRepository;
+  @Autowired private JdbcTemplate jdbcTemplate;
 
   @BeforeEach
   void setUp() {
+    jdbcTemplate.update("DELETE FROM document_templates");
     tenantRepository.deleteAll();
   }
 
