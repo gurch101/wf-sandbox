@@ -3,6 +3,7 @@ package com.gurch.sandbox.documenttemplates;
 import com.gurch.sandbox.dto.CreateResponse;
 import com.gurch.sandbox.dto.PagedResponse;
 import com.gurch.sandbox.idempotency.NotIdempotent;
+import com.gurch.sandbox.web.ApiErrorEnum;
 import com.gurch.sandbox.web.NotFoundException;
 import java.io.InputStream;
 import lombok.RequiredArgsConstructor;
@@ -60,6 +61,7 @@ public class DocumentTemplateController {
 
   @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   @NotIdempotent
+  @ApiErrorEnum({DocumentTemplateErrorCode.class})
   public DocumentTemplateResponse update(
       @PathVariable Long id,
       @RequestPart(value = "file", required = false) MultipartFile file,

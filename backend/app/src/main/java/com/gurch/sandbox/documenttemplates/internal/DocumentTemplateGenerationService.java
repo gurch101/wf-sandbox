@@ -14,7 +14,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.io.IOUtils;
@@ -359,23 +358,6 @@ public class DocumentTemplateGenerationService {
         || normalized.equals("1")
         || normalized.equals("yes")
         || normalized.equals("on");
-  }
-
-  @Getter
-  public static final class TemplateRenderSource {
-    private final String mimeType;
-    private final byte[] content;
-    private final Map<String, Object> fields;
-
-    public TemplateRenderSource(String mimeType, byte[] content, Map<String, Object> fields) {
-      this.mimeType = mimeType;
-      this.content = content == null ? new byte[0] : content.clone();
-      this.fields = fields == null ? Map.of() : Map.copyOf(fields);
-    }
-
-    public byte[] getContent() {
-      return content.clone();
-    }
   }
 
   private record ColumnSpec(String key, String label, String alignment) {}
