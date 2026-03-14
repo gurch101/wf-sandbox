@@ -1,15 +1,18 @@
 package com.gurch.sandbox;
 
+import com.gurch.sandbox.audit.internal.AuditLogEventEntity;
+import com.gurch.sandbox.audit.internal.AuditLogEventRepository;
 import com.gurch.sandbox.security.CurrentUserProvider;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.StreamSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
@@ -20,7 +23,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 public abstract class AbstractJdbcIntegrationTest {
   // Shared Spring Boot + Testcontainers context for integration tests.
 
-  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired protected AuditLogEventRepository auditLogEventRepository;
   @MockitoBean protected CurrentUserProvider currentUserProvider;
 
   @BeforeEach
@@ -30,16 +33,14 @@ public abstract class AbstractJdbcIntegrationTest {
   }
 
   protected List<String> auditActionsFor(String resourceType, String resourceId) {
-    return jdbcTemplate.queryForList(
-        """
-        SELECT action
-        FROM audit_log_events
-        WHERE resource_type = ?
-          AND resource_id = ?
-        ORDER BY created_at DESC, id DESC
-        """,
-        String.class,
-        resourceType,
-        resourceId);
+    return StreamSupport.stream(auditLogEventRepository.findAll().spliterator(), false)
+        .filter(event -> resourceType.equals(event.getResourceType()))
+        .filter(event -> resourceId.equals(event.getResourceId()))
+        .sorted(
+            Comparator.comparing(AuditLogEventEntity::getCreatedAt)
+                .thenComparing(AuditLogEventEntity::getId)
+                .reversed())
+        .map(event -> event.getAction().name())
+        .toList();
   }
 }
