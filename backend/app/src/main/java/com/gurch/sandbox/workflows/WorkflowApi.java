@@ -14,6 +14,15 @@ public interface WorkflowApi {
   boolean processDefinitionExists(String processDefinitionKey);
 
   /**
+   * Deploys a BPMN model and returns the deployed process definition key.
+   *
+   * @param resourceName deployment resource name
+   * @param bpmnXml BPMN XML content
+   * @return deployed process definition key
+   */
+  String deployBpmnModel(String resourceName, String bpmnXml);
+
+  /**
    * Searches deployed process definitions by optional key pattern.
    *
    * @param criteria search criteria

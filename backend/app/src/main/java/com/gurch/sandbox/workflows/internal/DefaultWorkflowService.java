@@ -7,6 +7,7 @@ import com.gurch.sandbox.workflows.WorkflowSearchCriteria;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.finos.fluxnova.bpm.engine.RepositoryService;
+import org.finos.fluxnova.bpm.engine.repository.Deployment;
 import org.finos.fluxnova.bpm.engine.repository.ProcessDefinitionQuery;
 import org.springframework.stereotype.Service;
 
@@ -24,6 +25,21 @@ public class DefaultWorkflowService implements WorkflowApi {
             .latestVersion()
             .count()
         > 0;
+  }
+
+  @Override
+  public String deployBpmnModel(String resourceName, String bpmnXml) {
+    Deployment deployment =
+        repositoryService
+            .createDeployment()
+            .name(resourceName)
+            .addString(resourceName, bpmnXml)
+            .deploy();
+    return repositoryService
+        .createProcessDefinitionQuery()
+        .deploymentId(deployment.getId())
+        .singleResult()
+        .getKey();
   }
 
   @Override

@@ -52,6 +52,15 @@ public class RequestTypeController {
             .build());
   }
 
+  @PostMapping("/{typeKey}/versions/{version}/workflow-model")
+  @ApiErrorEnum({RequestTypeErrorCode.class})
+  public ResolvedRequestTypeVersion publishWorkflowModel(
+      @PathVariable String typeKey,
+      @PathVariable Integer version,
+      @Valid @RequestBody RequestTypeDtos.PublishWorkflowModelRequest req) {
+    return requestTypeApi.publishWorkflowModel(typeKey, version, req.getBpmnXml());
+  }
+
   @GetMapping("/search")
   public PagedResponse<RequestTypeSearchResponse> search(RequestTypeSearchCriteria criteria) {
     return requestTypeApi.search(criteria);

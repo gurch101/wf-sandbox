@@ -22,7 +22,6 @@ public interface RequestTypeDtos {
     @NotBlank(message = "payloadHandlerId is required")
     String payloadHandlerId;
 
-    @NotBlank(message = "processDefinitionKey is required")
     String processDefinitionKey;
   }
 
@@ -38,7 +37,14 @@ public interface RequestTypeDtos {
     @NotBlank(message = "payloadHandlerId is required")
     String payloadHandlerId;
 
-    @NotBlank(message = "processDefinitionKey is required")
     String processDefinitionKey;
+  }
+
+  /** Request body for publishing a BPMN workflow model for an existing request type version. */
+  @Value
+  @Schema(description = "Publish BPMN workflow model for a request type version")
+  class PublishWorkflowModelRequest {
+    @NotBlank(message = "bpmnXml is required")
+    String bpmnXml;
   }
 }
