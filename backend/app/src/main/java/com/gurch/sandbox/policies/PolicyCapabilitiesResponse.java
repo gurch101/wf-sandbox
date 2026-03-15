@@ -48,8 +48,7 @@ public record PolicyCapabilitiesResponse(
     operatorsByType = immutableOperatorsByType(operatorsByType);
     assignmentStrategies = List.copyOf(Objects.requireNonNull(assignmentStrategies));
     assignmentModes = List.copyOf(Objects.requireNonNull(assignmentModes));
-    availableEscalationPolicies =
-        List.copyOf(Objects.requireNonNull(availableEscalationPolicies));
+    availableEscalationPolicies = List.copyOf(Objects.requireNonNull(availableEscalationPolicies));
     reasonCodeCatalog = List.copyOf(Objects.requireNonNull(reasonCodeCatalog));
     Objects.requireNonNull(validationLimits, "validationLimits is required");
     supportedHitPolicies = List.copyOf(Objects.requireNonNull(supportedHitPolicies));
@@ -175,15 +174,29 @@ public record PolicyCapabilitiesResponse(
       @Schema(description = "Maximum rules allowed in one rule set", example = "500")
           int maxRulesPerSet) {}
 
-  /** One escalation policy catalog option exposed to the admin UI. */
+  /**
+   * One escalation policy catalog option exposed to the admin UI.
+   *
+   * @param key stable escalation policy key
+   * @param label human-readable escalation policy label
+   */
   @Schema(description = "Escalation policy catalog option")
   public record EscalationPolicyOption(
-      @Schema(description = "Stable escalation policy key", example = "sla-breach-manager-escalation")
+      @Schema(
+              description = "Stable escalation policy key",
+              example = "sla-breach-manager-escalation")
           String key,
-      @Schema(description = "Human-readable escalation policy label", example = "Manager escalation on SLA breach")
+      @Schema(
+              description = "Human-readable escalation policy label",
+              example = "Manager escalation on SLA breach")
           String label) {}
 
-  /** One reason code catalog option exposed to the admin UI. */
+  /**
+   * One reason code catalog option exposed to the admin UI.
+   *
+   * @param code stable reason code value
+   * @param label human-readable reason code label
+   */
   @Schema(description = "Reason code catalog option")
   public record ReasonCodeOption(
       @Schema(description = "Stable reason code value", example = "HIGH_RISK_AMOUNT") String code,

@@ -27,16 +27,14 @@ public class DefaultPolicyAdminService implements PolicyAdminApi {
   private static final List<String> ASSIGNMENT_MODES =
       List.of("CANDIDATE_USERS", "CANDIDATE_GROUPS", "DIRECT_ASSIGNEE", "UNASSIGNED");
 
-  private static final List<PolicyCapabilitiesResponse.EscalationPolicyOption>
-      ESCALATION_POLICIES =
-          List.of(
-              new PolicyCapabilitiesResponse.EscalationPolicyOption(
-                  "sla-breach-manager-escalation", "Manager escalation on SLA breach"));
+  private static final List<PolicyCapabilitiesResponse.EscalationPolicyOption> ESCALATION_POLICIES =
+      List.of(
+          new PolicyCapabilitiesResponse.EscalationPolicyOption(
+              "sla-breach-manager-escalation", "Manager escalation on SLA breach"));
 
   private static final List<PolicyCapabilitiesResponse.ReasonCodeOption> REASON_CODE_CATALOG =
       List.of(
-          new PolicyCapabilitiesResponse.ReasonCodeOption(
-              "HIGH_RISK_AMOUNT", "High risk amount"),
+          new PolicyCapabilitiesResponse.ReasonCodeOption("HIGH_RISK_AMOUNT", "High risk amount"),
           new PolicyCapabilitiesResponse.ReasonCodeOption(
               "MANUAL_REVIEW_REQUIRED", "Manual review required"));
 

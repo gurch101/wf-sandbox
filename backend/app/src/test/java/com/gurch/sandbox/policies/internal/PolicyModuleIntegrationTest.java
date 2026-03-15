@@ -130,12 +130,12 @@ class PolicyModuleIntegrationTest extends AbstractJdbcIntegrationTest {
         .andExpect(jsonPath("$.assignmentStrategies[2]").value("BEST_USER_STUB"))
         .andExpect(jsonPath("$.assignmentModes[1]").value("CANDIDATE_GROUPS"))
         .andExpect(
-            jsonPath("$.availableEscalationPolicies[0].key")
-                .value("sla-breach-manager-escalation"))
+            jsonPath("$.availableEscalationPolicies[0].key").value("sla-breach-manager-escalation"))
         .andExpect(jsonPath("$.reasonCodeCatalog[0].code").value("HIGH_RISK_AMOUNT"))
         .andExpect(jsonPath("$.supportedHitPolicies[0]").value("FIRST"))
         .andExpect(jsonPath("$.validationLimits.maxTreeDepth").value(5))
-        .andExpect(jsonPath("$.outputSchema.executionTypes.HUMAN.then.taskPlan.required").value(true))
+        .andExpect(
+            jsonPath("$.outputSchema.executionTypes.HUMAN.then.taskPlan.required").value(true))
         .andExpect(
             jsonPath(
                     "$.outputSchema.executionTypes.HUMAN.then.taskPlan.properties.tasks.items.requiredProperties[0]")
@@ -188,7 +188,8 @@ class PolicyModuleIntegrationTest extends AbstractJdbcIntegrationTest {
         .andExpect(jsonPath("$.requestTypeId").value(requestTypeId))
         .andExpect(jsonPath("$.resolvedVersion").value(5))
         .andExpect(jsonPath("$.assignmentModes[0]").value("CANDIDATE_USERS"))
-        .andExpect(jsonPath("$.outputSchema.executionTypes.HUMAN.then.taskPlan.type").value("object"));
+        .andExpect(
+            jsonPath("$.outputSchema.executionTypes.HUMAN.then.taskPlan.type").value("object"));
   }
 
   @Test
