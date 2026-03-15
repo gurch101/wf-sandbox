@@ -52,6 +52,27 @@ class RequestTypeModuleIntegrationTest extends AbstractJdbcIntegrationTest {
   }
 
   @Test
+  void shouldReturnModelerCapabilitiesForRequestTypeVersion() throws Exception {
+    createType("loan", "Loan", "amount-positive", "requestTypeV1Process");
+
+    mockMvc
+        .perform(
+            get(
+                "/api/internal/request-types/{typeKey}/versions/{version}/modeler-capabilities",
+                "loan",
+                1))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.typeKey").value("loan"))
+        .andExpect(jsonPath("$.version").value(1))
+        .andExpect(jsonPath("$.inputs.payloadFields[0].key").value("request.amount"))
+        .andExpect(jsonPath("$.inputs.payloadFields[0].type").value("NUMBER"))
+        .andExpect(
+            jsonPath("$.inputs.workflowFields[0].key").value("workflow.lastCompletedTaskKey"))
+        .andExpect(jsonPath("$.assignmentModes[0]").value("CANDIDATE_USERS"))
+        .andExpect(jsonPath("$.availableEscalationHandlers[0]").value("OPS_REROUTE"));
+  }
+
+  @Test
   void shouldDeleteUnusedRequestTypeAndRejectDeleteWhenInUse() throws Exception {
     createType("unused", "Unused", "noop", "requestTypeV2Process");
     createType("loan", "Loan", "amount-positive", "requestTypeV1Process");

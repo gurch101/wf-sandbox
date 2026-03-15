@@ -9,4 +9,12 @@ public interface PayloadHandlerCatalog {
    * @return whether the handler exists
    */
   boolean exists(String handlerId);
+
+  /**
+   * Returns the typed payload class for a registered handler.
+   *
+   * @param handlerId stable handler identifier
+   * @return typed payload class
+   */
+  Class<?> payloadType(String handlerId);
 }
