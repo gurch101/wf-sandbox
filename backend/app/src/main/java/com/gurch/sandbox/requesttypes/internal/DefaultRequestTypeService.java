@@ -9,6 +9,8 @@ import com.gurch.sandbox.requesttypes.PayloadHandlerCatalog;
 import com.gurch.sandbox.requesttypes.RequestTypeApi;
 import com.gurch.sandbox.requesttypes.RequestTypeCommand;
 import com.gurch.sandbox.requesttypes.RequestTypeErrorCode;
+import com.gurch.sandbox.requesttypes.RequestTypeModelerCapabilitiesApi;
+import com.gurch.sandbox.requesttypes.RequestTypeModelerCapabilitiesResponse.ModelerInputField;
 import com.gurch.sandbox.requesttypes.RequestTypeResolutionErrorCode;
 import com.gurch.sandbox.requesttypes.RequestTypeSearchCriteria;
 import com.gurch.sandbox.requesttypes.RequestTypeSearchResponse;
@@ -16,11 +18,28 @@ import com.gurch.sandbox.requesttypes.ResolvedRequestTypeVersion;
 import com.gurch.sandbox.search.SearchExecutor;
 import com.gurch.sandbox.web.ValidationErrorException;
 import com.gurch.sandbox.workflows.WorkflowApi;
+import java.io.IOException;
+import java.io.StringReader;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.NodeList;
+import org.xml.sax.InputSource;
+import org.xml.sax.SAXException;
 
 @Service
 @RequiredArgsConstructor
@@ -28,12 +47,17 @@ public class DefaultRequestTypeService implements RequestTypeApi {
 
   private static final String REQUEST_TYPES_RESOURCE_TYPE = "request_types";
   private static final String REQUEST_TYPE_VERSIONS_RESOURCE_TYPE = "request_type_versions";
+  private static final String SEQUENCE_FLOW_CONDITION_REFERENCE_KIND = "SEQUENCE_FLOW_CONDITION";
+  private static final Pattern FIELD_REFERENCE_PATTERN =
+      Pattern.compile("(request|computed|workflow)\\.[A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)*");
 
   private final RequestTypeRepository requestTypeRepository;
   private final RequestTypeVersionRepository versionRepository;
   private final NamedParameterJdbcTemplate jdbcTemplate;
   private final WorkflowApi workflowApi;
   private final PayloadHandlerCatalog payloadHandlerCatalog;
+  private final RequestTypeModelerCapabilitiesApi requestTypeModelerCapabilitiesApi;
+  private final WorkflowModelInputReferenceRepository workflowModelInputReferenceRepository;
   private final SearchExecutor searchExecutor;
   private final AuditLogApi auditLogApi;
 
@@ -168,6 +192,55 @@ public class DefaultRequestTypeService implements RequestTypeApi {
   }
 
   @Override
+  @Transactional
+  public ResolvedRequestTypeVersion publishWorkflowModel(
+      String typeKey, Integer version, String bpmnXml) {
+    RequestTypeEntity type =
+        requestTypeRepository
+            .findByTypeKey(typeKey)
+            .orElseThrow(
+                () -> ValidationErrorException.of(RequestTypeErrorCode.REQUEST_TYPE_NOT_FOUND));
+
+    RequestTypeVersionEntity requestTypeVersion =
+        versionRepository
+            .findByRequestTypeIdAndTypeVersion(type.getId(), version)
+            .orElseThrow(
+                () -> ValidationErrorException.of(RequestTypeErrorCode.REQUEST_TYPE_NOT_FOUND));
+
+    CompiledWorkflowModel compiledWorkflowModel = validateWorkflowModel(typeKey, version, bpmnXml);
+    String processDefinitionKey;
+    try {
+      processDefinitionKey =
+          workflowApi.deployBpmnModel(typeKey + "-v" + version + ".bpmn", bpmnXml);
+    } catch (Exception ex) {
+      throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_WORKFLOW_MODEL);
+    }
+
+    RequestTypeVersionEntity updatedVersion =
+        versionRepository.save(
+            requestTypeVersion.toBuilder().processDefinitionKey(processDefinitionKey).build());
+    workflowModelInputReferenceRepository.deleteByRequestTypeVersionId(requestTypeVersion.getId());
+    workflowModelInputReferenceRepository.saveAll(
+        compiledWorkflowModel.inputReferences().stream()
+            .map(
+                reference ->
+                    WorkflowModelInputReferenceEntity.builder()
+                        .requestTypeVersionId(requestTypeVersion.getId())
+                        .processDefinitionKey(processDefinitionKey)
+                        .bpmnElementId(reference.bpmnElementId())
+                        .referenceKind(reference.referenceKind())
+                        .inputKey(reference.inputKey())
+                        .build())
+            .toList());
+    auditLogApi.recordUpdate(
+        REQUEST_TYPE_VERSIONS_RESOURCE_TYPE,
+        updatedVersion.getId(),
+        requestTypeVersion,
+        updatedVersion);
+    return toResolved(typeKey, updatedVersion);
+  }
+
+  @Override
   @Transactional(readOnly = true)
   public PagedResponse<RequestTypeSearchResponse> search(RequestTypeSearchCriteria criteria) {
     SQLQueryBuilder builder =
@@ -206,7 +279,8 @@ public class DefaultRequestTypeService implements RequestTypeApi {
   }
 
   private void validateProcessDefinitionKey(String processDefinitionKey) {
-    if (!workflowApi.processDefinitionExists(processDefinitionKey)) {
+    if (StringUtils.hasText(processDefinitionKey)
+        && !workflowApi.processDefinitionExists(processDefinitionKey)) {
       throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_PROCESS_DEFINITION_KEY);
     }
   }
@@ -225,4 +299,87 @@ public class DefaultRequestTypeService implements RequestTypeApi {
         .processDefinitionKey(version.getProcessDefinitionKey())
         .build();
   }
+
+  private CompiledWorkflowModel validateWorkflowModel(
+      String typeKey, Integer version, String bpmnXml) {
+    try {
+      Set<String> allowedFields = new HashSet<>();
+      for (ModelerInputField field :
+          requestTypeModelerCapabilitiesApi
+              .getCapabilities(typeKey, version)
+              .inputs()
+              .payloadFields()) {
+        allowedFields.add(field.key());
+      }
+      for (ModelerInputField field :
+          requestTypeModelerCapabilitiesApi
+              .getCapabilities(typeKey, version)
+              .inputs()
+              .computedFields()) {
+        allowedFields.add(field.key());
+      }
+      for (ModelerInputField field :
+          requestTypeModelerCapabilitiesApi
+              .getCapabilities(typeKey, version)
+              .inputs()
+              .workflowFields()) {
+        allowedFields.add(field.key());
+      }
+
+      DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+      factory.setNamespaceAware(true);
+      Document document =
+          factory.newDocumentBuilder().parse(new InputSource(new StringReader(bpmnXml)));
+
+      NodeList processes = document.getElementsByTagNameNS("*", "process");
+      if (processes.getLength() == 0
+          || !StringUtils.hasText(
+              processes.item(0).getAttributes().getNamedItem("id").getNodeValue())) {
+        throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_WORKFLOW_MODEL);
+      }
+
+      List<CompiledInputReference> inputReferences = new ArrayList<>();
+      NodeList sequenceFlows = document.getElementsByTagNameNS("*", "sequenceFlow");
+      for (int i = 0; i < sequenceFlows.getLength(); i++) {
+        Element sequenceFlow = (Element) sequenceFlows.item(i);
+        NodeList conditions = sequenceFlow.getElementsByTagNameNS("*", "conditionExpression");
+        if (conditions.getLength() == 0) {
+          continue;
+        }
+
+        String bpmnElementId = sequenceFlow.getAttribute("id");
+        if (!StringUtils.hasText(bpmnElementId)) {
+          throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_WORKFLOW_MODEL);
+        }
+
+        Set<String> elementReferences = new LinkedHashSet<>();
+        for (int j = 0; j < conditions.getLength(); j++) {
+          Matcher matcher = FIELD_REFERENCE_PATTERN.matcher(conditions.item(j).getTextContent());
+          while (matcher.find()) {
+            String inputKey = matcher.group();
+            if (!allowedFields.contains(inputKey)) {
+              throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_WORKFLOW_MODEL);
+            }
+            elementReferences.add(inputKey);
+          }
+        }
+
+        for (String inputKey : elementReferences) {
+          inputReferences.add(
+              new CompiledInputReference(
+                  bpmnElementId, SEQUENCE_FLOW_CONDITION_REFERENCE_KIND, inputKey));
+        }
+      }
+      return new CompiledWorkflowModel(inputReferences);
+    } catch (ValidationErrorException ex) {
+      throw ex;
+    } catch (IOException | ParserConfigurationException | SAXException ex) {
+      throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_WORKFLOW_MODEL);
+    }
+  }
+
+  private record CompiledWorkflowModel(List<CompiledInputReference> inputReferences) {}
+
+  private record CompiledInputReference(
+      String bpmnElementId, String referenceKind, String inputKey) {}
 }

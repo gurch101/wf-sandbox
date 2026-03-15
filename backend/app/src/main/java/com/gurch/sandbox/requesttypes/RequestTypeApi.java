@@ -40,6 +40,17 @@ public interface RequestTypeApi {
   ResolvedRequestTypeVersion changeType(String typeKey, RequestTypeCommand command);
 
   /**
+   * Publishes a BPMN workflow model for the provided request type version and binds the deployed
+   * process definition key to that version.
+   *
+   * @param typeKey request type key
+   * @param version immutable request type version
+   * @param bpmnXml BPMN XML to validate and deploy
+   * @return updated resolved request type version
+   */
+  ResolvedRequestTypeVersion publishWorkflowModel(String typeKey, Integer version, String bpmnXml);
+
+  /**
    * Searches request types with optional filters.
    *
    * @param criteria search criteria
