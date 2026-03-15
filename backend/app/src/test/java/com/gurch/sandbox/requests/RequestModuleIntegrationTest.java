@@ -11,7 +11,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gurch.sandbox.AbstractJdbcIntegrationTest;
-import com.gurch.sandbox.audit.internal.AuditLogEventEntity;
 import com.gurch.sandbox.dto.CreateResponse;
 import com.gurch.sandbox.requests.internal.RequestEntity;
 import com.gurch.sandbox.requests.internal.RequestRepository;
@@ -23,17 +22,16 @@ import com.gurch.sandbox.requesttypes.RequestTypeDtos;
 import com.gurch.sandbox.requesttypes.internal.RequestTypeRepository;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.stream.StreamSupport;
 import org.finos.fluxnova.bpm.engine.ExternalTaskService;
 import org.finos.fluxnova.bpm.engine.externaltask.LockedExternalTask;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -45,6 +43,7 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
   @Autowired private RequestTaskRepository requestTaskRepository;
   @Autowired private ExternalTaskService externalTaskService;
   @Autowired private RequestTypeRepository requestTypeRepository;
+  @Autowired private JdbcTemplate jdbcTemplate;
 
   @BeforeEach
   void setUp() {
@@ -324,16 +323,17 @@ class RequestModuleIntegrationTest extends AbstractJdbcIntegrationTest {
             .readValue(result.getResponse().getContentAsString(), CreateResponse.class)
             .getId();
     String correlationId =
-        StreamSupport.stream(auditLogEventRepository.findAll().spliterator(), false)
-            .filter(event -> "requests".equals(event.getResourceType()))
-            .filter(event -> requestId.toString().equals(event.getResourceId()))
-            .sorted(
-                Comparator.comparing(AuditLogEventEntity::getCreatedAt)
-                    .thenComparing(AuditLogEventEntity::getId)
-                    .reversed())
-            .map(AuditLogEventEntity::getCorrelationId)
-            .findFirst()
-            .orElseThrow();
+        jdbcTemplate.queryForObject(
+            """
+            SELECT correlation_id
+            FROM audit_log_events
+            WHERE resource_type = 'requests'
+              AND resource_id = ?
+            ORDER BY created_at DESC, id DESC
+            LIMIT 1
+            """,
+            String.class,
+            requestId.toString());
 
     assertThat(correlationId).isEqualTo(idempotencyKey);
   }
