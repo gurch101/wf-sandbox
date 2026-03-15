@@ -16,6 +16,9 @@ import java.util.Objects;
  * @param operatorsByType supported operators by field data type
  * @param outputSchema required output contract schema
  * @param assignmentStrategies supported assignment strategy values
+ * @param assignmentModes supported task-level assignment mode values
+ * @param availableEscalationPolicies supported escalation policy catalog entries
+ * @param reasonCodeCatalog supported task reason code catalog entries
  * @param validationLimits validation constraints for condition trees and rule sets
  * @param supportedHitPolicies supported DMN/rule hit policy values
  */
@@ -29,6 +32,12 @@ public record PolicyCapabilitiesResponse(
     @Schema(description = "Required output schema for policy then/outcome mappings")
         JsonNode outputSchema,
     @Schema(description = "Supported assignment strategy values") List<String> assignmentStrategies,
+    @Schema(description = "Supported task-level assignment mode values")
+        List<String> assignmentModes,
+    @Schema(description = "Supported escalation policy catalog entries")
+        List<EscalationPolicyOption> availableEscalationPolicies,
+    @Schema(description = "Supported task reason code catalog entries")
+        List<ReasonCodeOption> reasonCodeCatalog,
     @Schema(description = "Rule validation limits") ValidationLimits validationLimits,
     @Schema(description = "Supported rule set hit policies")
         List<PolicyHitPolicy> supportedHitPolicies) {
@@ -38,6 +47,10 @@ public record PolicyCapabilitiesResponse(
     Objects.requireNonNull(inputs, "inputs is required");
     operatorsByType = immutableOperatorsByType(operatorsByType);
     assignmentStrategies = List.copyOf(Objects.requireNonNull(assignmentStrategies));
+    assignmentModes = List.copyOf(Objects.requireNonNull(assignmentModes));
+    availableEscalationPolicies =
+        List.copyOf(Objects.requireNonNull(availableEscalationPolicies));
+    reasonCodeCatalog = List.copyOf(Objects.requireNonNull(reasonCodeCatalog));
     Objects.requireNonNull(validationLimits, "validationLimits is required");
     supportedHitPolicies = List.copyOf(Objects.requireNonNull(supportedHitPolicies));
   }
@@ -50,6 +63,21 @@ public record PolicyCapabilitiesResponse(
   @Override
   public List<String> assignmentStrategies() {
     return List.copyOf(assignmentStrategies);
+  }
+
+  @Override
+  public List<String> assignmentModes() {
+    return List.copyOf(assignmentModes);
+  }
+
+  @Override
+  public List<EscalationPolicyOption> availableEscalationPolicies() {
+    return List.copyOf(availableEscalationPolicies);
+  }
+
+  @Override
+  public List<ReasonCodeOption> reasonCodeCatalog() {
+    return List.copyOf(reasonCodeCatalog);
   }
 
   @Override
@@ -146,6 +174,21 @@ public record PolicyCapabilitiesResponse(
       @Schema(description = "Maximum total nodes per rule", example = "100") int maxNodesPerRule,
       @Schema(description = "Maximum rules allowed in one rule set", example = "500")
           int maxRulesPerSet) {}
+
+  /** One escalation policy catalog option exposed to the admin UI. */
+  @Schema(description = "Escalation policy catalog option")
+  public record EscalationPolicyOption(
+      @Schema(description = "Stable escalation policy key", example = "sla-breach-manager-escalation")
+          String key,
+      @Schema(description = "Human-readable escalation policy label", example = "Manager escalation on SLA breach")
+          String label) {}
+
+  /** One reason code catalog option exposed to the admin UI. */
+  @Schema(description = "Reason code catalog option")
+  public record ReasonCodeOption(
+      @Schema(description = "Stable reason code value", example = "HIGH_RISK_AMOUNT") String code,
+      @Schema(description = "Human-readable reason code label", example = "High risk amount")
+          String label) {}
 
   private static Map<String, List<String>> immutableOperatorsByType(
       Map<String, List<String>> operatorsByType) {

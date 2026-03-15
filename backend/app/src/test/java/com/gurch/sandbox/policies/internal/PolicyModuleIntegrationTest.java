@@ -10,7 +10,6 @@ import com.gurch.sandbox.AbstractJdbcIntegrationTest;
 import com.gurch.sandbox.policies.PolicyInputFieldDataType;
 import com.gurch.sandbox.requesttypes.internal.RequestTypeEntity;
 import com.gurch.sandbox.requesttypes.internal.RequestTypeRepository;
-import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -65,12 +64,58 @@ class PolicyModuleIntegrationTest extends AbstractJdbcIntegrationTest {
         objectMapper.readTree("[\"BROKERAGE\"]"));
     insertOutputContract(
         policyVersionId,
-        objectMapper.valueToTree(
-            Map.of(
-                "executionType",
-                "HUMAN|COMPLETE",
-                "then",
-                Map.of("taskPlanPatch", Map.of("stages", "array"), "assignmentHints", "object"))));
+        objectMapper.readTree(
+            """
+            {
+              "executionTypes": {
+                "HUMAN": {
+                  "then": {
+                    "taskPlan": {
+                      "type": "object",
+                      "required": true,
+                      "properties": {
+                        "tasks": {
+                          "type": "array",
+                          "required": true,
+                          "minItems": 1,
+                          "items": {
+                            "type": "object",
+                            "requiredProperties": ["taskKey", "name"],
+                            "properties": {
+                              "taskKey": {"type": "string", "required": true},
+                              "name": {"type": "string", "required": true},
+                              "assignmentMode": {
+                                "type": "string",
+                                "required": false,
+                                "enum": [
+                                  "CANDIDATE_USERS",
+                                  "CANDIDATE_GROUPS",
+                                  "DIRECT_ASSIGNEE",
+                                  "UNASSIGNED"
+                                ]
+                              },
+                              "escalationPolicyKey": {"type": "string", "required": false},
+                              "reasonCodes": {
+                                "type": "array",
+                                "required": false,
+                                "items": {"type": "string"}
+                              }
+                            },
+                            "crossFieldRules": [
+                              "If assignmentMode=CANDIDATE_GROUPS then candidateGroups must be non-empty"
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "COMPLETE": {
+                  "then": {}
+                }
+              }
+            }
+            """));
 
     mockMvc
         .perform(get("/api/admin/policies/{policyId}/capabilities", policyVersionId))
@@ -83,9 +128,22 @@ class PolicyModuleIntegrationTest extends AbstractJdbcIntegrationTest {
             jsonPath("$.inputs.computableFields[0].providerKey").value("account-profile-provider"))
         .andExpect(jsonPath("$.operatorsByType.NUMBER[0]").value("EQ"))
         .andExpect(jsonPath("$.assignmentStrategies[2]").value("BEST_USER_STUB"))
+        .andExpect(jsonPath("$.assignmentModes[1]").value("CANDIDATE_GROUPS"))
+        .andExpect(
+            jsonPath("$.availableEscalationPolicies[0].key")
+                .value("sla-breach-manager-escalation"))
+        .andExpect(jsonPath("$.reasonCodeCatalog[0].code").value("HIGH_RISK_AMOUNT"))
         .andExpect(jsonPath("$.supportedHitPolicies[0]").value("FIRST"))
         .andExpect(jsonPath("$.validationLimits.maxTreeDepth").value(5))
-        .andExpect(jsonPath("$.outputSchema.executionType").value("HUMAN|COMPLETE"));
+        .andExpect(jsonPath("$.outputSchema.executionTypes.HUMAN.then.taskPlan.required").value(true))
+        .andExpect(
+            jsonPath(
+                    "$.outputSchema.executionTypes.HUMAN.then.taskPlan.properties.tasks.items.requiredProperties[0]")
+                .value("taskKey"))
+        .andExpect(
+            jsonPath(
+                    "$.outputSchema.executionTypes.HUMAN.then.taskPlan.properties.tasks.items.properties.name.required")
+                .value(true));
   }
 
   @Test
@@ -106,14 +164,31 @@ class PolicyModuleIntegrationTest extends AbstractJdbcIntegrationTest {
         objectMapper.nullNode(),
         null,
         objectMapper.readTree("[\"ACC-2\"]"));
-    insertOutputContract(publishedPolicy, objectMapper.readTree("{\"executionType\":\"HUMAN\"}"));
+    insertOutputContract(
+        publishedPolicy,
+        objectMapper.readTree(
+            """
+            {
+              "executionTypes": {
+                "HUMAN": {
+                  "then": {
+                    "taskPlan": {
+                      "type": "object",
+                      "required": true
+                    }
+                  }
+                }
+              }
+            }
+            """));
 
     mockMvc
         .perform(get("/api/admin/policies/{policyId}/capabilities", publishedPolicy))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.requestTypeId").value(requestTypeId))
         .andExpect(jsonPath("$.resolvedVersion").value(5))
-        .andExpect(jsonPath("$.outputSchema.executionType").value("HUMAN"));
+        .andExpect(jsonPath("$.assignmentModes[0]").value("CANDIDATE_USERS"))
+        .andExpect(jsonPath("$.outputSchema.executionTypes.HUMAN.then.taskPlan.type").value("object"));
   }
 
   @Test
