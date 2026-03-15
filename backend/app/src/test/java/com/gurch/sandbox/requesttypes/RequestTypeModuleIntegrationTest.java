@@ -14,7 +14,6 @@ import com.gurch.sandbox.AbstractJdbcIntegrationTest;
 import com.gurch.sandbox.dto.CreateResponse;
 import com.gurch.sandbox.requests.RequestDtos;
 import com.gurch.sandbox.requests.internal.RequestRepository;
-import com.gurch.sandbox.requesttypes.internal.RequestTypeEntity;
 import com.gurch.sandbox.requesttypes.internal.RequestTypeRepository;
 import java.util.Map;
 import java.util.UUID;
@@ -22,6 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -31,6 +31,7 @@ class RequestTypeModuleIntegrationTest extends AbstractJdbcIntegrationTest {
   @Autowired private ObjectMapper objectMapper;
   @Autowired private RequestTypeRepository requestTypeRepository;
   @Autowired private RequestRepository requestRepository;
+  @Autowired private JdbcTemplate jdbcTemplate;
 
   @BeforeEach
   void setUp() {
@@ -132,10 +133,8 @@ class RequestTypeModuleIntegrationTest extends AbstractJdbcIntegrationTest {
     createType("audit-type", "Audit Type", "noop", "requestTypeV2Process");
 
     Long typeId =
-        requestTypeRepository
-            .findByTypeKey("audit-type")
-            .map(RequestTypeEntity::getId)
-            .orElseThrow();
+        jdbcTemplate.queryForObject(
+            "SELECT id FROM request_types WHERE type_key = ?", Long.class, "audit-type");
 
     mockMvc
         .perform(

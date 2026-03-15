@@ -6,8 +6,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gurch.sandbox.AbstractJdbcIntegrationTest;
-import com.gurch.sandbox.audit.internal.AuditLogAction;
-import com.gurch.sandbox.audit.internal.AuditLogEventEntity;
 import com.gurch.sandbox.dto.PagedResponse;
 import com.gurch.sandbox.requests.CreateRequestCommand;
 import com.gurch.sandbox.requests.RequestApi;
@@ -24,14 +22,13 @@ import com.gurch.sandbox.requesttypes.RequestTypeCommand;
 import com.gurch.sandbox.requesttypes.internal.RequestTypeRepository;
 import com.gurch.sandbox.web.NotFoundException;
 import com.gurch.sandbox.web.ValidationErrorException;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.StreamSupport;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 class DefaultRequestServiceIntegrationTest extends AbstractJdbcIntegrationTest {
 
@@ -41,6 +38,7 @@ class DefaultRequestServiceIntegrationTest extends AbstractJdbcIntegrationTest {
   @Autowired private RequestTypeApi requestTypeApi;
   @Autowired private RequestTypeRepository requestTypeRepository;
   @Autowired private ObjectMapper objectMapper;
+  @Autowired private JdbcTemplate jdbcTemplate;
 
   @BeforeEach
   void setUp() {
@@ -59,7 +57,7 @@ class DefaultRequestServiceIntegrationTest extends AbstractJdbcIntegrationTest {
 
   @AfterEach
   void tearDown() {
-    auditLogEventRepository.deleteAll();
+    jdbcTemplate.update("DELETE FROM audit_log_events");
   }
 
   @Test
@@ -260,34 +258,30 @@ class DefaultRequestServiceIntegrationTest extends AbstractJdbcIntegrationTest {
   }
 
   private Integer latestAuditActorForRequest(Long requestId) {
-    return StreamSupport.stream(auditLogEventRepository.findAll().spliterator(), false)
-        .filter(event -> "requests".equals(event.getResourceType()))
-        .filter(event -> requestId.toString().equals(event.getResourceId()))
-        .sorted(
-            Comparator.comparing(AuditLogEventEntity::getCreatedAt)
-                .thenComparing(AuditLogEventEntity::getId)
-                .reversed())
-        .map(AuditLogEventEntity::getActorUserId)
-        .findFirst()
-        .orElseThrow();
+    return jdbcTemplate.queryForObject(
+        """
+        SELECT actor_user_id
+        FROM audit_log_events
+        WHERE resource_type = 'requests'
+          AND resource_id = ?
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1
+        """,
+        Integer.class,
+        requestId.toString());
   }
 
   private Map<String, Object> updateAuditDiffRow(Long requestId) {
-    AuditLogEventEntity event =
-        StreamSupport.stream(auditLogEventRepository.findAll().spliterator(), false)
-            .filter(row -> "requests".equals(row.getResourceType()))
-            .filter(row -> requestId.toString().equals(row.getResourceId()))
-            .filter(row -> AuditLogAction.UPDATE.equals(row.getAction()))
-            .sorted(
-                Comparator.comparing(AuditLogEventEntity::getCreatedAt)
-                    .thenComparing(AuditLogEventEntity::getId)
-                    .reversed())
-            .findFirst()
-            .orElseThrow();
-    return Map.of(
-        "before_state",
-        event.getBeforeState().toString(),
-        "after_state",
-        event.getAfterState().toString());
+    return jdbcTemplate.queryForMap(
+        """
+        SELECT before_state::text AS before_state, after_state::text AS after_state
+        FROM audit_log_events
+        WHERE resource_type = 'requests'
+          AND resource_id = ?
+          AND action = 'UPDATE'
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1
+        """,
+        requestId.toString());
   }
 }

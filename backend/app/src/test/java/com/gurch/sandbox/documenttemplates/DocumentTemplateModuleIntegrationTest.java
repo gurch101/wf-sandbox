@@ -73,10 +73,7 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
     Path root = Path.of(storageRoot);
     if (Files.exists(root)) {
       try (Stream<Path> stream = Files.walk(root)) {
-        List<Path> paths = stream.sorted(Comparator.reverseOrder()).toList();
-        for (Path path : paths) {
-          Files.deleteIfExists(path);
-        }
+        stream.sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(java.io.File::delete);
       }
     }
     Files.createDirectories(root);
