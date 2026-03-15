@@ -24,6 +24,20 @@ public class DefaultPolicyAdminService implements PolicyAdminApi {
   private static final List<String> ASSIGNMENT_STRATEGIES =
       List.of("STATIC", "POLICY_HINT", "BEST_USER_STUB");
 
+  private static final List<String> ASSIGNMENT_MODES =
+      List.of("CANDIDATE_USERS", "CANDIDATE_GROUPS", "DIRECT_ASSIGNEE", "UNASSIGNED");
+
+  private static final List<PolicyCapabilitiesResponse.EscalationPolicyOption> ESCALATION_POLICIES =
+      List.of(
+          new PolicyCapabilitiesResponse.EscalationPolicyOption(
+              "sla-breach-manager-escalation", "Manager escalation on SLA breach"));
+
+  private static final List<PolicyCapabilitiesResponse.ReasonCodeOption> REASON_CODE_CATALOG =
+      List.of(
+          new PolicyCapabilitiesResponse.ReasonCodeOption("HIGH_RISK_AMOUNT", "High risk amount"),
+          new PolicyCapabilitiesResponse.ReasonCodeOption(
+              "MANUAL_REVIEW_REQUIRED", "Manual review required"));
+
   private static final List<PolicyHitPolicy> HIT_POLICIES =
       List.of(PolicyHitPolicy.FIRST, PolicyHitPolicy.COLLECT);
 
@@ -104,6 +118,9 @@ public class DefaultPolicyAdminService implements PolicyAdminApi {
         new LinkedHashMap<>(OPERATORS_BY_TYPE),
         outputSchema,
         ASSIGNMENT_STRATEGIES,
+        ASSIGNMENT_MODES,
+        ESCALATION_POLICIES,
+        REASON_CODE_CATALOG,
         new PolicyCapabilitiesResponse.ValidationLimits(
             MAX_TREE_DEPTH, MAX_NODES_PER_RULE, MAX_RULES_PER_SET),
         HIT_POLICIES);

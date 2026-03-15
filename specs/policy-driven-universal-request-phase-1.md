@@ -138,8 +138,11 @@
     - `payloadFields` (array): `{key, label, type, required, path, examples[]}`
     - `computableFields` (array): `{key, label, type, providerKey, dependsOn[], required, freshnessSlaSeconds}`
   - `operatorsByType` (object): map of `STRING|NUMBER|BOOLEAN|DATE|DATETIME|JSON` -> operator[]
-  - `outputSchema` (object): required `then` output structure for task generation
+  - `outputSchema` (object): machine-readable `then` output contract for task generation, including required fields, conditional requirements, enums, and defaulting hints
   - `assignmentStrategies` (string[])
+  - `assignmentModes` (string[]): supported task-level assignment modes for `HUMAN` execution
+  - `availableEscalationPolicies` (array): `{key, label}`
+  - `reasonCodeCatalog` (array): `{code, label}`
   - `validationLimits` (object): `{maxTreeDepth, maxNodesPerRule, maxRulesPerSet}`
   - `supportedHitPolicies` (string[])
 - Errors: `403`, `404`
@@ -192,16 +195,131 @@ Example response (`200`):
     "BOOLEAN": ["EQ", "NEQ", "IS_NULL", "IS_NOT_NULL"]
   },
   "outputSchema": {
-    "executionType": "HUMAN|COMPLETE",
-    "then": {
-      "taskPlanPatch": {
-        "stages": "array",
-        "completionPredicate": "ALL_TASKS_COMPLETED"
+    "executionTypes": {
+      "HUMAN": {
+        "then": {
+          "taskPlan": {
+            "type": "object",
+            "required": true,
+            "properties": {
+              "tasks": {
+                "type": "array",
+                "required": true,
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "requiredProperties": [
+                    "taskKey",
+                    "name"
+                  ],
+                  "properties": {
+                    "taskKey": {
+                      "type": "string",
+                      "required": true
+                    },
+                    "name": {
+                      "type": "string",
+                      "required": true
+                    },
+                    "assignmentMode": {
+                      "type": "string",
+                      "required": false,
+                      "enum": [
+                        "CANDIDATE_USERS",
+                        "CANDIDATE_GROUPS",
+                        "DIRECT_ASSIGNEE",
+                        "UNASSIGNED"
+                      ]
+                    },
+                    "candidateUsers": {
+                      "type": "array",
+                      "required": false,
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "candidateGroups": {
+                      "type": "array",
+                      "required": false,
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "priority": {
+                      "type": "integer",
+                      "required": false,
+                      "defaultingStrategy": "ENGINE_DEFAULT"
+                    },
+                    "order": {
+                      "type": "integer",
+                      "required": false
+                    },
+                    "parallelGroup": {
+                      "type": "string",
+                      "required": false
+                    },
+                    "dependsOn": {
+                      "type": "array",
+                      "required": false,
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "sla": {
+                      "type": "object",
+                      "required": false
+                    },
+                    "escalationPolicyKey": {
+                      "type": "string",
+                      "required": false
+                    },
+                    "reasonCodes": {
+                      "type": "array",
+                      "required": false,
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "crossFieldRules": [
+                    "If assignmentMode=CANDIDATE_USERS then candidateUsers must be non-empty",
+                    "If assignmentMode=CANDIDATE_GROUPS then candidateGroups must be non-empty",
+                    "If assignmentMode=DIRECT_ASSIGNEE then assigneeUser must be present"
+                  ]
+                }
+              }
+            }
+          }
+        }
       },
-      "assignmentHints": "object"
+      "COMPLETE": {
+        "then": {}
+      }
     }
   },
   "assignmentStrategies": ["STATIC", "POLICY_HINT", "BEST_USER_STUB"],
+  "assignmentModes": [
+    "CANDIDATE_USERS",
+    "CANDIDATE_GROUPS",
+    "DIRECT_ASSIGNEE",
+    "UNASSIGNED"
+  ],
+  "availableEscalationPolicies": [
+    {
+      "key": "sla-breach-manager-escalation",
+      "label": "Manager escalation on SLA breach"
+    }
+  ],
+  "reasonCodeCatalog": [
+    {
+      "code": "HIGH_RISK_AMOUNT",
+      "label": "High risk amount"
+    },
+    {
+      "code": "MANUAL_REVIEW_REQUIRED",
+      "label": "Manual review required"
+    }
+  ],
   "validationLimits": {
     "maxTreeDepth": 5,
     "maxNodesPerRule": 100,
@@ -414,20 +532,32 @@ Example error (`400`, cyclic dependency):
 - Request schema:
   - `contractVersion` (string, required)
   - `outputSchema` (object, required):
-    - `executionType` (`HUMAN|COMPLETE`, required)
-    - `stages` (array, required when `executionType=HUMAN`):
-      - `stageOrder` (integer, required, 1..n)
-      - `completionRule` (`ALL`, required)
-      - `tasks` (array, required):
-        - `taskKey` (string, required)
-        - `taskName` (string, required)
-        - `parallelGroupId` (string, optional)
-        - `candidateUsers` (string[], optional)
-        - `candidateGroups` (string[], optional)
-        - `assignmentStrategy` (`STATIC|POLICY_HINT|BEST_USER_STUB`, required)
-        - `allowedActions` (string[], required, min 1)
-        - `actionOutcomes` (object, optional)  (maps action -> next decision hints)
-    - `completionPredicate` (string, required)  (`ALL_TASKS_COMPLETED` for phase 1)
+    - `executionTypes` (object, required)
+      - `HUMAN` (object, optional):
+        - `then.taskPlan` (object, required when `HUMAN` is supported)
+          - `type` (`object`, required)
+          - `required` (`true`, required)
+          - `properties.tasks` (object, required)
+            - `type` (`array`, required)
+            - `required` (`true`, required)
+            - `minItems` (integer, required, `1` for phase 1)
+            - `items` (object, required)
+              - `requiredProperties` (string[], required): must include `taskKey` and `name`
+              - `properties` (object, required)
+                - `taskKey` (`string`, required)
+                - `name` (`string`, required)
+                - `assignmentMode` (`CANDIDATE_USERS|CANDIDATE_GROUPS|DIRECT_ASSIGNEE|UNASSIGNED`, optional)
+                - `candidateUsers` (string[], conditionally required)
+                - `candidateGroups` (string[], conditionally required)
+                - `priority` (integer, optional)
+                - `order` (integer, optional)
+                - `parallelGroup` (string, optional)
+                - `dependsOn` (string[], optional)
+                - `sla` (object, optional)
+                - `escalationPolicyKey` (string, optional)
+                - `reasonCodes` (string[], optional)
+              - `crossFieldRules` (string[], required): explicit validation guidance for conditional requirements
+      - `COMPLETE` (object, optional): reserved for auto-complete flows in a later phase
 - Response schema:
   - `requestType`, `version`, `outputContractHash`, `updatedAt`, `updatedBy`
 - Errors:
@@ -440,61 +570,87 @@ Example request:
 {
   "contractVersion": "1.0.0",
   "outputSchema": {
-    "executionType": "HUMAN",
-    "stages": [
-      {
-        "stageOrder": 1,
-        "completionRule": "ALL",
-        "tasks": [
-          {
-            "taskKey": "review_request",
-            "taskName": "Review Request",
-            "assignmentStrategy": "BEST_USER_STUB",
-            "candidateGroups": [
-              "Ops Reviewers"
-            ],
-            "allowedActions": [
-              "APPROVE",
-              "REJECT",
-              "REQUEST_INFO"
-            ]
+    "executionTypes": {
+      "HUMAN": {
+        "then": {
+          "taskPlan": {
+            "type": "object",
+            "required": true,
+            "properties": {
+              "tasks": {
+                "type": "array",
+                "required": true,
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "requiredProperties": [
+                    "taskKey",
+                    "name"
+                  ],
+                  "properties": {
+                    "taskKey": {
+                      "type": "string",
+                      "required": true
+                    },
+                    "name": {
+                      "type": "string",
+                      "required": true
+                    },
+                    "assignmentMode": {
+                      "type": "string",
+                      "required": false,
+                      "enum": [
+                        "CANDIDATE_USERS",
+                        "CANDIDATE_GROUPS",
+                        "DIRECT_ASSIGNEE",
+                        "UNASSIGNED"
+                      ]
+                    },
+                    "candidateGroups": {
+                      "type": "array",
+                      "required": false,
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "priority": {
+                      "type": "integer",
+                      "required": false
+                    },
+                    "order": {
+                      "type": "integer",
+                      "required": false
+                    },
+                    "parallelGroup": {
+                      "type": "string",
+                      "required": false
+                    },
+                    "sla": {
+                      "type": "object",
+                      "required": false
+                    },
+                    "escalationPolicyKey": {
+                      "type": "string",
+                      "required": false
+                    },
+                    "reasonCodes": {
+                      "type": "array",
+                      "required": false,
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "crossFieldRules": [
+                    "If assignmentMode=CANDIDATE_GROUPS then candidateGroups must be non-empty"
+                  ]
+                }
+              }
+            }
           }
-        ]
-      },
-      {
-        "stageOrder": 2,
-        "completionRule": "ALL",
-        "tasks": [
-          {
-            "taskKey": "fraud_check",
-            "taskName": "Fraud Check",
-            "parallelGroupId": "grp-risk",
-            "assignmentStrategy": "STATIC",
-            "candidateGroups": [
-              "Risk Team"
-            ],
-            "allowedActions": [
-              "CLEAR",
-              "FLAG"
-            ]
-          },
-          {
-            "taskKey": "compliance_check",
-            "taskName": "Compliance Check",
-            "parallelGroupId": "grp-risk",
-            "assignmentStrategy": "STATIC",
-            "candidateGroups": [
-              "Compliance Team"
-            ],
-            "allowedActions": [
-              "CLEAR",
-              "HOLD"
-            ]
-          }
-        ]
+        }
       }
-    ],
-    "completionPredicate": "ALL_TASKS_COMPLETED"
+    }
   }
 }
 ```
@@ -517,8 +673,8 @@ Example error (`400`, invalid contract):
   "message": "Task definition missing required field",
   "details": [
     {
-      "path": "outputSchema.stages[0].tasks[0].allowedActions",
-      "reason": "must contain at least 1 item"
+      "path": "outputSchema.executionTypes.HUMAN.then.taskPlan.properties.tasks.items.requiredProperties",
+      "reason": "must include taskKey and name"
     }
   ],
   "traceId": "fe260fb906bf4d7c"
@@ -561,9 +717,8 @@ Example request:
     "request.requestedAmount": "dmn.requestedAmount"
   },
   "outputBinding": {
-    "dmn.executionType": "outputSchema.executionType",
-    "dmn.stages": "outputSchema.stages",
-    "dmn.completionPredicate": "outputSchema.completionPredicate"
+    "dmn.executionType": "outputSchema.executionTypes.HUMAN",
+    "dmn.taskPlan": "outputSchema.executionTypes.HUMAN.then.taskPlan"
   }
 }
 ```
@@ -600,7 +755,7 @@ Example response (`200`):
       - `value` (any, optional for null operators)
     - `then` (object, required):
       - `executionType` (`HUMAN|COMPLETE`, required)
-      - `taskPlanPatch` (object, optional, must conform to output contract)
+      - `taskPlan` (object, optional, must conform to output contract)
       - `assignmentHints` (object, optional)
 - Response schema:
   - `requestType`, `version`, `ruleSetHash`, `compiledDmnHash`, `compileStatus`, `updatedAt`
@@ -683,28 +838,23 @@ Example request:
       },
       "then": {
         "executionType": "HUMAN",
-        "taskPlanPatch": {
-          "stages": [
+        "taskPlan": {
+          "tasks": [
             {
-              "stageOrder": 1,
-              "completionRule": "ALL",
-              "tasks": [
-                {
-                  "taskKey": "review_request",
-                  "taskName": "Review Request",
-                  "assignmentStrategy": "BEST_USER_STUB",
-                  "candidateGroups": [
-                    "Ops Reviewers"
-                  ],
-                  "allowedActions": [
-                    "APPROVE",
-                    "REJECT"
-                  ]
-                }
+              "taskKey": "review_request",
+              "name": "Review Request",
+              "assignmentMode": "CANDIDATE_GROUPS",
+              "candidateGroups": [
+                "Ops Reviewers"
+              ],
+              "priority": 75,
+              "order": 10,
+              "escalationPolicyKey": "sla-breach-manager-escalation",
+              "reasonCodes": [
+                "HIGH_RISK_AMOUNT"
               ]
             }
-          ],
-          "completionPredicate": "ALL_TASKS_COMPLETED"
+          ]
         },
         "assignmentHints": {
           "strategyHint": "LOAD_BALANCED"
@@ -889,29 +1039,29 @@ Example response (`200`):
   },
   "executionType": "HUMAN",
   "taskPlan": {
-    "stages": [
+    "tasks": [
       {
-        "stageOrder": 1,
-        "completionRule": "ALL",
-        "tasks": [
-          {
-            "taskKey": "review_request",
-            "taskName": "Review Request",
-            "candidateUsers": [],
-            "candidateGroups": [
-              "Ops Reviewers"
-            ],
-            "assignmentStrategy": "BEST_USER_STUB",
-            "allowedActions": [
-              "APPROVE",
-              "REJECT",
-              "REQUEST_INFO"
-            ]
-          }
+        "taskKey": "review_request",
+        "name": "Review Request",
+        "assignmentMode": "CANDIDATE_GROUPS",
+        "candidateUsers": [],
+        "candidateGroups": [
+          "Ops Reviewers"
+        ],
+        "priority": 75,
+        "order": 10,
+        "parallelGroup": "grp-risk",
+        "sla": {
+          "duration": "P2D",
+          "dueDateBasis": "TASK_CREATED_AT"
+        },
+        "escalationPolicyKey": "sla-breach-manager-escalation",
+        "reasonCodes": [
+          "HIGH_RISK_AMOUNT",
+          "MANUAL_REVIEW_REQUIRED"
         ]
       }
-    ],
-    "completionPredicate": "ALL_TASKS_COMPLETED"
+    ]
   },
   "validationMessages": [],
   "trace": {
@@ -971,7 +1121,7 @@ This is the canonical backend payload generated from IFTTT rules and/or accepted
           },
           "then": {
             "executionType": "HUMAN",
-            "taskPlanPatch": {},
+            "taskPlan": {},
             "assignmentHints": {}
           }
         }
@@ -991,7 +1141,10 @@ This is the canonical backend payload generated from IFTTT rules and/or accepted
 
 Rules for frontend authoring:
 - Every condition node `if/when` field must be declared in the version input catalog.
-- `then.taskPlanPatch` must validate against the configured output contract.
+- `then.taskPlan` must validate against the configured output contract.
+- Required versus optional task outputs must be declared in the output contract itself; frontend and backend validation must derive from the same machine-readable contract.
+- For phase 1 `HUMAN` execution, each task must require `taskKey` and `name`.
+- Conditional requirements such as assignment-target fields must be represented explicitly in `crossFieldRules`; they must not rely on undocumented backend-only validation.
 - `FIRST` hit policy requires deterministic priority ordering.
 - A `defaultOutcome` is mandatory and maps to DMN `default`.
 - Unknown operators or type mismatches fail validation and block publish.
@@ -1135,8 +1288,15 @@ Example response (`200`):
   "outputContract": {
     "contractVersion": "1.0.0",
     "outputSchema": {
-      "executionType": "HUMAN",
-      "completionPredicate": "ALL_TASKS_COMPLETED"
+      "executionTypes": {
+        "HUMAN": {
+          "then": {
+            "taskPlan": {
+              "type": "object"
+            }
+          }
+        }
+      }
     }
   },
   "dmnBundle": {
@@ -1282,7 +1442,7 @@ Example response (`200`):
 - Test steps:
   - Call dry-run with payload sample.
 - Expected API result:
-  - `200`, `executionType=HUMAN`, includes stages/tasks/assignments/actions.
+  - `200`, `executionType=HUMAN`, includes computed `taskPlan.tasks` with assignment, priority, SLA, escalation, and reason-code outputs.
 - Expected DB state:
   - Optional dry-run artifact recorded.
 - Expected Camunda state:
