@@ -41,6 +41,15 @@ public class RequestPayloadHandlerRegistry implements PayloadHandlerCatalog {
     return handlers.containsKey(handlerId);
   }
 
+  @Override
+  public Class<?> payloadType(String handlerId) {
+    PreWorkflowPayloadValidator<?> handler = handlers.get(handlerId);
+    if (handler == null) {
+      throw ValidationErrorException.of(RequestSubmissionErrorCode.MISSING_PAYLOAD_HANDLER);
+    }
+    return handler.payloadType();
+  }
+
   public void validate(String handlerId, JsonNode payload) {
     PreWorkflowPayloadValidator<?> handler = handlers.get(handlerId);
     if (handler == null) {
