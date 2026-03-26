@@ -1,9 +1,8 @@
 package com.gurch.sandbox.documenttemplates;
 
 import com.gurch.sandbox.dto.SearchCriteria;
+import com.gurch.sandbox.dto.SearchCriteriaUtils;
 import io.swagger.v3.oas.annotations.media.Schema;
-import java.util.Locale;
-import java.util.Optional;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -21,16 +20,15 @@ import lombok.extern.jackson.Jacksonized;
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 @Schema(description = "Criteria for searching document-template metadata")
 public class DocumentTemplateSearchCriteria extends SearchCriteria {
-  @Schema(description = "Partial name match (case-insensitive)", example = "intake")
-  private String nameContains;
+  @Schema(
+      description = "English or French name prefix match (case-insensitive)",
+      example = "intake")
+  private String nameBegins;
 
   @Schema(description = "Optional tenant filter. Null returns all templates")
   private Integer tenantId;
 
   public String getNamePattern() {
-    return Optional.ofNullable(nameContains)
-        .filter(s -> !s.isBlank())
-        .map(s -> "%" + s.trim().toUpperCase(Locale.ROOT) + "%")
-        .orElse(null);
+    return SearchCriteriaUtils.toUpperStartsWithPattern(nameBegins);
   }
 }

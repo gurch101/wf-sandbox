@@ -5,6 +5,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -90,7 +91,9 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
             .perform(
                 multipart("/api/admin/document-templates")
                     .file(file)
-                    .param("description", "Onboarding package")
+                    .param("enDescription", "Onboarding package")
+                    .param("frName", "Formulaire d'accueil client")
+                    .param("frDescription", "Dossier d'integration")
                     .with(csrf()))
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.id").exists())
@@ -104,8 +107,10 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
     mockMvc
         .perform(get("/api/admin/document-templates/{id}", id))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.name").value("Client Intake Form.pdf"))
-        .andExpect(jsonPath("$.description").value("Onboarding package"))
+        .andExpect(jsonPath("$.enName").value("Client Intake Form.pdf"))
+        .andExpect(jsonPath("$.frName").value("Formulaire d'accueil client"))
+        .andExpect(jsonPath("$.enDescription").value("Onboarding package"))
+        .andExpect(jsonPath("$.frDescription").value("Dossier d'integration"))
         .andExpect(jsonPath("$.tenantId").isEmpty())
         .andExpect(jsonPath("$.esignable").value(true))
         .andExpect(jsonPath("$.formMap.fields.length()").value(3))
@@ -122,10 +127,11 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
         .andExpect(content().bytes(payload));
 
     mockMvc
-        .perform(get("/api/admin/document-templates/search").param("nameContains", "intake"))
+        .perform(get("/api/admin/document-templates/search").param("nameBegins", "Form"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.items.length()").value(1))
         .andExpect(jsonPath("$.items[0].id").value(id))
+        .andExpect(jsonPath("$.items[0].frName").value("Formulaire d'accueil client"))
         .andExpect(jsonPath("$.items[0].tenantId").isEmpty());
 
     mockMvc
@@ -156,8 +162,8 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
     mockMvc
         .perform(multipart("/api/admin/document-templates").file(file).with(csrf()))
         .andExpect(status().isBadRequest())
-        .andExpect(
-            jsonPath("$.detail").value("Unsupported file type. Only PDF and DOCX are allowed"));
+        .andExpect(jsonPath("$.detail").value("Request has invalid fields"))
+        .andExpect(jsonPath("$.errors[0].code").value("UNSUPPORTED_FILE_TYPE"));
   }
 
   @Test
@@ -285,6 +291,62 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
   }
 
   @Test
+  void shouldGenerateComposedPdfViaEndpoint() throws Exception {
+    Long pdfId = uploadTemplate("fillable.pdf", "application/pdf", createFillablePdfWithAnchor());
+    Long docxId =
+        uploadTemplate(
+            "template.docx",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            createTemplatedDocx());
+
+    DocumentTemplateGenerateRequest request =
+        new DocumentTemplateGenerateRequest(
+            List.of(
+                new DocumentTemplateGenerateRequest.GenerateInput(
+                    pdfId, java.util.Map.of("clientName", "Ada", "consent", "true", "state", "NY")),
+                new DocumentTemplateGenerateRequest.GenerateInput(
+                    docxId,
+                    java.util.Map.of("client.firstName", "Ada", "client.lastName", "Lovelace"))));
+
+    byte[] generated =
+        mockMvc
+            .perform(
+                post("/api/admin/document-templates/generate")
+                    .with(csrf())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsBytes(request)))
+            .andExpect(status().isOk())
+            .andExpect(header().string("Content-Type", "application/pdf"))
+            .andExpect(
+                header()
+                    .string(
+                        "Content-Disposition",
+                        "attachment; filename=\"generated-document-bundle.pdf\""))
+            .andReturn()
+            .getResponse()
+            .getContentAsByteArray();
+
+    try (PDDocument document = Loader.loadPDF(generated)) {
+      String text = new PDFTextStripper().getText(document);
+      assertThat(text).contains("Ada");
+      assertThat(text).contains("Lovelace");
+    }
+  }
+
+  @Test
+  void shouldRejectGenerateRequestWithoutDocuments() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/admin/document-templates/generate")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"documents\":[]}"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.detail").value("Request has invalid fields"))
+        .andExpect(jsonPath("$.errors[0].name").value("documents"));
+  }
+
+  @Test
   void shouldUpdateMetadataAndTemplateWhenFieldMapIsUnchanged() throws Exception {
     Long templateId =
         uploadTemplate("fillable.pdf", "application/pdf", createFillablePdfWithAnchor());
@@ -296,18 +358,22 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
         .perform(
             multipart("/api/admin/document-templates/{id}", templateId)
                 .file(updatedFile)
-                .param("name", "Updated Form Name")
-                .param("description", "Updated description")
+                .param("enName", "Updated Form Name")
+                .param("frName", "Nom mis a jour")
+                .param("enDescription", "Updated description")
+                .param("frDescription", "Description mise a jour")
                 .with(csrf())
                 .with(
                     request -> {
-                      request.setMethod("PUT");
+                      request.setMethod("PATCH");
                       return request;
                     }))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value(templateId))
-        .andExpect(jsonPath("$.name").value("Updated Form Name"))
-        .andExpect(jsonPath("$.description").value("Updated description"))
+        .andExpect(jsonPath("$.enName").value("Updated Form Name"))
+        .andExpect(jsonPath("$.frName").value("Nom mis a jour"))
+        .andExpect(jsonPath("$.enDescription").value("Updated description"))
+        .andExpect(jsonPath("$.frDescription").value("Description mise a jour"))
         .andExpect(jsonPath("$.formMap.fields.length()").value(3));
   }
 
@@ -325,7 +391,7 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
                 .with(csrf())
                 .with(
                     request -> {
-                      request.setMethod("PUT");
+                      request.setMethod("PATCH");
                       return request;
                     }))
         .andExpect(status().isBadRequest())
@@ -430,9 +496,8 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
                 .param("tenantId", "2")
                 .with(csrf()))
         .andExpect(status().isBadRequest())
-        .andExpect(
-            jsonPath("$.detail")
-                .value("tenantId must match the authenticated user's tenant scope"));
+        .andExpect(jsonPath("$.detail").value("Request has invalid fields"))
+        .andExpect(jsonPath("$.errors[0].code").value("TENANT_SCOPE_MISMATCH"));
   }
 
   private static byte[] createFillablePdfWithAnchor() throws IOException {

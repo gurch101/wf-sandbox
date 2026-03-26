@@ -1,5 +1,7 @@
 package com.gurch.sandbox.documenttemplates.internal;
 
+import com.gurch.sandbox.documenttemplates.DocumentTemplateSharedErrorCode;
+import com.gurch.sandbox.web.ValidationErrorException;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -38,8 +40,7 @@ public class DocumentTemplateGenerationService {
       case MIME_PDF -> pdfGenerationService.renderAsPdf(sourceBytes, fields);
       case MIME_DOCX -> docxGenerationService.renderAsPdf(sourceBytes, fields);
       default ->
-          throw new IllegalArgumentException(
-              "Unsupported file type. Only PDF and DOCX are allowed");
+          throw ValidationErrorException.of(DocumentTemplateSharedErrorCode.UNSUPPORTED_FILE_TYPE);
     };
   }
 
