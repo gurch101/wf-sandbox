@@ -15,8 +15,10 @@ import org.springframework.data.relational.core.mapping.Table;
 @EqualsAndHashCode(callSuper = true)
 @Table("document_templates")
 public class DocumentTemplateEntity extends MutableEntity<Long> {
-  private String name;
-  private String description;
+  private String enName;
+  private String frName;
+  private String enDescription;
+  private String frDescription;
   private String mimeType;
   private Long contentSize;
   private String checksumSha256;

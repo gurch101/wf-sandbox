@@ -7,10 +7,10 @@ import java.util.Optional;
 public interface DocumentTemplateApi {
 
   /** Persists metadata and bytes for a new uploaded file. */
-  DocumentTemplateResponse upload(DocumentTemplateUploadRequest request);
+  DocumentTemplateResponse upload(DocumentTemplateUploadCommand command);
 
   /** Updates metadata and optionally replaces template content. */
-  DocumentTemplateResponse update(Long id, DocumentTemplateUpdateRequest request);
+  DocumentTemplateResponse update(Long id, DocumentTemplateUpdateCommand command);
 
   /** Finds one document template by identifier. */
   Optional<DocumentTemplateResponse> findById(Long id);

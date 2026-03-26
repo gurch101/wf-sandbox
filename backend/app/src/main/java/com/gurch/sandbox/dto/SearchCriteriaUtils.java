@@ -24,6 +24,20 @@ public final class SearchCriteriaUtils {
   }
 
   /**
+   * Converts optional text into an uppercase SQL prefix-LIKE pattern.
+   *
+   * @param value raw filter value
+   * @return uppercase prefix wildcard pattern or null when blank
+   */
+  public static String toUpperStartsWithPattern(String value) {
+    return Optional.ofNullable(value)
+        .map(String::trim)
+        .filter(s -> !s.isBlank())
+        .map(s -> s.toUpperCase(Locale.ROOT) + "%")
+        .orElse(null);
+  }
+
+  /**
    * Normalizes optional string list input for SQL IN usage.
    *
    * @param values raw values

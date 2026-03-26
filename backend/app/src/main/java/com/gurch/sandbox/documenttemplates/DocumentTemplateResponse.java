@@ -14,11 +14,23 @@ public class DocumentTemplateResponse {
   @Schema(description = "Unique identifier of the file", example = "123")
   Long id;
 
-  @Schema(description = "Display name for the file", example = "Client Intake Form.pdf")
-  String name;
+  @Schema(description = "English display name for the file", example = "Client Intake Form.pdf")
+  String enName;
 
-  @Schema(description = "Optional user-provided description", example = "Q1 onboarding packet")
-  String description;
+  @Schema(
+      description = "French display name for the file",
+      example = "Formulaire d'accueil client.pdf")
+  String frName;
+
+  @Schema(
+      description = "Optional English user-provided description",
+      example = "Q1 onboarding packet")
+  String enDescription;
+
+  @Schema(
+      description = "Optional French user-provided description",
+      example = "Dossier d'integration T1")
+  String frDescription;
 
   @Schema(description = "MIME type", example = "application/pdf")
   String mimeType;

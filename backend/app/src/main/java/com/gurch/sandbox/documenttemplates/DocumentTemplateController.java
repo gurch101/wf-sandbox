@@ -5,8 +5,13 @@ import com.gurch.sandbox.dto.PagedResponse;
 import com.gurch.sandbox.idempotency.NotIdempotent;
 import com.gurch.sandbox.web.ApiErrorEnum;
 import com.gurch.sandbox.web.NotFoundException;
+import com.gurch.sandbox.web.ValidationErrorException;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import java.io.InputStream;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -14,9 +19,10 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
@@ -28,6 +34,9 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 @RestController
 @RequestMapping("/api/admin/document-templates")
 @RequiredArgsConstructor
+@Tag(
+    name = "Document Templates",
+    description = "Manage uploaded document templates and generated documents")
 public class DocumentTemplateController {
 
   private final DocumentTemplateApi documentTemplateApi;
@@ -35,55 +44,67 @@ public class DocumentTemplateController {
   @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   // Multipart uploads are excluded from idempotency replay because the request body is streamed.
   @NotIdempotent
+  @ApiErrorEnum({DocumentTemplateSharedErrorCode.class, DocumentTemplateUploadErrorCode.class})
   @ResponseStatus(HttpStatus.CREATED)
+  @Operation(summary = "Upload a document template")
   public CreateResponse upload(
       @RequestPart("file") MultipartFile file,
-      @RequestParam(value = "name", required = false) String name,
-      @RequestParam(value = "description", required = false) String description,
+      @RequestParam(value = "enName", required = false) String enName,
+      @RequestParam(value = "frName", required = false) String frName,
+      @RequestParam(value = "enDescription", required = false) String enDescription,
+      @RequestParam(value = "frDescription", required = false) String frDescription,
       @RequestParam(value = "tenantId", required = false) Integer tenantId) {
-    DocumentTemplateUploadRequest request;
+    DocumentTemplateUploadCommand command;
     try {
-      request =
-          new DocumentTemplateUploadRequest(
-              name,
-              description,
+      command =
+          new DocumentTemplateUploadCommand(
+              enName,
+              frName,
+              enDescription,
+              frDescription,
               tenantId,
               file.getOriginalFilename(),
               file.getContentType(),
               file.getSize(),
               file.getInputStream());
     } catch (Exception e) {
-      throw new IllegalArgumentException("Could not read uploaded file content");
+      throw ValidationErrorException.of(DocumentTemplateSharedErrorCode.FILE_READ_FAILED);
     }
 
-    return new CreateResponse(documentTemplateApi.upload(request).getId());
+    return new CreateResponse(documentTemplateApi.upload(command).getId());
   }
 
-  @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  @PatchMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   @NotIdempotent
-  @ApiErrorEnum({DocumentTemplateErrorCode.class})
+  @ApiErrorEnum({DocumentTemplateSharedErrorCode.class, DocumentTemplateUpdateErrorCode.class})
+  @Operation(summary = "Patch a document template")
   public DocumentTemplateResponse update(
       @PathVariable Long id,
       @RequestPart(value = "file", required = false) MultipartFile file,
-      @RequestParam(value = "name", required = false) String name,
-      @RequestParam(value = "description", required = false) String description) {
-    DocumentTemplateUpdateRequest request;
+      @RequestParam(value = "enName", required = false) String enName,
+      @RequestParam(value = "frName", required = false) String frName,
+      @RequestParam(value = "enDescription", required = false) String enDescription,
+      @RequestParam(value = "frDescription", required = false) String frDescription) {
+    DocumentTemplateUpdateCommand command;
     try {
-      request =
-          new DocumentTemplateUpdateRequest(
-              name,
-              description,
+      command =
+          new DocumentTemplateUpdateCommand(
+              enName,
+              frName,
+              enDescription,
+              frDescription,
               file == null ? null : file.getOriginalFilename(),
               file == null ? null : file.getContentType(),
               file == null ? null : file.getSize(),
               file == null ? null : file.getInputStream());
     } catch (Exception e) {
-      throw new IllegalArgumentException("Could not read uploaded file content");
+      throw ValidationErrorException.of(DocumentTemplateSharedErrorCode.FILE_READ_FAILED);
     }
-    return documentTemplateApi.update(id, request);
+    return documentTemplateApi.update(id, command);
   }
 
   @GetMapping("/{id}")
+  @Operation(summary = "Get a document template by id")
   public DocumentTemplateResponse getById(@PathVariable Long id) {
     return documentTemplateApi
         .findById(id)
@@ -91,8 +112,24 @@ public class DocumentTemplateController {
   }
 
   @GetMapping("/{id}/download")
+  @Operation(summary = "Download a document template file")
   public ResponseEntity<StreamingResponseBody> download(@PathVariable Long id) {
     DocumentTemplateDownload download = documentTemplateApi.download(id);
+    return toDownloadResponse(download);
+  }
+
+  @PostMapping("/generate")
+  @NotIdempotent
+  @ApiErrorEnum({DocumentTemplateSharedErrorCode.class, DocumentTemplateGenerateErrorCode.class})
+  @Operation(summary = "Generate a merged PDF from document templates")
+  public ResponseEntity<StreamingResponseBody> generate(
+      @Valid @RequestBody DocumentTemplateGenerateRequest request) {
+    DocumentTemplateDownload download = documentTemplateApi.generate(request);
+    return toDownloadResponse(download);
+  }
+
+  private ResponseEntity<StreamingResponseBody> toDownloadResponse(
+      DocumentTemplateDownload download) {
     MediaType mediaType = MediaType.APPLICATION_OCTET_STREAM;
     try {
       mediaType = MediaType.parseMediaType(download.getMimeType());
@@ -117,12 +154,15 @@ public class DocumentTemplateController {
   }
 
   @GetMapping("/search")
-  public PagedResponse<DocumentTemplateResponse> search(DocumentTemplateSearchCriteria criteria) {
+  @Operation(summary = "Search document templates")
+  public PagedResponse<DocumentTemplateResponse> search(
+      @ParameterObject DocumentTemplateSearchCriteria criteria) {
     return documentTemplateApi.search(criteria);
   }
 
   @DeleteMapping("/{id}")
   @ResponseStatus(HttpStatus.NO_CONTENT)
+  @Operation(summary = "Delete a document template")
   public void delete(@PathVariable Long id) {
     documentTemplateApi.deleteById(id);
   }

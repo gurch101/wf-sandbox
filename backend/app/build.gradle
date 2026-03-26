@@ -37,6 +37,7 @@ dependencies {
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.5'
 	implementation 'org.flywaydb:flyway-core'
 	implementation 'org.flywaydb:flyway-database-postgresql'
+	implementation 'org.apache.commons:commons-lang3'
 	implementation 'org.apache.pdfbox:pdfbox:3.0.4'
 	implementation 'org.apache.poi:poi-ooxml:5.4.1'
 	implementation 'com.deepoove:poi-tl:1.12.2'
