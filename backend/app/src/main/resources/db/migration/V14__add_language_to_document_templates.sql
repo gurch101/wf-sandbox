@@ -1,0 +1,2 @@
+ALTER TABLE document_templates
+  ADD COLUMN language VARCHAR(16) NOT NULL DEFAULT 'ENGLISH';

@@ -5,10 +5,12 @@ import org.springframework.http.HttpStatus;
 
 /** Validation errors for document template upload operations. */
 public enum DocumentTemplateUploadErrorCode implements ApiErrorCode {
+  EN_NAME_REQUIRED("enName", "enName is required", HttpStatus.BAD_REQUEST),
   TENANT_SCOPE_MISMATCH(
       "tenantId",
       "tenantId must match the authenticated user's tenant scope",
-      HttpStatus.BAD_REQUEST);
+      HttpStatus.BAD_REQUEST),
+  INVALID_LANGUAGE("language", "language must be english or french", HttpStatus.BAD_REQUEST);
 
   private final String fieldName;
   private final String message;

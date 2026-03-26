@@ -1,5 +1,6 @@
 package com.gurch.sandbox.documenttemplates.internal;
 
+import com.gurch.sandbox.documenttemplates.DocumentTemplateLanguage;
 import com.gurch.sandbox.persistence.MutableEntity;
 import com.gurch.sandbox.storage.StorageProviderType;
 import lombok.Data;
@@ -22,6 +23,7 @@ public class DocumentTemplateEntity extends MutableEntity<Long> {
   private String mimeType;
   private Long contentSize;
   private String checksumSha256;
+  private DocumentTemplateLanguage language;
   private Integer tenantId;
 
   @Column("form_map_json")

@@ -1,6 +1,5 @@
 package com.gurch.sandbox.documenttemplates;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import lombok.Builder;
@@ -41,6 +40,9 @@ public class DocumentTemplateResponse {
   @Schema(description = "SHA-256 checksum of uploaded content")
   String checksumSha256;
 
+  @Schema(description = "Document template language")
+  DocumentTemplateLanguage language;
+
   @Schema(
       description = "Optional tenant identifier. Null indicates a global template",
       example = "1")
@@ -49,7 +51,7 @@ public class DocumentTemplateResponse {
   @Schema(
       description =
           "Parsed form map with fields, field types, and possible values for selectable controls")
-  JsonNode formMap;
+  DocumentTemplateFormMap formMap;
 
   @Schema(description = "Whether this template includes configured e-signature anchors")
   boolean esignable;

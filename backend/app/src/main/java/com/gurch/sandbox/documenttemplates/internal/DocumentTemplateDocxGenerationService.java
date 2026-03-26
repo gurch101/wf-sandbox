@@ -2,35 +2,53 @@ package com.gurch.sandbox.documenttemplates.internal;
 
 import com.deepoove.poi.XWPFTemplate;
 import com.deepoove.poi.config.Configure;
-import com.deepoove.poi.data.Cells;
-import com.deepoove.poi.data.RowRenderData;
-import com.deepoove.poi.data.Rows;
-import com.deepoove.poi.data.Tables;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.docx4j.Docx4J;
 import org.docx4j.openpackaging.packages.WordprocessingMLPackage;
+import org.apache.poi.xwpf.usermodel.XWPFDocument;
+import org.apache.poi.xwpf.usermodel.XWPFParagraph;
+import org.apache.poi.xwpf.usermodel.XWPFRun;
+import org.apache.poi.xwpf.usermodel.XWPFTable;
+import org.apache.poi.xwpf.usermodel.XWPFTableCell;
+import org.apache.poi.xwpf.usermodel.XWPFTableRow;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTBorder;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTJc;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPPr;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTRow;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTcBorders;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTcPr;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STJc;
 import org.springframework.stereotype.Service;
 
 /** Renders DOCX templates and converts the rendered output to PDF. */
 @Service
 public class DocumentTemplateDocxGenerationService {
 
+  private static final String NON_BREAKING_SPACE = "\u00A0";
+  private static final Configure DOCX_TEMPLATE_CONFIG = Configure.createDefault();
+  private static final Pattern SCALAR_PLACEHOLDER =
+      Pattern.compile("\\{\\{\\s*([a-zA-Z0-9_.-]+)\\s*}}");
+  private static final Pattern TABLE_PLACEHOLDER =
+      Pattern.compile("\\{\\{\\s*([a-zA-Z0-9_-]+)\\.([a-zA-Z0-9_.-]+)\\s*}}");
+
   public byte[] renderAsPdf(byte[] sourceBytes, Map<String, Object> fields) {
-    byte[] renderedDocx = renderDocxTemplate(sourceBytes, fields);
-    return convertDocxToPdf(renderedDocx);
+    byte[] renderedDocx = renderDocx(sourceBytes, fields);
+    return convertDocxToPdf(prepareDocxForPdf(renderedDocx));
   }
 
-  private byte[] renderDocxTemplate(byte[] sourceBytes, Map<String, Object> fields) {
+  byte[] renderDocx(byte[] sourceBytes, Map<String, Object> fields) {
     Map<String, Object> renderData = normalizeDocxData(fields);
+    byte[] expandedDocx = expandTemplateTables(sourceBytes, renderData);
     try (XWPFTemplate template =
-            XWPFTemplate.compile(new ByteArrayInputStream(sourceBytes), Configure.createDefault());
+            XWPFTemplate.compile(new ByteArrayInputStream(expandedDocx), DOCX_TEMPLATE_CONFIG);
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
       template.render(renderData);
       template.write(outputStream);
@@ -48,9 +66,7 @@ public class DocumentTemplateDocxGenerationService {
     for (Map.Entry<String, Object> entry : fields.entrySet()) {
       Object value = entry.getValue();
       if (isStructuredTableConfig(value)) {
-        value = toTableRenderDataFromConfig((Map<?, ?>) value);
-      } else if (isListOfMaps(value)) {
-        value = toTableRenderData((List<?>) value);
+        value = ((Map<?, ?>) value).get("rows");
       }
       putNested(normalized, entry.getKey(), value);
     }
@@ -64,126 +80,11 @@ public class DocumentTemplateDocxGenerationService {
     return map.get("rows") instanceof List<?>;
   }
 
-  private static boolean isListOfMaps(Object value) {
-    if (!(value instanceof List<?> list) || list.isEmpty()) {
-      return false;
-    }
-    return list.stream().allMatch(item -> item instanceof Map<?, ?>);
-  }
-
-  private static Object toTableRenderData(List<?> rows) {
-    if (rows.isEmpty()) {
-      return rows;
-    }
-    Map<?, ?> firstRow = (Map<?, ?>) rows.get(0);
-    List<String> headers = firstRow.keySet().stream().map(String::valueOf).toList();
-    List<RowRenderData> tableRows = new ArrayList<>();
-    tableRows.add(Rows.of(headers.toArray(String[]::new)).create());
-    for (Object row : rows) {
-      Map<?, ?> rowMap = (Map<?, ?>) row;
-      String[] cells =
-          headers.stream()
-              .map(
-                  header -> {
-                    Object value = rowMap.containsKey(header) ? rowMap.get(header) : "";
-                    return String.valueOf(value);
-                  })
-              .toArray(String[]::new);
-      tableRows.add(Rows.of(cells).create());
-    }
-    return Tables.of(tableRows.toArray(RowRenderData[]::new)).create();
-  }
-
-  private static Object toTableRenderDataFromConfig(Map<?, ?> config) {
-    Object rowsRaw = config.get("rows");
-    if (!(rowsRaw instanceof List<?> rows)) {
-      return config;
-    }
-    List<ColumnSpec> columns = parseColumns(config.get("headers"), rows);
-    if (columns.isEmpty()) {
-      return config;
-    }
-
-    List<RowRenderData> tableRows = new ArrayList<>();
-    Rows.RowBuilder headerBuilder = Rows.of();
-    for (ColumnSpec column : columns) {
-      headerBuilder.addCell(Cells.of(column.label()).create());
-    }
-    tableRows.add(headerBuilder.create());
-
-    for (Object row : rows) {
-      if (!(row instanceof Map<?, ?> rowMap)) {
-        continue;
-      }
-      Rows.RowBuilder rowBuilder = Rows.of();
-      for (ColumnSpec column : columns) {
-        Object raw = rowMap.containsKey(column.key()) ? rowMap.get(column.key()) : "";
-        Cells.CellBuilder cellBuilder = Cells.of(String.valueOf(raw));
-        switch (column.alignment()) {
-          case "RIGHT" -> cellBuilder.horizontalRight();
-          case "CENTER" -> cellBuilder.horizontalCenter();
-          default -> cellBuilder.horizontalLeft();
-        }
-        rowBuilder.addCell(cellBuilder.create());
-      }
-      tableRows.add(rowBuilder.create());
-    }
-    return Tables.of(tableRows.toArray(RowRenderData[]::new)).create();
-  }
-
-  private static List<ColumnSpec> parseColumns(Object headersRaw, List<?> rows) {
-    List<ColumnSpec> columns = new ArrayList<>();
-    if (headersRaw instanceof List<?> headers && !headers.isEmpty()) {
-      for (Object header : headers) {
-        if (header instanceof Map<?, ?> headerMap) {
-          String key = stringValue(headerMap.get("key"));
-          if (key == null) {
-            continue;
-          }
-          String label = stringValue(headerMap.get("label"));
-          String alignment = normalizeAlignment(stringValue(headerMap.get("align")));
-          columns.add(new ColumnSpec(key, label == null ? key : label, alignment));
-          continue;
-        }
-        String key = stringValue(header);
-        if (key != null) {
-          columns.add(new ColumnSpec(key, key, "LEFT"));
-        }
-      }
-      if (!columns.isEmpty()) {
-        return columns;
-      }
-    }
-
-    if (rows.isEmpty() || !(rows.get(0) instanceof Map<?, ?> firstRow)) {
-      return List.of();
-    }
-    for (Object key : firstRow.keySet()) {
-      String keyText = stringValue(key);
-      if (keyText != null) {
-        columns.add(new ColumnSpec(keyText, keyText, "LEFT"));
-      }
-    }
-    return columns;
-  }
-
-  private static String normalizeAlignment(String alignment) {
-    if (alignment == null) {
-      return "LEFT";
-    }
-    String normalized = alignment.trim().toUpperCase(Locale.ROOT);
-    if (normalized.equals("RIGHT") || normalized.equals("CENTER")) {
-      return normalized;
-    }
-    return "LEFT";
-  }
-
   private static String stringValue(Object value) {
     if (value == null) {
       return null;
     }
-    String text = String.valueOf(value).trim();
-    return text.isEmpty() ? null : text;
+    return String.valueOf(value);
   }
 
   @SuppressWarnings("unchecked")
@@ -221,6 +122,181 @@ public class DocumentTemplateDocxGenerationService {
     return parts;
   }
 
+  private void normalizeTemplatePlaceholders(XWPFDocument document) {
+    for (XWPFParagraph paragraph : document.getParagraphs()) {
+      normalizeParagraphPlaceholders(paragraph);
+    }
+    for (XWPFTable table : document.getTables()) {
+      normalizeTablePlaceholders(table);
+    }
+  }
+
+  private void normalizeTablePlaceholders(XWPFTable table) {
+    for (XWPFTableRow row : table.getRows()) {
+      for (XWPFTableCell cell : row.getTableCells()) {
+        for (XWPFParagraph paragraph : cell.getParagraphs()) {
+          normalizeParagraphPlaceholders(paragraph);
+        }
+        for (XWPFTable nestedTable : cell.getTables()) {
+          normalizeTablePlaceholders(nestedTable);
+        }
+      }
+    }
+  }
+
+  private void normalizeParagraphPlaceholders(XWPFParagraph paragraph) {
+    for (XWPFRun run : paragraph.getRuns()) {
+      String text = run.getText(0);
+      if (text == null) {
+        continue;
+      }
+      String normalized = normalizeScalarPlaceholders(text);
+      if (!normalized.equals(text)) {
+        run.setText(normalized, 0);
+      }
+    }
+  }
+
+  private String normalizeScalarPlaceholders(String text) {
+    Matcher matcher = SCALAR_PLACEHOLDER.matcher(text);
+    StringBuffer result = new StringBuffer();
+    while (matcher.find()) {
+      matcher.appendReplacement(result, Matcher.quoteReplacement("{{" + matcher.group(1) + "}}"));
+    }
+    matcher.appendTail(result);
+    return result.toString();
+  }
+
+  private byte[] expandTemplateTables(byte[] sourceBytes, Map<String, Object> renderData) {
+    try (XWPFDocument document = new XWPFDocument(new ByteArrayInputStream(sourceBytes));
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+      normalizeTemplatePlaceholders(document);
+      for (XWPFTable table : document.getTables()) {
+        expandTemplateTable(table, renderData);
+      }
+      document.write(outputStream);
+      return outputStream.toByteArray();
+    } catch (IOException e) {
+      throw new IllegalArgumentException("Unable to expand DOCX table template", e);
+    }
+  }
+
+  private void expandTemplateTable(XWPFTable table, Map<String, Object> renderData) {
+    for (int rowIndex = table.getNumberOfRows() - 1; rowIndex >= 0; rowIndex--) {
+      XWPFTableRow templateRow = table.getRow(rowIndex);
+      TableTemplateBinding binding = findTableBinding(templateRow);
+      if (binding == null) {
+        continue;
+      }
+
+      List<Map<String, Object>> rows = tableRows(renderData.get(binding.tableKey()));
+      for (int i = rows.size() - 1; i >= 0; i--) {
+        XWPFTableRow copiedRow = new XWPFTableRow((CTRow) templateRow.getCtRow().copy(), table);
+        replaceRowPlaceholders(copiedRow, binding.tableKey(), rows.get(i));
+        table.addRow(copiedRow, rowIndex + 1);
+      }
+      table.removeRow(rowIndex);
+    }
+  }
+
+  private TableTemplateBinding findTableBinding(XWPFTableRow row) {
+    String detectedTableKey = null;
+    for (XWPFTableCell cell : row.getTableCells()) {
+      Matcher matcher = TABLE_PLACEHOLDER.matcher(cell.getText());
+      boolean found = false;
+      while (matcher.find()) {
+        found = true;
+        String tableKey = matcher.group(1);
+        if (detectedTableKey == null) {
+          detectedTableKey = tableKey;
+          continue;
+        }
+        if (!detectedTableKey.equals(tableKey)) {
+          return null;
+        }
+      }
+      if (!found && cell.getText().contains("{{")) {
+        return null;
+      }
+    }
+    if (detectedTableKey == null) {
+      return null;
+    }
+    return new TableTemplateBinding(detectedTableKey);
+  }
+
+  @SuppressWarnings("unchecked")
+  private static List<Map<String, Object>> tableRows(Object value) {
+    if (!(value instanceof List<?> rows)) {
+      return List.of();
+    }
+    List<Map<String, Object>> normalizedRows = new ArrayList<>();
+    for (Object row : rows) {
+      if (row instanceof Map<?, ?> rowMap) {
+        normalizedRows.add((Map<String, Object>) rowMap);
+      }
+    }
+    return normalizedRows;
+  }
+
+  private void replaceRowPlaceholders(
+      XWPFTableRow row, String tableKey, Map<String, Object> rowValues) {
+    for (XWPFTableCell cell : row.getTableCells()) {
+      for (XWPFParagraph paragraph : cell.getParagraphs()) {
+        replaceParagraphPlaceholders(paragraph, tableKey, rowValues);
+      }
+    }
+  }
+
+  private void replaceParagraphPlaceholders(
+      XWPFParagraph paragraph, String tableKey, Map<String, Object> rowValues) {
+    String originalText = paragraph.getText();
+    if (originalText == null || originalText.isBlank()) {
+      return;
+    }
+    String replacedText = replaceTablePlaceholders(originalText, tableKey, rowValues);
+    if (replacedText.equals(originalText)) {
+      return;
+    }
+    int runCount = paragraph.getRuns().size();
+    for (int i = runCount - 1; i >= 1; i--) {
+      paragraph.removeRun(i);
+    }
+    XWPFRun run = paragraph.getRuns().isEmpty() ? paragraph.createRun() : paragraph.getRuns().get(0);
+    run.setText(replacedText, 0);
+  }
+
+  private String replaceTablePlaceholders(
+      String text, String tableKey, Map<String, Object> rowValues) {
+    Matcher matcher = TABLE_PLACEHOLDER.matcher(text);
+    StringBuffer result = new StringBuffer();
+    while (matcher.find()) {
+      if (!tableKey.equals(matcher.group(1))) {
+        continue;
+      }
+      String columnPath = matcher.group(2);
+      String replacement = stringValue(resolvePathValue(rowValues, columnPath));
+      matcher.appendReplacement(result, Matcher.quoteReplacement(replacement == null ? "" : replacement));
+    }
+    matcher.appendTail(result);
+    return result.toString();
+  }
+
+  @SuppressWarnings("unchecked")
+  private static Object resolvePathValue(Map<String, Object> rowValues, String columnPath) {
+    if (rowValues.containsKey(columnPath)) {
+      return rowValues.get(columnPath);
+    }
+    Object current = rowValues;
+    for (String segment : splitPathSegments(columnPath)) {
+      if (!(current instanceof Map<?, ?> currentMap) || !currentMap.containsKey(segment)) {
+        return "";
+      }
+      current = ((Map<String, Object>) currentMap).get(segment);
+    }
+    return current;
+  }
+
   private byte[] convertDocxToPdf(byte[] renderedDocx) {
     try (ByteArrayInputStream inputStream = new ByteArrayInputStream(renderedDocx);
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
@@ -232,5 +308,79 @@ public class DocumentTemplateDocxGenerationService {
     }
   }
 
-  private record ColumnSpec(String key, String label, String alignment) {}
+  byte[] prepareDocxForPdf(byte[] renderedDocx) {
+    try (XWPFDocument document = new XWPFDocument(new ByteArrayInputStream(renderedDocx));
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+      ensureVisibleBlankParagraphs(document);
+      document.write(outputStream);
+      return outputStream.toByteArray();
+    } catch (IOException e) {
+      throw new IllegalArgumentException("Unable to prepare DOCX for PDF conversion", e);
+    }
+  }
+
+  private void ensureVisibleBlankParagraphs(XWPFDocument document) {
+    for (XWPFParagraph paragraph : document.getParagraphs()) {
+      ensureVisibleBlankParagraph(paragraph);
+      normalizeParagraphForPdf(paragraph);
+    }
+    for (XWPFTable table : document.getTables()) {
+      ensureVisibleBlankParagraphs(table);
+    }
+  }
+
+  private void ensureVisibleBlankParagraphs(XWPFTable table) {
+    for (XWPFTableRow row : table.getRows()) {
+      for (XWPFTableCell cell : row.getTableCells()) {
+        for (XWPFParagraph paragraph : cell.getParagraphs()) {
+          ensureVisibleBlankParagraph(paragraph);
+          normalizeParagraphForPdf(paragraph);
+        }
+        normalizeCellBordersForPdf(cell);
+        for (XWPFTable nestedTable : cell.getTables()) {
+          ensureVisibleBlankParagraphs(nestedTable);
+        }
+      }
+    }
+  }
+
+  private void ensureVisibleBlankParagraph(XWPFParagraph paragraph) {
+    if (!paragraph.getText().isEmpty()) {
+      return;
+    }
+    XWPFRun run = paragraph.getRuns().isEmpty() ? paragraph.createRun() : paragraph.getRuns().get(0);
+    run.setText(NON_BREAKING_SPACE, 0);
+  }
+
+  private void normalizeParagraphForPdf(XWPFParagraph paragraph) {
+    CTPPr paragraphProperties =
+        paragraph.getCTP().isSetPPr() ? paragraph.getCTP().getPPr() : paragraph.getCTP().addNewPPr();
+    CTJc justification =
+        paragraphProperties.isSetJc() ? paragraphProperties.getJc() : paragraphProperties.addNewJc();
+    if (STJc.END.equals(justification.getVal())) {
+      justification.setVal(STJc.RIGHT);
+      return;
+    }
+    if (STJc.START.equals(justification.getVal())) {
+      justification.setVal(STJc.LEFT);
+    }
+  }
+
+  private void normalizeCellBordersForPdf(XWPFTableCell cell) {
+    CTTcPr cellProperties =
+        cell.getCTTc().isSetTcPr() ? cell.getCTTc().getTcPr() : cell.getCTTc().addNewTcPr();
+    CTTcBorders borders =
+        cellProperties.isSetTcBorders()
+            ? cellProperties.getTcBorders()
+            : cellProperties.addNewTcBorders();
+
+    if (borders.isSetStart() && !borders.isSetLeft()) {
+      borders.setLeft((CTBorder) borders.getStart().copy());
+    }
+    if (borders.isSetEnd() && !borders.isSetRight()) {
+      borders.setRight((CTBorder) borders.getEnd().copy());
+    }
+  }
+
+  private record TableTemplateBinding(String tableKey) {}
 }

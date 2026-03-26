@@ -18,10 +18,6 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class DocumentTemplateGenerationService {
 
-  private static final String MIME_PDF = "application/pdf";
-  private static final String MIME_DOCX =
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-
   private final DocumentTemplatePdfGenerationService pdfGenerationService;
   private final DocumentTemplateDocxGenerationService docxGenerationService;
 
@@ -37,8 +33,8 @@ public class DocumentTemplateGenerationService {
   private byte[] renderTemplateToPdf(
       String mimeType, byte[] sourceBytes, Map<String, Object> fields) {
     return switch (mimeType) {
-      case MIME_PDF -> pdfGenerationService.renderAsPdf(sourceBytes, fields);
-      case MIME_DOCX -> docxGenerationService.renderAsPdf(sourceBytes, fields);
+      case DocumentTemplateMimeTypes.PDF -> pdfGenerationService.renderAsPdf(sourceBytes, fields);
+      case DocumentTemplateMimeTypes.DOCX -> docxGenerationService.renderAsPdf(sourceBytes, fields);
       default ->
           throw ValidationErrorException.of(DocumentTemplateSharedErrorCode.UNSUPPORTED_FILE_TYPE);
     };

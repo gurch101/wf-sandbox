@@ -1,3 +1,5 @@
 package com.gurch.sandbox.documenttemplates.internal;
 
-public record TemplateIntrospectionResult(String formMapJson, boolean esignable) {}
+import com.gurch.sandbox.documenttemplates.DocumentTemplateFormMap;
+
+public record TemplateIntrospectionResult(DocumentTemplateFormMap formMap, boolean esignable) {}

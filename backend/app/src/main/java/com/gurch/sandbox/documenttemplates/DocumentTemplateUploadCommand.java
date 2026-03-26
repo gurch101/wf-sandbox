@@ -10,6 +10,7 @@ public class DocumentTemplateUploadCommand {
   String frName;
   String enDescription;
   String frDescription;
+  DocumentTemplateLanguage language;
   Integer tenantId;
   String originalFilename;
   String mimeType;

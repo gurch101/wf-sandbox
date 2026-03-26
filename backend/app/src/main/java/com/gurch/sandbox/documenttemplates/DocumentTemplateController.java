@@ -9,9 +9,11 @@ import com.gurch.sandbox.web.ValidationErrorException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import java.io.InputStream;
+import java.util.Locale;
 import lombok.RequiredArgsConstructor;
+import org.apache.commons.lang3.StringUtils;
 import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -29,7 +31,6 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 @RestController
 @RequestMapping("/api/admin/document-templates")
@@ -49,11 +50,16 @@ public class DocumentTemplateController {
   @Operation(summary = "Upload a document template")
   public CreateResponse upload(
       @RequestPart("file") MultipartFile file,
-      @RequestParam(value = "enName", required = false) String enName,
+      @RequestParam("enName") String enName,
       @RequestParam(value = "frName", required = false) String frName,
       @RequestParam(value = "enDescription", required = false) String enDescription,
       @RequestParam(value = "frDescription", required = false) String frDescription,
+      @RequestParam("language") String language,
       @RequestParam(value = "tenantId", required = false) Integer tenantId) {
+    if (enName.isBlank()) {
+      throw ValidationErrorException.of(DocumentTemplateUploadErrorCode.EN_NAME_REQUIRED);
+    }
+    DocumentTemplateLanguage parsedLanguage = parseUploadLanguage(language);
     DocumentTemplateUploadCommand command;
     try {
       command =
@@ -62,6 +68,7 @@ public class DocumentTemplateController {
               frName,
               enDescription,
               frDescription,
+              parsedLanguage,
               tenantId,
               file.getOriginalFilename(),
               file.getContentType(),
@@ -113,7 +120,7 @@ public class DocumentTemplateController {
 
   @GetMapping("/{id}/download")
   @Operation(summary = "Download a document template file")
-  public ResponseEntity<StreamingResponseBody> download(@PathVariable Long id) {
+  public ResponseEntity<InputStreamResource> download(@PathVariable Long id) {
     DocumentTemplateDownload download = documentTemplateApi.download(id);
     return toDownloadResponse(download);
   }
@@ -122,13 +129,13 @@ public class DocumentTemplateController {
   @NotIdempotent
   @ApiErrorEnum({DocumentTemplateSharedErrorCode.class, DocumentTemplateGenerateErrorCode.class})
   @Operation(summary = "Generate a merged PDF from document templates")
-  public ResponseEntity<StreamingResponseBody> generate(
+  public ResponseEntity<InputStreamResource> generate(
       @Valid @RequestBody DocumentTemplateGenerateRequest request) {
     DocumentTemplateDownload download = documentTemplateApi.generate(request);
     return toDownloadResponse(download);
   }
 
-  private ResponseEntity<StreamingResponseBody> toDownloadResponse(
+  private ResponseEntity<InputStreamResource> toDownloadResponse(
       DocumentTemplateDownload download) {
     MediaType mediaType = MediaType.APPLICATION_OCTET_STREAM;
     try {
@@ -137,20 +144,13 @@ public class DocumentTemplateController {
       // Fall back to octet-stream when media type is invalid or not parseable.
     }
 
-    StreamingResponseBody body =
-        outputStream -> {
-          try (InputStream inputStream = download.getContentStream()) {
-            inputStream.transferTo(outputStream);
-          }
-        };
-
     return ResponseEntity.ok()
         .contentType(mediaType)
         .header(
             HttpHeaders.CONTENT_DISPOSITION,
             ContentDisposition.attachment().filename(download.getName()).build().toString())
         .contentLength(download.getContentSize())
-        .body(body);
+        .body(new InputStreamResource(download.getContentStream()));
   }
 
   @GetMapping("/search")
@@ -165,5 +165,16 @@ public class DocumentTemplateController {
   @Operation(summary = "Delete a document template")
   public void delete(@PathVariable Long id) {
     documentTemplateApi.deleteById(id);
+  }
+
+  private DocumentTemplateLanguage parseUploadLanguage(String rawLanguage) {
+    if (StringUtils.isBlank(rawLanguage)) {
+      throw ValidationErrorException.of(DocumentTemplateUploadErrorCode.INVALID_LANGUAGE);
+    }
+    try {
+      return DocumentTemplateLanguage.valueOf(rawLanguage.trim().toUpperCase(Locale.ROOT));
+    } catch (IllegalArgumentException e) {
+      throw ValidationErrorException.of(DocumentTemplateUploadErrorCode.INVALID_LANGUAGE);
+    }
   }
 }
