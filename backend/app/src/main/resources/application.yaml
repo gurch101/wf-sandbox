@@ -18,5 +18,35 @@ documenttemplates:
   upload:
     max-size-bytes: ${FORMS_UPLOAD_MAX_SIZE_BYTES:26214400}
 
+logging:
+  level:
+    com.deepoove.poi.resolver.TemplateResolver: WARN
+    com.deepoove.poi.render.DefaultRender: WARN
+    com.deepoove.poi.render.processor.LogProcessor: WARN
+    com.deepoove.poi.render.processor.DelegatePolicy: WARN
+    org.docx4j.jaxb.JaxbValidationEventHandler: OFF
+    org.docx4j.Docx4jProperties: ERROR
+    org.docx4j.jaxb.Context: WARN
+    org.docx4j.model.PropertyResolver: OFF
+    org.docx4j.XmlUtils: WARN
+    org.docx4j.utils.ResourceUtils: ERROR
+    org.docx4j.utils.XPathFactoryUtil: WARN
+    org.docx4j.openpackaging.contenttype.ContentTypeManager: WARN
+    org.docx4j.openpackaging.io3.Load3: WARN
+    org.docx4j.jaxb.NamespacePrefixMapperUtils: WARN
+    org.docx4j.openpackaging.parts.DocPropsCorePart: WARN
+    org.docx4j.openpackaging.parts.DocPropsExtendedPart: WARN
+    org.docx4j.openpackaging.parts.JaxbXmlPartXPathAware: ERROR
+    org.docx4j.openpackaging.parts.WordprocessingML.StyleDefinitionsPart: ERROR
+    org.docx4j.openpackaging.parts.WordprocessingML.FontTablePart: ERROR
+    org.docx4j.openpackaging.parts.ThemePart: WARN
+    org.docx4j.convert.out.common.preprocess.FieldsCombiner: WARN
+    org.docx4j.convert.out.common.preprocess.CoverPageSectPrMover: WARN
+    org.docx4j.convert.out.common.preprocess.ParagraphStylesInTableFix: ERROR
+    org.docx4j.convert.out.common.AbstractConversionContext: WARN
+    org.docx4j.convert.out.fo.FOPAreaTreeHelper: WARN
+    org.docx4j.fonts.PhysicalFonts: ERROR
+    org.docx4j.fonts.fop.fonts.autodetect.FontInfoFinder: ERROR
+
 storage:
   local-root: ${FORMS_STORAGE_LOCAL_ROOT:./uploads}

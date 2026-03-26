@@ -1,12 +1,13 @@
 package com.gurch.sandbox.documenttemplates.internal;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gurch.sandbox.audit.AuditLogApi;
 import com.gurch.sandbox.documenttemplates.DocumentTemplateApi;
 import com.gurch.sandbox.documenttemplates.DocumentTemplateDownload;
+import com.gurch.sandbox.documenttemplates.DocumentTemplateFormMap;
 import com.gurch.sandbox.documenttemplates.DocumentTemplateGenerateErrorCode;
 import com.gurch.sandbox.documenttemplates.DocumentTemplateGenerateRequest;
+import com.gurch.sandbox.documenttemplates.DocumentTemplateLanguage;
 import com.gurch.sandbox.documenttemplates.DocumentTemplateResponse;
 import com.gurch.sandbox.documenttemplates.DocumentTemplateSearchCriteria;
 import com.gurch.sandbox.documenttemplates.DocumentTemplateSharedErrorCode;
@@ -46,9 +47,6 @@ import org.springframework.util.CollectionUtils;
 @RequiredArgsConstructor
 public class DefaultDocumentTemplateService implements DocumentTemplateApi {
 
-  private static final String MIME_PDF = "application/pdf";
-  private static final String MIME_DOCX =
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
   private static final String STORAGE_NAMESPACE_DOCUMENT_TEMPLATES = "document-templates";
   private static final String DOCUMENT_TEMPLATES_RESOURCE_TYPE = "documenttemplates";
 
@@ -70,9 +68,8 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
     validateUploadRequest(command);
 
     String mimeType = normalizeMimeType(command.getMimeType(), command.getOriginalFilename());
-    String trimmedEnName = StringUtils.trimToNull(command.getEnName());
-    String enDisplayName =
-        trimmedEnName != null ? trimmedEnName : command.getOriginalFilename().trim();
+    String enDisplayName = StringUtils.trimToNull(command.getEnName());
+    DocumentTemplateLanguage language = command.getLanguage();
     byte[] payload = readRequestPayload(command.getContentStream());
     TemplateIntrospectionResult introspection = introspectionService.introspect(mimeType, payload);
 
@@ -87,8 +84,9 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
             .mimeType(mimeType)
             .contentSize(stored.contentSize())
             .checksumSha256(stored.checksumSha256())
+            .language(language)
             .tenantId(command.getTenantId())
-            .formMapJson(introspection.formMapJson())
+            .formMapJson(writeFormMap(introspection.formMap()))
             .esignable(introspection.esignable())
             .storageProvider(stored.provider())
             .storagePath(stored.storagePath())
@@ -141,7 +139,7 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
         normalizeMimeType(command.getMimeType(), command.getOriginalFilename());
     TemplateIntrospectionResult introspection =
         introspectionService.introspect(replacementMimeType, payload);
-    if (!hasUnchangedFieldMap(existing.getFormMapJson(), introspection.formMapJson())) {
+    if (!hasUnchangedFieldMap(existing.getFormMapJson(), introspection.formMap())) {
       throw ValidationErrorException.of(DocumentTemplateUpdateErrorCode.TEMPLATE_FIELD_MAP_CHANGED);
     }
 
@@ -157,7 +155,7 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
             .mimeType(replacementMimeType)
             .contentSize(stored.contentSize())
             .checksumSha256(stored.checksumSha256())
-            .formMapJson(introspection.formMapJson())
+            .formMapJson(writeFormMap(introspection.formMap()))
             .esignable(introspection.esignable())
             .storageProvider(stored.provider())
             .storagePath(stored.storagePath())
@@ -230,7 +228,7 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
     byte[] mergedPdf = generationService.generateComposedPdf(renderSources);
     return DocumentTemplateDownload.builder()
         .name("generated-document-bundle.pdf")
-        .mimeType(MIME_PDF)
+        .mimeType(DocumentTemplateMimeTypes.PDF)
         .contentSize((long) mergedPdf.length)
         .contentStream(new ByteArrayInputStream(mergedPdf))
         .build();
@@ -283,6 +281,12 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
     if (command == null) {
       throw ValidationErrorException.of(DocumentTemplateSharedErrorCode.FILE_REQUIRED);
     }
+    if (StringUtils.isBlank(command.getEnName())) {
+      throw ValidationErrorException.of(DocumentTemplateUploadErrorCode.EN_NAME_REQUIRED);
+    }
+    if (command.getLanguage() == null) {
+      throw ValidationErrorException.of(DocumentTemplateUploadErrorCode.INVALID_LANGUAGE);
+    }
     validateUploadTenantAccess(command.getTenantId());
     validateFilePart(
         command.getContentSize(), command.getContentStream(), command.getOriginalFilename());
@@ -311,22 +315,22 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
     String fileName = originalFilename.toLowerCase(Locale.ROOT);
     if (StringUtils.isNotBlank(mimeType)) {
       String normalized = mimeType.trim().toLowerCase(Locale.ROOT);
-      if (MIME_PDF.equals(normalized) || MIME_DOCX.equals(normalized)) {
+      if (DocumentTemplateMimeTypes.isSupported(normalized)) {
         return normalized;
       }
       if (fileName.endsWith(".pdf")) {
-        return MIME_PDF;
+        return DocumentTemplateMimeTypes.PDF;
       }
       if (fileName.endsWith(".docx")) {
-        return MIME_DOCX;
+        return DocumentTemplateMimeTypes.DOCX;
       }
       throw ValidationErrorException.of(DocumentTemplateSharedErrorCode.UNSUPPORTED_FILE_TYPE);
     }
     if (fileName.endsWith(".pdf")) {
-      return MIME_PDF;
+      return DocumentTemplateMimeTypes.PDF;
     }
     if (fileName.endsWith(".docx")) {
-      return MIME_DOCX;
+      return DocumentTemplateMimeTypes.DOCX;
     }
     throw ValidationErrorException.of(DocumentTemplateSharedErrorCode.UNSUPPORTED_FILE_TYPE);
   }
@@ -343,20 +347,29 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
     return StringUtils.trimToNull(nextValue);
   }
 
-  private boolean hasUnchangedFieldMap(String previousFormMapJson, String nextFormMapJson) {
-    JsonNode previous = parseJsonOrNull(previousFormMapJson);
-    JsonNode next = parseJsonOrNull(nextFormMapJson);
+  private boolean hasUnchangedFieldMap(
+      String previousFormMapJson, DocumentTemplateFormMap nextFormMap) {
+    DocumentTemplateFormMap previous = parseFormMapOrNull(previousFormMapJson);
+    DocumentTemplateFormMap next = nextFormMap;
     return Objects.equals(previous, next);
   }
 
-  private JsonNode parseJsonOrNull(String rawJson) {
+  private DocumentTemplateFormMap parseFormMapOrNull(String rawJson) {
     if (StringUtils.isBlank(rawJson)) {
       return null;
     }
     try {
-      return objectMapper.readTree(rawJson);
+      return objectMapper.readValue(rawJson, DocumentTemplateFormMap.class);
     } catch (IOException e) {
       throw new IllegalStateException("Stored template form map is invalid JSON", e);
+    }
+  }
+
+  private String writeFormMap(DocumentTemplateFormMap formMap) {
+    try {
+      return objectMapper.writeValueAsString(formMap);
+    } catch (IOException e) {
+      throw new IllegalStateException("Parsed template form map could not be serialized", e);
     }
   }
 
@@ -370,8 +383,9 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
         .mimeType(entity.getMimeType())
         .contentSize(entity.getContentSize())
         .checksumSha256(entity.getChecksumSha256())
+        .language(entity.getLanguage())
         .tenantId(entity.getTenantId())
-        .formMap(parseJsonOrNull(entity.getFormMapJson()))
+        .formMap(parseFormMapOrNull(entity.getFormMapJson()))
         .esignable(entity.isEsignable())
         .createdAt(entity.getCreatedAt())
         .updatedAt(entity.getUpdatedAt())
