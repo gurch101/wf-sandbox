@@ -1,6 +1,7 @@
 package com.gurch.sandbox.security.internal;
 
 import com.gurch.sandbox.security.AuthenticatedUser;
+import com.gurch.sandbox.security.AuthenticatedUserDetails;
 import com.gurch.sandbox.security.CurrentUserProvider;
 import java.util.Optional;
 import org.springframework.security.core.Authentication;
@@ -31,6 +32,9 @@ class SecurityContextCurrentUserProvider implements CurrentUserProvider {
     Object principal = authentication.getPrincipal();
     if (principal instanceof AuthenticatedUser authenticatedUser) {
       return Optional.of(authenticatedUser);
+    }
+    if (principal instanceof AuthenticatedUserDetails authenticatedUserDetails) {
+      return Optional.of(authenticatedUserDetails.authenticatedUser());
     }
     if (principal instanceof UserDetails userDetails) {
       return parseUserId(userDetails.getUsername())

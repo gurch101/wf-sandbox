@@ -25,7 +25,6 @@ import org.springframework.data.jdbc.repository.config.EnableJdbcAuditing;
     dateTimeProviderRef = "jdbcAuditingDateTimeProvider")
 @RequiredArgsConstructor
 public class PersistenceConfig {
-
   private final ObjectMapper objectMapper;
   private final CurrentUserProvider currentUserProvider;
 
