@@ -11,14 +11,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.docx4j.Docx4J;
-import org.docx4j.openpackaging.packages.WordprocessingMLPackage;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.apache.poi.xwpf.usermodel.XWPFRun;
 import org.apache.poi.xwpf.usermodel.XWPFTable;
 import org.apache.poi.xwpf.usermodel.XWPFTableCell;
 import org.apache.poi.xwpf.usermodel.XWPFTableRow;
+import org.docx4j.Docx4J;
+import org.docx4j.openpackaging.packages.WordprocessingMLPackage;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTBorder;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTJc;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPPr;
@@ -262,7 +262,8 @@ public class DocumentTemplateDocxGenerationService {
     for (int i = runCount - 1; i >= 1; i--) {
       paragraph.removeRun(i);
     }
-    XWPFRun run = paragraph.getRuns().isEmpty() ? paragraph.createRun() : paragraph.getRuns().get(0);
+    XWPFRun run =
+        paragraph.getRuns().isEmpty() ? paragraph.createRun() : paragraph.getRuns().get(0);
     run.setText(replacedText, 0);
   }
 
@@ -276,7 +277,8 @@ public class DocumentTemplateDocxGenerationService {
       }
       String columnPath = matcher.group(2);
       String replacement = stringValue(resolvePathValue(rowValues, columnPath));
-      matcher.appendReplacement(result, Matcher.quoteReplacement(replacement == null ? "" : replacement));
+      matcher.appendReplacement(
+          result, Matcher.quoteReplacement(replacement == null ? "" : replacement));
     }
     matcher.appendTail(result);
     return result.toString();
@@ -348,15 +350,20 @@ public class DocumentTemplateDocxGenerationService {
     if (!paragraph.getText().isEmpty()) {
       return;
     }
-    XWPFRun run = paragraph.getRuns().isEmpty() ? paragraph.createRun() : paragraph.getRuns().get(0);
+    XWPFRun run =
+        paragraph.getRuns().isEmpty() ? paragraph.createRun() : paragraph.getRuns().get(0);
     run.setText(NON_BREAKING_SPACE, 0);
   }
 
   private void normalizeParagraphForPdf(XWPFParagraph paragraph) {
     CTPPr paragraphProperties =
-        paragraph.getCTP().isSetPPr() ? paragraph.getCTP().getPPr() : paragraph.getCTP().addNewPPr();
+        paragraph.getCTP().isSetPPr()
+            ? paragraph.getCTP().getPPr()
+            : paragraph.getCTP().addNewPPr();
     CTJc justification =
-        paragraphProperties.isSetJc() ? paragraphProperties.getJc() : paragraphProperties.addNewJc();
+        paragraphProperties.isSetJc()
+            ? paragraphProperties.getJc()
+            : paragraphProperties.addNewJc();
     if (STJc.END.equals(justification.getVal())) {
       justification.setVal(STJc.RIGHT);
       return;

@@ -7,6 +7,10 @@ import org.springframework.http.HttpStatus;
 public enum DocumentTemplateUpdateErrorCode implements ApiErrorCode {
   TEMPLATE_FIELD_MAP_CHANGED(
       "file", "template field map changed and update is not allowed", HttpStatus.BAD_REQUEST),
+  TEMPLATE_ESIGN_ANCHORS_CHANGED(
+      "file",
+      "template e-sign anchor metadata changed and update is not allowed",
+      HttpStatus.BAD_REQUEST),
   INVALID_LANGUAGE("language", "language must be english or french", HttpStatus.BAD_REQUEST);
 
   private final String fieldName;

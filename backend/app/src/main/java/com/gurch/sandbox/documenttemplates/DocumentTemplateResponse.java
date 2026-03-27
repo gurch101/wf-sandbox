@@ -53,6 +53,9 @@ public class DocumentTemplateResponse {
           "Parsed form map with fields, field types, and possible values for selectable controls")
   DocumentTemplateFormMap formMap;
 
+  @Schema(description = "Parsed e-sign anchor metadata")
+  DocumentTemplateEsignAnchorMetadata esignAnchorMetadata;
+
   @Schema(description = "Whether this template includes configured e-signature anchors")
   boolean esignable;
 

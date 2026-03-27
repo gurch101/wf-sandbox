@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gurch.sandbox.audit.AuditLogApi;
 import com.gurch.sandbox.documenttemplates.DocumentTemplateApi;
 import com.gurch.sandbox.documenttemplates.DocumentTemplateDownload;
+import com.gurch.sandbox.documenttemplates.DocumentTemplateEsignAnchorMetadata;
 import com.gurch.sandbox.documenttemplates.DocumentTemplateFormMap;
 import com.gurch.sandbox.documenttemplates.DocumentTemplateGenerateErrorCode;
 import com.gurch.sandbox.documenttemplates.DocumentTemplateGenerateRequest;
@@ -87,6 +88,7 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
             .language(language)
             .tenantId(command.getTenantId())
             .formMapJson(writeFormMap(introspection.formMap()))
+            .esignAnchorMetadataJson(writeEsignAnchorMetadata(introspection.esignAnchorMetadata()))
             .esignable(introspection.esignable())
             .storageProvider(stored.provider())
             .storagePath(stored.storagePath())
@@ -139,8 +141,14 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
         normalizeMimeType(command.getMimeType(), command.getOriginalFilename());
     TemplateIntrospectionResult introspection =
         introspectionService.introspect(replacementMimeType, payload);
-    if (!hasUnchangedFieldMap(existing.getFormMapJson(), introspection.formMap())) {
+    if (!Objects.equals(parseFormMapOrNull(existing.getFormMapJson()), introspection.formMap())) {
       throw ValidationErrorException.of(DocumentTemplateUpdateErrorCode.TEMPLATE_FIELD_MAP_CHANGED);
+    }
+    if (!Objects.equals(
+        parseEsignAnchorMetadataOrNull(existing.getEsignAnchorMetadataJson()),
+        introspection.esignAnchorMetadata())) {
+      throw ValidationErrorException.of(
+          DocumentTemplateUpdateErrorCode.TEMPLATE_ESIGN_ANCHORS_CHANGED);
     }
 
     StorageWriteResult stored = persistPayload(command.getOriginalFilename(), payload);
@@ -156,6 +164,7 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
             .contentSize(stored.contentSize())
             .checksumSha256(stored.checksumSha256())
             .formMapJson(writeFormMap(introspection.formMap()))
+            .esignAnchorMetadataJson(writeEsignAnchorMetadata(introspection.esignAnchorMetadata()))
             .esignable(introspection.esignable())
             .storageProvider(stored.provider())
             .storagePath(stored.storagePath())
@@ -347,13 +356,6 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
     return StringUtils.trimToNull(nextValue);
   }
 
-  private boolean hasUnchangedFieldMap(
-      String previousFormMapJson, DocumentTemplateFormMap nextFormMap) {
-    DocumentTemplateFormMap previous = parseFormMapOrNull(previousFormMapJson);
-    DocumentTemplateFormMap next = nextFormMap;
-    return Objects.equals(previous, next);
-  }
-
   private DocumentTemplateFormMap parseFormMapOrNull(String rawJson) {
     if (StringUtils.isBlank(rawJson)) {
       return null;
@@ -365,11 +367,31 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
     }
   }
 
+  private DocumentTemplateEsignAnchorMetadata parseEsignAnchorMetadataOrNull(String rawJson) {
+    if (StringUtils.isBlank(rawJson)) {
+      return null;
+    }
+    try {
+      return objectMapper.readValue(rawJson, DocumentTemplateEsignAnchorMetadata.class);
+    } catch (IOException e) {
+      throw new IllegalStateException("Stored template e-sign anchor metadata is invalid JSON", e);
+    }
+  }
+
   private String writeFormMap(DocumentTemplateFormMap formMap) {
     try {
       return objectMapper.writeValueAsString(formMap);
     } catch (IOException e) {
       throw new IllegalStateException("Parsed template form map could not be serialized", e);
+    }
+  }
+
+  private String writeEsignAnchorMetadata(DocumentTemplateEsignAnchorMetadata esignAnchorMetadata) {
+    try {
+      return objectMapper.writeValueAsString(esignAnchorMetadata);
+    } catch (IOException e) {
+      throw new IllegalStateException(
+          "Parsed template e-sign anchor metadata could not be serialized", e);
     }
   }
 
@@ -386,6 +408,7 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
         .language(entity.getLanguage())
         .tenantId(entity.getTenantId())
         .formMap(parseFormMapOrNull(entity.getFormMapJson()))
+        .esignAnchorMetadata(parseEsignAnchorMetadataOrNull(entity.getEsignAnchorMetadataJson()))
         .esignable(entity.isEsignable())
         .createdAt(entity.getCreatedAt())
         .updatedAt(entity.getUpdatedAt())

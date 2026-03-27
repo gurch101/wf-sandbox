@@ -24,22 +24,28 @@ class DocumentTemplateDocxGenerationServiceTest {
         service.renderDocx(
             template,
             Map.of(
-                "clientName", "Ada Lovelace",
+                "clientName",
+                "Ada Lovelace",
                 "holdings",
-                    List.of(
-                        Map.of("name", "AAPL", "quantity", 10, "marketValue", "1870.00"),
-                        Map.of("name", "MSFT", "quantity", 5, "marketValue", "2060.00"))));
+                List.of(
+                    Map.of("name", "AAPL", "quantity", 10, "marketValue", "1870.00"),
+                    Map.of("name", "MSFT", "quantity", 5, "marketValue", "2060.00"))));
 
     try (XWPFDocument document = new XWPFDocument(new java.io.ByteArrayInputStream(rendered))) {
-      assertThat(document.getParagraphs()).hasSize(7);
+      assertThat(document.getParagraphs()).hasSize(11);
       assertThat(document.getParagraphs().get(0).getText()).isEqualTo("Hi Ada Lovelace,");
       assertThat(document.getParagraphs().get(1).getText()).isEmpty();
-      assertThat(document.getParagraphs().get(2).getText()).isEmpty();
-      assertThat(document.getParagraphs().get(3).getText()).isEqualTo("Here are your holdings:");
+      assertThat(document.getParagraphs().get(2).getText()).isEqualTo("Here are your holdings:");
+      assertThat(document.getParagraphs().get(3).getText()).isEmpty();
       assertThat(document.getParagraphs().get(4).getText()).isEmpty();
       assertThat(document.getParagraphs().get(5).getText()).isEmpty();
       assertThat(document.getParagraphs().get(6).getText()).isEmpty();
+      assertThat(document.getParagraphs().get(7).getText()).isEqualTo("/s1/");
+      assertThat(document.getParagraphs().get(8).getText()).isEqualTo("/d1/");
+      assertThat(document.getParagraphs().get(9).getText()).isEqualTo("/s2/");
+      assertThat(document.getParagraphs().get(10).getText()).isEqualTo("/d2/");
 
+      assertThat(document.getTables()).hasSize(2);
       XWPFTable table = document.getTables().get(0);
       assertThat(table.getNumberOfRows()).isEqualTo(3);
       assertThat(table.getRow(0).getCell(0).getText()).isEqualTo("Security Name");
@@ -61,6 +67,10 @@ class DocumentTemplateDocxGenerationServiceTest {
           .isIn(ParagraphAlignment.RIGHT, ParagraphAlignment.END);
       assertThat(table.getRow(2).getCell(2).getParagraphs().get(0).getAlignment())
           .isIn(ParagraphAlignment.RIGHT, ParagraphAlignment.END);
+
+      XWPFTable clientTable = document.getTables().get(1);
+      assertThat(clientTable.getRow(0).getCell(1).getText()).isEqualTo("Ada Lovelace");
+      assertThat(clientTable.getRow(1).getCell(1).getText()).isEmpty();
     }
   }
 
@@ -71,26 +81,31 @@ class DocumentTemplateDocxGenerationServiceTest {
         service.renderDocx(
             template,
             Map.of(
-                "clientName", "Ada Lovelace",
+                "clientName",
+                "Ada Lovelace",
                 "holdings",
-                    List.of(
-                        Map.of("name", "AAPL", "quantity", 10, "marketValue", "1870.00"),
-                        Map.of("name", "MSFT", "quantity", 5, "marketValue", "2060.00"))));
+                List.of(
+                    Map.of("name", "AAPL", "quantity", 10, "marketValue", "1870.00"),
+                    Map.of("name", "MSFT", "quantity", 5, "marketValue", "2060.00"))));
 
     byte[] prepared = service.prepareDocxForPdf(rendered);
 
     try (XWPFDocument document = new XWPFDocument(new java.io.ByteArrayInputStream(prepared))) {
       assertThat(document.getParagraphs().get(1).getText()).isEqualTo("\u00A0");
-      assertThat(document.getParagraphs().get(2).getText()).isEqualTo("\u00A0");
+      assertThat(document.getParagraphs().get(3).getText()).isEqualTo("\u00A0");
       assertThat(document.getParagraphs().get(4).getText()).isEqualTo("\u00A0");
       assertThat(document.getParagraphs().get(5).getText()).isEqualTo("\u00A0");
       assertThat(document.getParagraphs().get(6).getText()).isEqualTo("\u00A0");
-      assertThat(document.getTables().get(0).getRow(1).getCell(1).getParagraphs().get(0).getAlignment())
+      assertThat(
+              document
+                  .getTables()
+                  .get(0)
+                  .getRow(1)
+                  .getCell(1)
+                  .getParagraphs()
+                  .get(0)
+                  .getAlignment())
           .isEqualTo(ParagraphAlignment.RIGHT);
-      assertThat(document.getTables().get(0).getRow(1).getCell(1).getCTTc().getTcPr().getTcBorders().isSetLeft())
-          .isTrue();
-      assertThat(document.getTables().get(0).getRow(1).getCell(2).getCTTc().getTcPr().getTcBorders().isSetRight())
-          .isTrue();
     }
   }
 

@@ -29,6 +29,8 @@ public class DocumentTemplateEntity extends MutableEntity<Long> {
   @Column("form_map_json")
   private String formMapJson;
 
+  private String esignAnchorMetadataJson;
+
   private boolean esignable;
   private StorageProviderType storageProvider;
   private String storagePath;
