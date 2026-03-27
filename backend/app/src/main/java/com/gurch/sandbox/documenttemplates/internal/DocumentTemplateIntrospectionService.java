@@ -37,7 +37,7 @@ public class DocumentTemplateIntrospectionService {
   private static final Pattern DOCX_PLACEHOLDER =
       Pattern.compile("\\{\\{\\s*([a-zA-Z0-9_.-]+)\\s*}}");
 
-  private static final List<String> PDF_ESIGN_ANCHORS = List.of("s1", "s2", "d1", "d2");
+  private static final List<String> PDF_ESIGN_ANCHORS = List.of("/s1/", "/s2/", "/d1/", "/d2/");
 
   public TemplateIntrospectionResult introspect(String mimeType, byte[] payload) {
     if (DocumentTemplateMimeTypes.PDF.equals(mimeType)) {
@@ -80,18 +80,20 @@ public class DocumentTemplateIntrospectionService {
   }
 
   private TemplateIntrospectionResult introspectWord(byte[] payload) {
-    Set<String> keys = extractPlaceholdersFromDocx(payload);
+    String text = extractTextFromDocx(payload);
+    Set<String> keys = extractPlaceholderKeys(text);
     List<DocumentTemplateFormField> fields = new ArrayList<>();
     for (String key : keys) {
       fields.add(new DocumentTemplateFormField(key, DocumentTemplateFormFieldType.TEXT, List.of()));
     }
-    return new TemplateIntrospectionResult(new DocumentTemplateFormMap(fields), false);
+    return new TemplateIntrospectionResult(
+        new DocumentTemplateFormMap(fields), hasEsignAnchor(text));
   }
 
-  private Set<String> extractPlaceholdersFromDocx(byte[] payload) {
+  private String extractTextFromDocx(byte[] payload) {
     try (XWPFDocument document = new XWPFDocument(new ByteArrayInputStream(payload));
         XWPFWordExtractor extractor = new XWPFWordExtractor(document)) {
-      return extractPlaceholderKeys(extractor.getText());
+      return extractor.getText();
     } catch (IOException e) {
       throw new IllegalArgumentException("Uploaded Word document is not a valid .docx file", e);
     }
@@ -153,7 +155,12 @@ public class DocumentTemplateIntrospectionService {
 
   private boolean hasEsignAnchor(PDDocument document) throws IOException {
     String text = new PDFTextStripper().getText(document).toLowerCase(Locale.ROOT);
-    return PDF_ESIGN_ANCHORS.stream().anyMatch(text::contains);
+    return hasEsignAnchor(text);
+  }
+
+  private boolean hasEsignAnchor(String text) {
+    String normalized = text == null ? "" : text.toLowerCase(Locale.ROOT);
+    return PDF_ESIGN_ANCHORS.stream().anyMatch(normalized::contains);
   }
 
   private static List<String> deduplicate(List<String> values) {

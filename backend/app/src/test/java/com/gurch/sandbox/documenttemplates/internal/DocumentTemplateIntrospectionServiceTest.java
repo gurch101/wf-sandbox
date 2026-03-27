@@ -35,9 +35,25 @@ class DocumentTemplateIntrospectionServiceTest {
     assertThat(electronicDeliveryField.possibleValues()).containsExactly("false", "true");
   }
 
+  @Test
+  void shouldMarkDocxWithEsignAnchorsAsEsignable() throws IOException {
+    TemplateIntrospectionResult result = service.introspect(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document", loadTestDocx());
+
+    assertThat(result.esignable()).isTrue();
+  }
+
   private byte[] loadTestPdf() throws IOException {
     try (InputStream inputStream =
         getClass().getResourceAsStream("/documenttemplates/introspect.pdf")) {
+      assertThat(inputStream).isNotNull();
+      return inputStream.readAllBytes();
+    }
+  }
+
+  private byte[] loadTestDocx() throws IOException {
+    try (InputStream inputStream =
+        getClass().getResourceAsStream("/documenttemplates/introspect.docx")) {
       assertThat(inputStream).isNotNull();
       return inputStream.readAllBytes();
     }
