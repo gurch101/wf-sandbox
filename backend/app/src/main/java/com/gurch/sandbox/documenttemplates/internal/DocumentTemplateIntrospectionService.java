@@ -5,13 +5,14 @@ import com.gurch.sandbox.documenttemplates.DocumentTemplateFormField;
 import com.gurch.sandbox.documenttemplates.DocumentTemplateFormFieldType;
 import com.gurch.sandbox.documenttemplates.DocumentTemplateFormMap;
 import com.gurch.sandbox.documenttemplates.DocumentTemplateSharedErrorCode;
+import com.gurch.sandbox.pdfutils.PdfAnchorParseResult;
+import com.gurch.sandbox.pdfutils.PdfAnchorParser;
 import com.gurch.sandbox.web.ValidationErrorException;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -27,7 +28,6 @@ import org.apache.pdfbox.pdmodel.interactive.form.PDNonTerminalField;
 import org.apache.pdfbox.pdmodel.interactive.form.PDPushButton;
 import org.apache.pdfbox.pdmodel.interactive.form.PDRadioButton;
 import org.apache.pdfbox.pdmodel.interactive.form.PDTextField;
-import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.poi.xwpf.extractor.XWPFWordExtractor;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.springframework.stereotype.Service;
@@ -37,9 +37,9 @@ public class DocumentTemplateIntrospectionService {
 
   private static final Pattern DOCX_PLACEHOLDER =
       Pattern.compile("\\{\\{\\s*([a-zA-Z0-9_.-]+)\\s*}}");
-  private static final Pattern SIGNATURE_ANCHOR_PATTERN =
+  private static final Pattern DOCX_SIGNATURE_ANCHOR_PATTERN =
       Pattern.compile("/(s\\d+)/", Pattern.CASE_INSENSITIVE);
-  private static final Pattern DATE_ANCHOR_PATTERN =
+  private static final Pattern DOCX_DATE_ANCHOR_PATTERN =
       Pattern.compile("/(d\\d+)/", Pattern.CASE_INSENSITIVE);
 
   public TemplateIntrospectionResult introspect(String mimeType, byte[] payload) {
@@ -164,22 +164,25 @@ public class DocumentTemplateIntrospectionService {
 
   private DocumentTemplateEsignAnchorMetadata parseEsignAnchorMetadata(PDDocument document)
       throws IOException {
-    String text = new PDFTextStripper().getText(document).toLowerCase(Locale.ROOT);
-    return parseEsignAnchorMetadata(text);
+    PdfAnchorParseResult result = PdfAnchorParser.parse(document);
+    return new DocumentTemplateEsignAnchorMetadata(
+        deduplicate(result.signatureAnchorKeys()), deduplicate(result.dateAnchorKeys()));
   }
 
   private DocumentTemplateEsignAnchorMetadata parseEsignAnchorMetadata(String text) {
-    String normalized = text == null ? "" : text.toLowerCase(Locale.ROOT);
     return new DocumentTemplateEsignAnchorMetadata(
-        deduplicate(findMatches(normalized, SIGNATURE_ANCHOR_PATTERN)),
-        deduplicate(findMatches(normalized, DATE_ANCHOR_PATTERN)));
+        deduplicate(findMatches(text, DOCX_SIGNATURE_ANCHOR_PATTERN)),
+        deduplicate(findMatches(text, DOCX_DATE_ANCHOR_PATTERN)));
   }
 
   private static Set<String> findMatches(String text, Pattern pattern) {
     LinkedHashSet<String> matches = new LinkedHashSet<>();
     Matcher matcher = pattern.matcher(text == null ? "" : text);
     while (matcher.find()) {
-      matches.add(matcher.group(1).toLowerCase(Locale.ROOT));
+      String match = StringUtils.trimToNull(matcher.group(1));
+      if (match != null) {
+        matches.add(match.toLowerCase(java.util.Locale.ROOT));
+      }
     }
     return matches;
   }
