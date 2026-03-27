@@ -248,6 +248,20 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
   }
 
   @Test
+  void shouldMarkUploadedDocxFixtureWithEsignAnchorsAsEsignable() throws Exception {
+    Long id =
+        uploadTemplate(
+            "introspect.docx",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            loadTestResource("documenttemplates/introspect.docx"));
+
+    mockMvc
+        .perform(get("/api/admin/document-templates/{id}", id))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.esignable").value(true));
+  }
+
+  @Test
   void shouldAcceptPdfWithoutFormFields() throws Exception {
     byte[] payload = createFlatPdf();
     MockMultipartFile file = new MockMultipartFile("file", "flat.pdf", "application/pdf", payload);
@@ -561,7 +575,7 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
         contentStream.beginText();
         contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 12);
         contentStream.newLineAtOffset(50, 760);
-        contentStream.showText("Please sign here s1 and date d1");
+        contentStream.showText("Please sign here /s1/ and date /d1/");
         contentStream.endText();
       }
 
