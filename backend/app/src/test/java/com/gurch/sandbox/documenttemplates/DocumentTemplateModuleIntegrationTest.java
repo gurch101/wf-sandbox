@@ -115,6 +115,10 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
         .andExpect(jsonPath("$.language").value("FRENCH"))
         .andExpect(jsonPath("$.tenantId").isEmpty())
         .andExpect(jsonPath("$.esignable").value(true))
+        .andExpect(jsonPath("$.esignAnchorMetadata.signatureAnchorKeys.length()").value(1))
+        .andExpect(jsonPath("$.esignAnchorMetadata.signatureAnchorKeys[0]").value("s1"))
+        .andExpect(jsonPath("$.esignAnchorMetadata.dateAnchorKeys.length()").value(1))
+        .andExpect(jsonPath("$.esignAnchorMetadata.dateAnchorKeys[0]").value("d1"))
         .andExpect(jsonPath("$.formMap.fields.length()").value(3))
         .andExpect(jsonPath("$.formMap.fields[0].key").value("clientName"))
         .andExpect(jsonPath("$.formMap.fields[0].type").value("TEXT"));
@@ -423,6 +427,7 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
         .andExpect(jsonPath("$.enDescription").value("Updated description"))
         .andExpect(jsonPath("$.frDescription").value("Description mise a jour"))
         .andExpect(jsonPath("$.language").value("ENGLISH"))
+        .andExpect(jsonPath("$.esignable").value(true))
         .andExpect(jsonPath("$.formMap.fields.length()").value(3));
   }
 
@@ -446,6 +451,29 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.detail").value("Request has invalid fields"))
         .andExpect(jsonPath("$.errors[0].code").value("TEMPLATE_FIELD_MAP_CHANGED"));
+  }
+
+  @Test
+  void shouldRejectUpdateWhenReplacementChangesEsignAnchorMetadata() throws Exception {
+    Long templateId =
+        uploadTemplate("fillable.pdf", "application/pdf", createFillablePdfWithAnchor());
+    MockMultipartFile changedFile =
+        new MockMultipartFile(
+            "file", "fillable-v2.pdf", "application/pdf", createFillablePdfWithDifferentAnchor());
+
+    mockMvc
+        .perform(
+            multipart("/api/admin/document-templates/{id}", templateId)
+                .file(changedFile)
+                .with(csrf())
+                .with(
+                    request -> {
+                      request.setMethod("PATCH");
+                      return request;
+                    }))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.detail").value("Request has invalid fields"))
+        .andExpect(jsonPath("$.errors[0].code").value("TEMPLATE_ESIGN_ANCHORS_CHANGED"));
   }
 
   @Test
@@ -612,6 +640,45 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
         contentStream.showText("This is not a form PDF");
         contentStream.endText();
       }
+      document.save(out);
+      return out.toByteArray();
+    }
+  }
+
+  private static byte[] createFillablePdfWithDifferentAnchor() throws IOException {
+    try (PDDocument document = new PDDocument();
+        ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+      PDPage page = new PDPage(PDRectangle.LETTER);
+      document.addPage(page);
+
+      PDAcroForm form = new PDAcroForm(document);
+      document.getDocumentCatalog().setAcroForm(form);
+      form.setDefaultAppearance("/Helv 10 Tf 0 g");
+
+      try (PDPageContentStream contentStream = new PDPageContentStream(document, page)) {
+        contentStream.beginText();
+        contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 12);
+        contentStream.newLineAtOffset(50, 760);
+        contentStream.showText("Please sign here /s2/ and date /d2/");
+        contentStream.endText();
+      }
+
+      PDTextField clientName = new PDTextField(form);
+      clientName.setPartialName("clientName");
+      form.getFields().add(clientName);
+      attachWidget(clientName.getWidgets().get(0), page, 50, 700, 200, 18);
+
+      PDCheckBox consent = new PDCheckBox(form);
+      consent.setPartialName("consent");
+      form.getFields().add(consent);
+      attachWidget(consent.getWidgets().get(0), page, 50, 665, 18, 18);
+
+      PDComboBox state = new PDComboBox(form);
+      state.setPartialName("state");
+      state.setOptions(java.util.List.of("CA", "NY"));
+      form.getFields().add(state);
+      attachWidget(state.getWidgets().get(0), page, 50, 630, 120, 18);
+
       document.save(out);
       return out.toByteArray();
     }

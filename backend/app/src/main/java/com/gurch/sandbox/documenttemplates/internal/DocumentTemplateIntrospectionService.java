@@ -1,5 +1,6 @@
 package com.gurch.sandbox.documenttemplates.internal;
 
+import com.gurch.sandbox.documenttemplates.DocumentTemplateEsignAnchorMetadata;
 import com.gurch.sandbox.documenttemplates.DocumentTemplateFormField;
 import com.gurch.sandbox.documenttemplates.DocumentTemplateFormFieldType;
 import com.gurch.sandbox.documenttemplates.DocumentTemplateFormMap;
@@ -36,8 +37,10 @@ public class DocumentTemplateIntrospectionService {
 
   private static final Pattern DOCX_PLACEHOLDER =
       Pattern.compile("\\{\\{\\s*([a-zA-Z0-9_.-]+)\\s*}}");
-
-  private static final List<String> PDF_ESIGN_ANCHORS = List.of("/s1/", "/s2/", "/d1/", "/d2/");
+  private static final Pattern SIGNATURE_ANCHOR_PATTERN =
+      Pattern.compile("/(s\\d+)/", Pattern.CASE_INSENSITIVE);
+  private static final Pattern DATE_ANCHOR_PATTERN =
+      Pattern.compile("/(d\\d+)/", Pattern.CASE_INSENSITIVE);
 
   public TemplateIntrospectionResult introspect(String mimeType, byte[] payload) {
     if (DocumentTemplateMimeTypes.PDF.equals(mimeType)) {
@@ -72,8 +75,11 @@ public class DocumentTemplateIntrospectionService {
         }
       }
 
+      DocumentTemplateEsignAnchorMetadata esignAnchorMetadata = parseEsignAnchorMetadata(document);
       return new TemplateIntrospectionResult(
-          new DocumentTemplateFormMap(fields), hasEsignAnchor(document));
+          new DocumentTemplateFormMap(fields),
+          esignAnchorMetadata,
+          esignAnchorMetadata.isEsignable());
     } catch (IOException e) {
       throw new IllegalArgumentException("Uploaded PDF is not a valid form document", e);
     }
@@ -86,8 +92,11 @@ public class DocumentTemplateIntrospectionService {
     for (String key : keys) {
       fields.add(new DocumentTemplateFormField(key, DocumentTemplateFormFieldType.TEXT, List.of()));
     }
+    DocumentTemplateEsignAnchorMetadata esignAnchorMetadata = parseEsignAnchorMetadata(text);
     return new TemplateIntrospectionResult(
-        new DocumentTemplateFormMap(fields), hasEsignAnchor(text));
+        new DocumentTemplateFormMap(fields),
+        esignAnchorMetadata,
+        esignAnchorMetadata.isEsignable());
   }
 
   private String extractTextFromDocx(byte[] payload) {
@@ -153,14 +162,26 @@ public class DocumentTemplateIntrospectionService {
     return List.of();
   }
 
-  private boolean hasEsignAnchor(PDDocument document) throws IOException {
+  private DocumentTemplateEsignAnchorMetadata parseEsignAnchorMetadata(PDDocument document)
+      throws IOException {
     String text = new PDFTextStripper().getText(document).toLowerCase(Locale.ROOT);
-    return hasEsignAnchor(text);
+    return parseEsignAnchorMetadata(text);
   }
 
-  private boolean hasEsignAnchor(String text) {
+  private DocumentTemplateEsignAnchorMetadata parseEsignAnchorMetadata(String text) {
     String normalized = text == null ? "" : text.toLowerCase(Locale.ROOT);
-    return PDF_ESIGN_ANCHORS.stream().anyMatch(normalized::contains);
+    return new DocumentTemplateEsignAnchorMetadata(
+        deduplicate(findMatches(normalized, SIGNATURE_ANCHOR_PATTERN)),
+        deduplicate(findMatches(normalized, DATE_ANCHOR_PATTERN)));
+  }
+
+  private static Set<String> findMatches(String text, Pattern pattern) {
+    LinkedHashSet<String> matches = new LinkedHashSet<>();
+    Matcher matcher = pattern.matcher(text == null ? "" : text);
+    while (matcher.find()) {
+      matches.add(matcher.group(1).toLowerCase(Locale.ROOT));
+    }
+    return matches;
   }
 
   private static List<String> deduplicate(List<String> values) {

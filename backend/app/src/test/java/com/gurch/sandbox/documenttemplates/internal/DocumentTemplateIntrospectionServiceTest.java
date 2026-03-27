@@ -37,10 +37,14 @@ class DocumentTemplateIntrospectionServiceTest {
 
   @Test
   void shouldMarkDocxWithEsignAnchorsAsEsignable() throws IOException {
-    TemplateIntrospectionResult result = service.introspect(
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document", loadTestDocx());
+    TemplateIntrospectionResult result =
+        service.introspect(
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            loadTestDocx());
 
     assertThat(result.esignable()).isTrue();
+    assertThat(result.esignAnchorMetadata().signatureAnchorKeys()).contains("s1", "s2");
+    assertThat(result.esignAnchorMetadata().dateAnchorKeys()).contains("d1", "d2");
   }
 
   private byte[] loadTestPdf() throws IOException {
