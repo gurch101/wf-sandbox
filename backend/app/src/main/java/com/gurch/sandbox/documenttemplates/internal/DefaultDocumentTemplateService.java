@@ -22,15 +22,16 @@ import com.gurch.sandbox.query.SQLQueryBuilder;
 import com.gurch.sandbox.query.WhereClause;
 import com.gurch.sandbox.search.SearchExecutor;
 import com.gurch.sandbox.security.CurrentUserProvider;
-import com.gurch.sandbox.storage.StorageApi;
-import com.gurch.sandbox.storage.StorageWriteRequest;
-import com.gurch.sandbox.storage.StorageWriteResult;
+import com.gurch.sandbox.storage.StoreObjectRequest;
+import com.gurch.sandbox.storage.StoredObject;
+import com.gurch.sandbox.storage.StoredObjectApi;
 import com.gurch.sandbox.web.NotFoundException;
 import com.gurch.sandbox.web.PayloadTooLargeException;
 import com.gurch.sandbox.web.ValidationErrorException;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.NoSuchFileException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -52,7 +53,7 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
   private static final String DOCUMENT_TEMPLATES_RESOURCE_TYPE = "documenttemplates";
 
   private final DocumentTemplateRepository repository;
-  private final StorageApi storageApi;
+  private final StoredObjectApi storedObjectApi;
   private final SearchExecutor searchExecutor;
   private final AuditLogApi auditLogApi;
   private final DocumentTemplateIntrospectionService introspectionService;
@@ -74,7 +75,7 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
     byte[] payload = readRequestPayload(command.getContentStream());
     TemplateIntrospectionResult introspection = introspectionService.introspect(mimeType, payload);
 
-    StorageWriteResult stored = persistPayload(command.getOriginalFilename(), payload);
+    StoredObject stored = storeTemplateContent(command.getOriginalFilename(), mimeType, payload);
 
     DocumentTemplateEntity entity =
         DocumentTemplateEntity.builder()
@@ -82,16 +83,12 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
             .frName(StringUtils.trimToNull(command.getFrName()))
             .enDescription(StringUtils.trimToNull(command.getEnDescription()))
             .frDescription(StringUtils.trimToNull(command.getFrDescription()))
-            .mimeType(mimeType)
-            .contentSize(stored.contentSize())
-            .checksumSha256(stored.checksumSha256())
             .language(language)
             .tenantId(command.getTenantId())
             .formMapJson(writeFormMap(introspection.formMap()))
             .esignAnchorMetadataJson(writeEsignAnchorMetadata(introspection.esignAnchorMetadata()))
             .esignable(introspection.esignable())
-            .storageProvider(stored.provider())
-            .storagePath(stored.storagePath())
+            .storageObjectId(stored.id())
             .build();
 
     try {
@@ -99,11 +96,7 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
       auditLogApi.recordCreate(DOCUMENT_TEMPLATES_RESOURCE_TYPE, saved.getId(), saved);
       return toResponse(saved);
     } catch (RuntimeException e) {
-      try {
-        storageApi.delete(stored.storagePath());
-      } catch (IOException ignored) {
-        // Intentionally ignored: persistence failure is the root cause.
-      }
+      cleanupStoredObjectQuietly(stored.id());
       throw e;
     }
   }
@@ -151,7 +144,8 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
           DocumentTemplateUpdateErrorCode.TEMPLATE_ESIGN_ANCHORS_CHANGED);
     }
 
-    StorageWriteResult stored = persistPayload(command.getOriginalFilename(), payload);
+    StoredObject stored =
+        storeTemplateContent(command.getOriginalFilename(), replacementMimeType, payload);
 
     DocumentTemplateEntity beforeState = existing;
     DocumentTemplateEntity updatedEntity =
@@ -160,33 +154,21 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
             .frName(updatedFrName)
             .enDescription(updatedEnDescription)
             .frDescription(updatedFrDescription)
-            .mimeType(replacementMimeType)
-            .contentSize(stored.contentSize())
-            .checksumSha256(stored.checksumSha256())
             .formMapJson(writeFormMap(introspection.formMap()))
             .esignAnchorMetadataJson(writeEsignAnchorMetadata(introspection.esignAnchorMetadata()))
             .esignable(introspection.esignable())
-            .storageProvider(stored.provider())
-            .storagePath(stored.storagePath())
+            .storageObjectId(stored.id())
             .build();
 
     try {
       DocumentTemplateEntity saved = repository.save(updatedEntity);
       auditLogApi.recordUpdate(DOCUMENT_TEMPLATES_RESOURCE_TYPE, saved.getId(), beforeState, saved);
-      if (!existing.getStoragePath().equals(stored.storagePath())) {
-        try {
-          storageApi.delete(existing.getStoragePath());
-        } catch (IOException ignored) {
-          // Best effort cleanup of previous content.
-        }
+      if (!Objects.equals(existing.getStorageObjectId(), stored.id())) {
+        cleanupStoredObjectQuietly(existing.getStorageObjectId());
       }
       return toResponse(saved);
     } catch (RuntimeException e) {
-      try {
-        storageApi.delete(stored.storagePath());
-      } catch (IOException ignored) {
-        // Intentionally ignored: persistence failure is the root cause.
-      }
+      cleanupStoredObjectQuietly(stored.id());
       throw e;
     }
   }
@@ -199,15 +181,16 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
   @Override
   public DocumentTemplateDownload download(Long id) {
     DocumentTemplateEntity entity = loadAccessibleTemplate(id);
+    StoredObject stored = requireStoredObject(entity.getStorageObjectId(), id);
 
     try {
       return DocumentTemplateDownload.builder()
-          .name(entity.getEnName())
-          .mimeType(entity.getMimeType())
-          .contentSize(entity.getContentSize())
-          .contentStream(storageApi.read(entity.getStoragePath()))
+          .name(stored.fileName())
+          .mimeType(stored.mimeType())
+          .contentSize(stored.contentSize())
+          .contentStream(storedObjectApi.read(stored.id()))
           .build();
-    } catch (java.nio.file.NoSuchFileException e) {
+    } catch (NoSuchFileException e) {
       throw new NotFoundException("Stored content is missing for document template id: " + id);
     } catch (IOException e) {
       throw new IllegalStateException("Could not read stored file", e);
@@ -228,10 +211,11 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
             DocumentTemplateGenerateErrorCode.GENERATE_TEMPLATE_ID_REQUIRED);
       }
       DocumentTemplateEntity entity = loadAccessibleTemplate(input.getDocumentTemplateId());
+      StoredObject stored = requireStoredObject(entity.getStorageObjectId(), entity.getId());
 
-      byte[] sourceBytes = readStoredBytes(entity.getStoragePath());
+      byte[] sourceBytes = readStoredBytes(stored.id());
       renderSources.add(
-          new TemplateRenderSource(entity.getMimeType(), sourceBytes, input.getFields()));
+          new TemplateRenderSource(stored.mimeType(), sourceBytes, input.getFields()));
     }
 
     byte[] mergedPdf = generationService.generateComposedPdf(renderSources);
@@ -275,15 +259,14 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
   @Transactional
   public void deleteById(Long id) {
     DocumentTemplateEntity entity = loadAccessibleTemplate(id);
+    repository.delete(entity);
+    auditLogApi.recordDelete(DOCUMENT_TEMPLATES_RESOURCE_TYPE, id, entity);
 
     try {
-      storageApi.delete(entity.getStoragePath());
+      storedObjectApi.delete(entity.getStorageObjectId());
     } catch (IOException e) {
       throw new IllegalStateException("Could not delete stored file", e);
     }
-
-    repository.delete(entity);
-    auditLogApi.recordDelete(DOCUMENT_TEMPLATES_RESOURCE_TYPE, id, entity);
   }
 
   private void validateUploadRequest(DocumentTemplateUploadCommand command) {
@@ -292,9 +275,6 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
     }
     if (StringUtils.isBlank(command.getEnName())) {
       throw ValidationErrorException.of(DocumentTemplateUploadErrorCode.EN_NAME_REQUIRED);
-    }
-    if (command.getLanguage() == null) {
-      throw ValidationErrorException.of(DocumentTemplateUploadErrorCode.INVALID_LANGUAGE);
     }
     validateUploadTenantAccess(command.getTenantId());
     validateFilePart(
@@ -396,15 +376,16 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
   }
 
   private DocumentTemplateResponse toResponse(DocumentTemplateEntity entity) {
+    StoredObject stored = requireStoredObject(entity.getStorageObjectId(), entity.getId());
     return DocumentTemplateResponse.builder()
         .id(entity.getId())
         .enName(entity.getEnName())
         .frName(entity.getFrName())
         .enDescription(entity.getEnDescription())
         .frDescription(entity.getFrDescription())
-        .mimeType(entity.getMimeType())
-        .contentSize(entity.getContentSize())
-        .checksumSha256(entity.getChecksumSha256())
+        .mimeType(stored.mimeType())
+        .contentSize(stored.contentSize())
+        .checksumSha256(stored.checksumSha256())
         .language(entity.getLanguage())
         .tenantId(entity.getTenantId())
         .formMap(parseFormMapOrNull(entity.getFormMapJson()))
@@ -457,24 +438,39 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
     }
   }
 
-  private StorageWriteResult persistPayload(String originalFilename, byte[] payload) {
-    try {
-      return storageApi.write(
-          StorageWriteRequest.builder()
-              .namespace(STORAGE_NAMESPACE_DOCUMENT_TEMPLATES)
-              .originalFilename(originalFilename)
-              .contentStream(new ByteArrayInputStream(payload))
-              .build());
-    } catch (IOException e) {
-      throw new IllegalStateException("Could not persist uploaded file", e);
-    }
+  private StoredObject storeTemplateContent(
+      String originalFilename, String mimeType, byte[] payload) {
+    return storedObjectApi.store(
+        StoreObjectRequest.builder()
+            .namespace(STORAGE_NAMESPACE_DOCUMENT_TEMPLATES)
+            .fileName(originalFilename)
+            .mimeType(mimeType)
+            .contentStream(new ByteArrayInputStream(payload))
+            .build());
   }
 
-  private byte[] readStoredBytes(String storagePath) {
-    try (InputStream inputStream = storageApi.read(storagePath)) {
+  private byte[] readStoredBytes(Long storageObjectId) {
+    try (InputStream inputStream = storedObjectApi.read(storageObjectId)) {
       return inputStream.readAllBytes();
     } catch (IOException e) {
       throw new IllegalStateException("Could not read stored file", e);
+    }
+  }
+
+  private StoredObject requireStoredObject(Long storageObjectId, Long templateId) {
+    return storedObjectApi
+        .findById(storageObjectId)
+        .orElseThrow(
+            () ->
+                new IllegalStateException(
+                    "Stored object is missing for document template id: " + templateId));
+  }
+
+  private void cleanupStoredObjectQuietly(Long storageObjectId) {
+    try {
+      storedObjectApi.delete(storageObjectId);
+    } catch (IOException ignored) {
+      // Best-effort storage cleanup only.
     }
   }
 

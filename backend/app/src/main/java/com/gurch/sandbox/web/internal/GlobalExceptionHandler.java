@@ -127,7 +127,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     ProblemDetail problemDetail =
-        ProblemDetail.forStatusAndDetail(status, "Request body has invalid content");
+        ProblemDetail.forStatusAndDetail(status, "Request has invalid fields");
     problemDetail.setTitle("Validation Failed");
     problemDetail.setType(URI.create("https://example.com/probs/validation-failed"));
     problemDetail.setInstance(URI.create(request.getDescription(false).replace("uri=", "")));

@@ -90,11 +90,15 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
             .perform(
                 multipart("/api/admin/document-templates")
                     .file(file)
-                    .param("enName", "Client Intake Form.pdf")
-                    .param("language", "french")
-                    .param("enDescription", "Onboarding package")
-                    .param("frName", "Formulaire d'accueil client")
-                    .param("frDescription", "Dossier d'integration")
+                    .file(
+                        requestPart(
+                            new DocumentTemplateUploadRequest(
+                                "Client Intake Form.pdf",
+                                "Formulaire d'accueil client",
+                                "Onboarding package",
+                                "Dossier d'integration",
+                                DocumentTemplateLanguage.FRENCH,
+                                null)))
                     .with(csrf()))
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.id").exists())
@@ -170,8 +174,15 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
         .perform(
             multipart("/api/admin/document-templates")
                 .file(file)
-                .param("enName", "script.txt")
-                .param("language", "english")
+                .file(
+                    requestPart(
+                        new DocumentTemplateUploadRequest(
+                            "script.txt",
+                            null,
+                            null,
+                            null,
+                            DocumentTemplateLanguage.ENGLISH,
+                            null)))
                 .with(csrf()))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.detail").value("Request has invalid fields"))
@@ -188,8 +199,15 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
         .perform(
             multipart("/api/admin/document-templates")
                 .file(file)
-                .param("enName", "too-large.pdf")
-                .param("language", "english")
+                .file(
+                    requestPart(
+                        new DocumentTemplateUploadRequest(
+                            "too-large.pdf",
+                            null,
+                            null,
+                            null,
+                            DocumentTemplateLanguage.ENGLISH,
+                            null)))
                 .with(csrf()))
         .andExpect(status().isPayloadTooLarge())
         .andExpect(jsonPath("$.title").value("Payload Too Large"))
@@ -206,8 +224,15 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
         .perform(
             multipart("/api/admin/document-templates")
                 .file(file)
-                .param("enName", "too-large-for-multipart.pdf")
-                .param("language", "english")
+                .file(
+                    requestPart(
+                        new DocumentTemplateUploadRequest(
+                            "too-large-for-multipart.pdf",
+                            null,
+                            null,
+                            null,
+                            DocumentTemplateLanguage.ENGLISH,
+                            null)))
                 .with(csrf()))
         .andExpect(status().isPayloadTooLarge())
         .andExpect(jsonPath("$.title").value("Payload Too Large"))
@@ -229,8 +254,15 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
             .perform(
                 multipart("/api/admin/document-templates")
                     .file(file)
-                    .param("enName", "Client Intake Template.docx")
-                    .param("language", "english")
+                    .file(
+                        requestPart(
+                            new DocumentTemplateUploadRequest(
+                                "Client Intake Template.docx",
+                                null,
+                                null,
+                                null,
+                                DocumentTemplateLanguage.ENGLISH,
+                                null)))
                     .with(csrf()))
             .andExpect(status().isCreated())
             .andReturn();
@@ -274,8 +306,10 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
         .perform(
             multipart("/api/admin/document-templates")
                 .file(file)
-                .param("enName", "flat.pdf")
-                .param("language", "english")
+                .file(
+                    requestPart(
+                        new DocumentTemplateUploadRequest(
+                            "flat.pdf", null, null, null, DocumentTemplateLanguage.ENGLISH, null)))
                 .with(csrf()))
         .andExpect(status().isCreated());
   }
@@ -294,8 +328,15 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
         .perform(
             multipart("/api/admin/document-templates")
                 .file(file)
-                .param("enName", "plain.docx")
-                .param("language", "english")
+                .file(
+                    requestPart(
+                        new DocumentTemplateUploadRequest(
+                            "plain.docx",
+                            null,
+                            null,
+                            null,
+                            DocumentTemplateLanguage.ENGLISH,
+                            null)))
                 .with(csrf()))
         .andExpect(status().isCreated());
   }
@@ -410,10 +451,13 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
         .perform(
             multipart("/api/admin/document-templates/{id}", templateId)
                 .file(updatedFile)
-                .param("enName", "Updated Form Name")
-                .param("frName", "Nom mis a jour")
-                .param("enDescription", "Updated description")
-                .param("frDescription", "Description mise a jour")
+                .file(
+                    requestPart(
+                        new DocumentTemplateUpdateRequest(
+                            "Updated Form Name",
+                            "Nom mis a jour",
+                            "Updated description",
+                            "Description mise a jour")))
                 .with(csrf())
                 .with(
                     request -> {
@@ -442,6 +486,7 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
         .perform(
             multipart("/api/admin/document-templates/{id}", templateId)
                 .file(changedFile)
+                .file(requestPart(new DocumentTemplateUpdateRequest(null, null, null, null)))
                 .with(csrf())
                 .with(
                     request -> {
@@ -465,6 +510,7 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
         .perform(
             multipart("/api/admin/document-templates/{id}", templateId)
                 .file(changedFile)
+                .file(requestPart(new DocumentTemplateUpdateRequest(null, null, null, null)))
                 .with(csrf())
                 .with(
                     request -> {
@@ -563,9 +609,10 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
         .perform(
             multipart("/api/admin/document-templates")
                 .file(file)
-                .param("enName", "tenant2.pdf")
-                .param("language", "english")
-                .param("tenantId", "2")
+                .file(
+                    requestPart(
+                        new DocumentTemplateUploadRequest(
+                            "tenant2.pdf", null, null, null, DocumentTemplateLanguage.ENGLISH, 2)))
                 .with(csrf()))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.detail").value("Request has invalid fields"))
@@ -581,12 +628,21 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
         .perform(
             multipart("/api/admin/document-templates")
                 .file(file)
-                .param("enName", "bad-language.pdf")
-                .param("language", "spanish")
+                .file(
+                    new MockMultipartFile(
+                        "request",
+                        "",
+                        MediaType.APPLICATION_JSON_VALUE,
+                        """
+                        {
+                          "enName": "bad-language.pdf",
+                          "language": "spanish"
+                        }
+                        """
+                            .getBytes(StandardCharsets.UTF_8)))
                 .with(csrf()))
         .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.detail").value("Request has invalid fields"))
-        .andExpect(jsonPath("$.errors[0].code").value("INVALID_LANGUAGE"));
+        .andExpect(jsonPath("$.title").value("Validation Failed"));
   }
 
   private static byte[] createFillablePdfWithAnchor() throws IOException {
@@ -736,15 +792,19 @@ class DocumentTemplateModuleIntegrationTest extends AbstractJdbcIntegrationTest 
     var builder =
         multipart("/api/admin/document-templates")
             .file(file)
-            .param("enName", name)
-            .param("language", "english")
+            .file(
+                requestPart(
+                    new DocumentTemplateUploadRequest(
+                        name, null, null, null, DocumentTemplateLanguage.ENGLISH, tenantId)))
             .with(csrf());
-    if (tenantId != null) {
-      builder = builder.param("tenantId", String.valueOf(tenantId));
-    }
     MvcResult uploadResult = mockMvc.perform(builder).andExpect(status().isCreated()).andReturn();
     return objectMapper
         .readValue(uploadResult.getResponse().getContentAsString(), CreateResponse.class)
         .getId();
+  }
+
+  private MockMultipartFile requestPart(Object request) throws Exception {
+    return new MockMultipartFile(
+        "request", "", MediaType.APPLICATION_JSON_VALUE, objectMapper.writeValueAsBytes(request));
   }
 }
