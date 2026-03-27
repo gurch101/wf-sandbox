@@ -9,9 +9,8 @@ import com.gurch.sandbox.web.ValidationErrorException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import java.util.Locale;
+import java.io.IOException;
 import lombok.RequiredArgsConstructor;
-import org.apache.commons.lang3.StringUtils;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ContentDisposition;
@@ -26,7 +25,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -50,31 +48,22 @@ public class DocumentTemplateController {
   @Operation(summary = "Upload a document template")
   public CreateResponse upload(
       @RequestPart("file") MultipartFile file,
-      @RequestParam("enName") String enName,
-      @RequestParam(value = "frName", required = false) String frName,
-      @RequestParam(value = "enDescription", required = false) String enDescription,
-      @RequestParam(value = "frDescription", required = false) String frDescription,
-      @RequestParam("language") String language,
-      @RequestParam(value = "tenantId", required = false) Integer tenantId) {
-    if (enName.isBlank()) {
-      throw ValidationErrorException.of(DocumentTemplateUploadErrorCode.EN_NAME_REQUIRED);
-    }
-    DocumentTemplateLanguage parsedLanguage = parseUploadLanguage(language);
+      @Valid @RequestPart("request") DocumentTemplateUploadRequest request) {
     DocumentTemplateUploadCommand command;
     try {
       command =
           new DocumentTemplateUploadCommand(
-              enName,
-              frName,
-              enDescription,
-              frDescription,
-              parsedLanguage,
-              tenantId,
+              request.enName(),
+              request.frName(),
+              request.enDescription(),
+              request.frDescription(),
+              request.language(),
+              request.tenantId(),
               file.getOriginalFilename(),
               file.getContentType(),
               file.getSize(),
               file.getInputStream());
-    } catch (Exception e) {
+    } catch (IOException e) {
       throw ValidationErrorException.of(DocumentTemplateSharedErrorCode.FILE_READ_FAILED);
     }
 
@@ -88,23 +77,20 @@ public class DocumentTemplateController {
   public DocumentTemplateResponse update(
       @PathVariable Long id,
       @RequestPart(value = "file", required = false) MultipartFile file,
-      @RequestParam(value = "enName", required = false) String enName,
-      @RequestParam(value = "frName", required = false) String frName,
-      @RequestParam(value = "enDescription", required = false) String enDescription,
-      @RequestParam(value = "frDescription", required = false) String frDescription) {
+      @Valid @RequestPart("request") DocumentTemplateUpdateRequest request) {
     DocumentTemplateUpdateCommand command;
     try {
       command =
           new DocumentTemplateUpdateCommand(
-              enName,
-              frName,
-              enDescription,
-              frDescription,
+              request.enName(),
+              request.frName(),
+              request.enDescription(),
+              request.frDescription(),
               file == null ? null : file.getOriginalFilename(),
               file == null ? null : file.getContentType(),
               file == null ? null : file.getSize(),
               file == null ? null : file.getInputStream());
-    } catch (Exception e) {
+    } catch (IOException e) {
       throw ValidationErrorException.of(DocumentTemplateSharedErrorCode.FILE_READ_FAILED);
     }
     return documentTemplateApi.update(id, command);
@@ -165,16 +151,5 @@ public class DocumentTemplateController {
   @Operation(summary = "Delete a document template")
   public void delete(@PathVariable Long id) {
     documentTemplateApi.deleteById(id);
-  }
-
-  private DocumentTemplateLanguage parseUploadLanguage(String rawLanguage) {
-    if (StringUtils.isBlank(rawLanguage)) {
-      throw ValidationErrorException.of(DocumentTemplateUploadErrorCode.INVALID_LANGUAGE);
-    }
-    try {
-      return DocumentTemplateLanguage.valueOf(rawLanguage.trim().toUpperCase(Locale.ROOT));
-    } catch (IllegalArgumentException e) {
-      throw ValidationErrorException.of(DocumentTemplateUploadErrorCode.INVALID_LANGUAGE);
-    }
   }
 }

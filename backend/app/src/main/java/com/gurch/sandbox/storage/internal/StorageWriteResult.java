@@ -1,4 +1,6 @@
-package com.gurch.sandbox.storage;
+package com.gurch.sandbox.storage.internal;
+
+import com.gurch.sandbox.storage.StorageProviderType;
 
 /**
  * Storage write outcome with provider and persisted object metadata.

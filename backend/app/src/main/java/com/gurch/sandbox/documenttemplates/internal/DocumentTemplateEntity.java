@@ -2,7 +2,6 @@ package com.gurch.sandbox.documenttemplates.internal;
 
 import com.gurch.sandbox.documenttemplates.DocumentTemplateLanguage;
 import com.gurch.sandbox.persistence.MutableEntity;
-import com.gurch.sandbox.storage.StorageProviderType;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
@@ -20,9 +19,6 @@ public class DocumentTemplateEntity extends MutableEntity<Long> {
   private String frName;
   private String enDescription;
   private String frDescription;
-  private String mimeType;
-  private Long contentSize;
-  private String checksumSha256;
   private DocumentTemplateLanguage language;
   private Integer tenantId;
 
@@ -32,6 +28,5 @@ public class DocumentTemplateEntity extends MutableEntity<Long> {
   private String esignAnchorMetadataJson;
 
   private boolean esignable;
-  private StorageProviderType storageProvider;
-  private String storagePath;
+  private Long storageObjectId;
 }

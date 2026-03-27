@@ -3,11 +3,14 @@ package com.gurch.sandbox.web.internal;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.core.JsonParseException;
+import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
+import com.gurch.sandbox.dto.ValidationError;
 import com.gurch.sandbox.idempotency.IdempotencyConflictException;
 import com.gurch.sandbox.idempotency.MissingIdempotencyKeyException;
 import com.gurch.sandbox.requests.RequestStatus;
+import com.gurch.sandbox.requests.RequestSubmissionErrorCode;
 import com.gurch.sandbox.web.NotFoundException;
 import com.gurch.sandbox.web.ValidationErrorException;
 import java.lang.reflect.Method;
@@ -16,6 +19,7 @@ import org.springframework.core.MethodParameter;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.mock.http.MockHttpInputMessage;
@@ -63,8 +67,7 @@ class GlobalExceptionHandlerTest {
         new ServletWebRequest(new MockHttpServletRequest("GET", "/api/test"));
     var problem =
         handler.handleValidationErrorException(
-            ValidationErrorException.of(
-                com.gurch.sandbox.requests.RequestSubmissionErrorCode.INVALID_REQUEST_PAYLOAD),
+            ValidationErrorException.of(RequestSubmissionErrorCode.INVALID_REQUEST_PAYLOAD),
             request);
 
     assertThat(problem.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
@@ -90,7 +93,7 @@ class GlobalExceptionHandlerTest {
             new ServletWebRequest(new MockHttpServletRequest("POST", "/api/test")));
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-    assertThat(response.getBody()).isInstanceOf(org.springframework.http.ProblemDetail.class);
+    assertThat(response.getBody()).isInstanceOf(ProblemDetail.class);
   }
 
   @Test
@@ -101,16 +104,31 @@ class GlobalExceptionHandlerTest {
     InvalidFormatException invalidEnum =
         InvalidFormatException.from(null, "bad enum", "BAD", RequestStatus.class);
     invalidEnum.prependPath(new Object(), "status");
-    assertThat(callReadable(invalidEnum, request).getStatusCode())
-        .isEqualTo(HttpStatus.BAD_REQUEST);
+    ResponseEntity<Object> invalidEnumResponse = callReadable(invalidEnum, request);
+    assertThat(invalidEnumResponse.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(invalidEnumResponse.getBody())
+        .isInstanceOfSatisfying(
+            ProblemDetail.class,
+            problem -> {
+              assertThat(problem.getTitle()).isEqualTo("Validation Failed");
+              assertThat(problem.getDetail()).isEqualTo("Request has invalid fields");
+              assertThat(problem.getProperties()).containsKey("errors");
+              @SuppressWarnings("unchecked")
+              java.util.List<ValidationError> errors =
+                  (java.util.List<ValidationError>) problem.getProperties().get("errors");
+              assertThat(errors).hasSize(1);
+              assertThat(errors.getFirst().name()).isEqualTo("status");
+              assertThat(errors.getFirst().code()).isEqualTo("INVALID_VALUE");
+              assertThat(errors.getFirst().message())
+                  .contains("status contains an invalid value")
+                  .contains("Allowed values:");
+            });
 
-    JsonMappingException mapping =
-        new JsonMappingException((com.fasterxml.jackson.core.JsonParser) null, "bad");
+    JsonMappingException mapping = new JsonMappingException((JsonParser) null, "bad");
     mapping.prependPath(new Object(), "nested");
     assertThat(callReadable(mapping, request).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
 
-    JsonParseException parse =
-        new JsonParseException((com.fasterxml.jackson.core.JsonParser) null, "bad");
+    JsonParseException parse = new JsonParseException((JsonParser) null, "bad");
     assertThat(callReadable(parse, request).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
 
     assertThat(callReadable(new RuntimeException("boom"), request).getStatusCode())

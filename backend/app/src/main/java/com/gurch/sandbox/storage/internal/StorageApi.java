@@ -1,10 +1,10 @@
-package com.gurch.sandbox.storage;
+package com.gurch.sandbox.storage.internal;
 
 import java.io.IOException;
 import java.io.InputStream;
 
-/** Public API for binary object storage operations. */
-public interface StorageApi {
+/** Internal API for raw binary object storage operations. */
+interface StorageApi {
 
   /** Persists content and returns provider metadata plus storage key. */
   StorageWriteResult write(StorageWriteRequest request) throws IOException;

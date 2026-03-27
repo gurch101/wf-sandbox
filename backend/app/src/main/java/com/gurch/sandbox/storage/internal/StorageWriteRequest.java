@@ -1,4 +1,4 @@
-package com.gurch.sandbox.storage;
+package com.gurch.sandbox.storage.internal;
 
 import java.io.InputStream;
 import lombok.Builder;
