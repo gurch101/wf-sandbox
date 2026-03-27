@@ -16,6 +16,9 @@ camunda:
 storage:
   local-root: ./build/test-uploads
 
+docusign:
+  webhook-hmac-secret: test-webhook-secret
+
 spring:
   servlet:
     multipart:

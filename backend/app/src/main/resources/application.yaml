@@ -50,3 +50,12 @@ logging:
 
 storage:
   local-root: ${FORMS_STORAGE_LOCAL_ROOT:./uploads}
+
+docusign:
+  base-path: ${DOCUSIGN_BASE_PATH:https://demo.docusign.net/restapi}
+  account-id: ${DOCUSIGN_ACCOUNT_ID:}
+  access-token: ${DOCUSIGN_ACCESS_TOKEN:}
+  webhook-hmac-secret: ${DOCUSIGN_WEBHOOK_HMAC_SECRET:}
+  return-url: ${DOCUSIGN_RETURN_URL:https://example.com/docusign/return}
+  host-email: ${DOCUSIGN_HOST_EMAIL:system@sandbox.local}
+  host-name: ${DOCUSIGN_HOST_NAME:Sandbox Host}
