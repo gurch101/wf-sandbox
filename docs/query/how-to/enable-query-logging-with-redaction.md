@@ -19,7 +19,7 @@ Log generated SQL and parameters for debugging while redacting sensitive values.
 
 ```java
 BuiltQuery query =
-    SQLQueryBuilder.select("u.id", "u.email")
+    SQLQueryBuilder.newBuilder().select("u.id", "u.email")
         .from("users", "u")
         .where("u.email", Operator.EQ, email)
         .build();

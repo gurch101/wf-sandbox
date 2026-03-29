@@ -36,7 +36,8 @@ public class DefaultRequestActivityService implements RequestActivityApi {
   public PagedResponse<RequestActivityEventResponse> search(
       Long requestId, RequestActivitySearchCriteria criteria) {
     SQLQueryBuilder builder =
-        SQLQueryBuilder.select(
+        SQLQueryBuilder.newBuilder()
+            .select(
                 "rae.id, rae.request_id AS requestId, rae.event_type AS eventType, "
                     + "rae.actor_user_id AS actorUserId, rae.correlation_id AS correlationId, "
                     + "rae.payload::text AS payloadText, rae.created_at AS createdAt")

@@ -25,7 +25,8 @@ class SearchExecutorTest {
     NamedParameterJdbcTemplate jdbcTemplate = mock(NamedParameterJdbcTemplate.class);
     SearchExecutor searchExecutor = new SearchExecutor(jdbcTemplate);
     SearchCriteria criteria = criteria(1, 2);
-    SQLQueryBuilder builder = SQLQueryBuilder.select("DISTINCT r.status").from("requests", "r");
+    SQLQueryBuilder builder =
+        SQLQueryBuilder.newBuilder().select("DISTINCT r.status").from("requests", "r");
 
     when(jdbcTemplate.query(anyString(), anyMap(), ArgumentMatchers.<RowMapper<String>>any()))
         .thenReturn(List.of("REJECTED"));
@@ -43,7 +44,8 @@ class SearchExecutorTest {
     NamedParameterJdbcTemplate jdbcTemplate = mock(NamedParameterJdbcTemplate.class);
     SearchExecutor searchExecutor = new SearchExecutor(jdbcTemplate);
     SearchCriteria criteria = criteria(0, 2);
-    SQLQueryBuilder builder = SQLQueryBuilder.select("DISTINCT r.status").from("requests", "r");
+    SQLQueryBuilder builder =
+        SQLQueryBuilder.newBuilder().select("DISTINCT r.status").from("requests", "r");
 
     when(jdbcTemplate.query(anyString(), anyMap(), ArgumentMatchers.<RowMapper<String>>any()))
         .thenReturn(List.of("IN_PROGRESS", "COMPLETED", "REJECTED"));

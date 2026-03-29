@@ -171,7 +171,8 @@ public class DefaultRequestService implements RequestApi {
   @Override
   public PagedResponse<RequestSearchResponse> search(RequestSearchCriteria criteria) {
     SQLQueryBuilder builder =
-        SQLQueryBuilder.select(
+        SQLQueryBuilder.newBuilder()
+            .select(
                 "DISTINCT r.id, r.request_type_key AS requestTypeKey, "
                     + "r.request_type_version AS requestTypeVersion, "
                     + "r.status, r.created_at AS createdAt, r.updated_at AS updatedAt, r.version")

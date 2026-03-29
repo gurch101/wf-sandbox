@@ -13,9 +13,22 @@ import org.junit.jupiter.api.Test;
 class SqlQueryBuilderTest {
 
   @Test
+  void chainedSelectCallsAppendColumns() {
+    BuiltQuery query =
+        SQLQueryBuilder.newBuilder()
+            .select("r.id")
+            .select("r.status")
+            .from("requests", "r")
+            .build();
+
+    assertThat(query.sql()).isEqualTo("SELECT r.id, r.status FROM requests r");
+  }
+
+  @Test
   void whereWithNullValueIsOmittedAndQueryBuildsWithNamedParameters() {
     BuiltQuery query =
-        SQLQueryBuilder.select("r.id")
+        SQLQueryBuilder.newBuilder()
+            .select("r.id")
             .from("requests", "r")
             .where("r.status", Operator.EQ, "IN_PROGRESS")
             .where("r.process_instance_id", Operator.EQ, null)
@@ -30,7 +43,8 @@ class SqlQueryBuilderTest {
   @Test
   void whereOrGroupIsComposedInsideParenthesesAndCombinedWithAnd() {
     BuiltQuery query =
-        SQLQueryBuilder.select("r.id")
+        SQLQueryBuilder.newBuilder()
+            .select("r.id")
             .from("requests", "r")
             .where("r.version", Operator.GT, 0L)
             .whereOr(
@@ -45,9 +59,65 @@ class SqlQueryBuilderTest {
   }
 
   @Test
+  void whereOrSupportsMixedTypedAndRawClauses() {
+    BuiltQuery query =
+        SQLQueryBuilder.newBuilder()
+            .select("r.id")
+            .from("requests", "r")
+            .whereOr(
+                WhereClause.create("r.status", Operator.EQ, "IN_PROGRESS"),
+                WhereClause.raw(
+                    "upper(r.request_type_key) like :namePattern",
+                    Map.of("namePattern", "%REQUEST%")))
+            .build();
+
+    assertThat(query.sql()).contains("(r.status = :p1 OR upper(r.request_type_key) like :p2)");
+    assertThat(query.params()).containsOnlyKeys("p1", "p2");
+    assertThat(query.params()).containsEntry("p2", "%REQUEST%");
+  }
+
+  @Test
+  void whereOrRawClausesRewriteCollidingParameterNamesSafely() {
+    BuiltQuery query =
+        SQLQueryBuilder.newBuilder()
+            .select("r.id")
+            .from("requests", "r")
+            .where("r.status", Operator.EQ, "IN_PROGRESS")
+            .whereOr(
+                WhereClause.raw("upper(r.request_type_key) like :p1", Map.of("p1", "%REQUEST%")))
+            .build();
+
+    assertThat(query.sql()).contains("r.status = :p1");
+    assertThat(query.sql()).contains("(upper(r.request_type_key) like :p2)");
+    assertThat(query.params()).containsOnlyKeys("p1", "p2");
+    assertThat(query.params()).containsEntry("p1", "IN_PROGRESS");
+    assertThat(query.params()).containsEntry("p2", "%REQUEST%");
+  }
+
+  @Test
+  void whereOrSupportsMultipleRawClauses() {
+    BuiltQuery query =
+        SQLQueryBuilder.newBuilder()
+            .select("r.id")
+            .from("requests", "r")
+            .whereOr(
+                WhereClause.raw(
+                    "upper(r.request_type_key) like :namePattern",
+                    Map.of("namePattern", "%REQUEST%")),
+                WhereClause.raw("r.tenant_id = :tenantId", Map.of("tenantId", 42)))
+            .build();
+
+    assertThat(query.sql()).contains("(upper(r.request_type_key) like :p1 OR r.tenant_id = :p2)");
+    assertThat(query.params()).containsOnlyKeys("p1", "p2");
+    assertThat(query.params()).containsEntry("p1", "%REQUEST%");
+    assertThat(query.params()).containsEntry("p2", 42);
+  }
+
+  @Test
   void whereNullEmitsIsNullPredicate() {
     BuiltQuery query =
-        SQLQueryBuilder.select("r.id")
+        SQLQueryBuilder.newBuilder()
+            .select("r.id")
             .from("requests", "r")
             .whereNull("r.process_instance_id")
             .build();
@@ -57,9 +127,51 @@ class SqlQueryBuilderTest {
   }
 
   @Test
+  void startsWithUsesLikeAndAppendsWildcardSuffix() {
+    BuiltQuery query =
+        SQLQueryBuilder.newBuilder()
+            .select("r.id")
+            .from("requests", "r")
+            .where("r.request_type_key", Operator.STARTS_WITH, "REQ")
+            .build();
+
+    assertThat(query.sql()).contains("r.request_type_key LIKE :p1");
+    assertThat(query.params()).containsEntry("p1", "REQ%");
+  }
+
+  @Test
+  void startsWithWithNullValueIsOmitted() {
+    BuiltQuery query =
+        SQLQueryBuilder.newBuilder()
+            .select("r.id")
+            .from("requests", "r")
+            .where("r.version", Operator.GT, 0L)
+            .where("r.request_type_key", Operator.STARTS_WITH, null)
+            .build();
+
+    assertThat(query.sql()).contains("r.version > :p1");
+    assertThat(query.sql()).doesNotContain("r.request_type_key LIKE");
+    assertThat(query.params()).containsOnlyKeys("p1");
+  }
+
+  @Test
+  void startsWithRejectsNonStringValues() {
+    assertThatThrownBy(
+            () ->
+                SQLQueryBuilder.newBuilder()
+                    .select("r.id")
+                    .from("requests", "r")
+                    .where("r.request_type_key", Operator.STARTS_WITH, 42)
+                    .build())
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("STARTS_WITH");
+  }
+
+  @Test
   void whereOrWithOnlyNullValuedClausesIsOmitted() {
     BuiltQuery query =
-        SQLQueryBuilder.select("r.id")
+        SQLQueryBuilder.newBuilder()
+            .select("r.id")
             .from("requests", "r")
             .where("r.version", Operator.GT, 0L)
             .whereOr(
@@ -75,22 +187,31 @@ class SqlQueryBuilderTest {
 
   @Test
   void blankAliasIsRejected() {
-    assertThatThrownBy(() -> SQLQueryBuilder.select("r.id").from("requests", "").build())
+    assertThatThrownBy(
+            () -> SQLQueryBuilder.newBuilder().select("r.id").from("requests", "").build())
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("alias");
   }
 
   @Test
   void buildWithoutFromIsRejected() {
-    assertThatThrownBy(() -> SQLQueryBuilder.select("r.id").build())
+    assertThatThrownBy(() -> SQLQueryBuilder.newBuilder().select("r.id").build())
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("FROM");
   }
 
   @Test
+  void buildWithoutSelectIsRejected() {
+    assertThatThrownBy(() -> SQLQueryBuilder.newBuilder().from("requests", "r").build())
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("SELECT");
+  }
+
+  @Test
   void pageAddsLimitAndOffset() {
     BuiltQuery query =
-        SQLQueryBuilder.select("r.id")
+        SQLQueryBuilder.newBuilder()
+            .select("r.id")
             .from("requests", "r")
             .where("r.version", Operator.GT, 0L)
             .page(1, 2)
@@ -102,14 +223,16 @@ class SqlQueryBuilderTest {
   @Test
   void pageWithNullPageOrSizeIsOmitted() {
     BuiltQuery nullPageQuery =
-        SQLQueryBuilder.select("r.id")
+        SQLQueryBuilder.newBuilder()
+            .select("r.id")
             .from("requests", "r")
             .where("r.version", Operator.GT, 0L)
             .page(null, 2)
             .build();
 
     BuiltQuery nullSizeQuery =
-        SQLQueryBuilder.select("r.id")
+        SQLQueryBuilder.newBuilder()
+            .select("r.id")
             .from("requests", "r")
             .where("r.version", Operator.GT, 0L)
             .page(0, null)
@@ -125,7 +248,8 @@ class SqlQueryBuilderTest {
         SortWhitelist.create().allow("createdAt", "r.created_at").allow("status", "r.status");
 
     BuiltQuery query =
-        SQLQueryBuilder.select("r.id")
+        SQLQueryBuilder.newBuilder()
+            .select("r.id")
             .from("requests", "r")
             .where("r.version", Operator.GT, 0L)
             .safeOrderBy("-createdAt", whitelist)
@@ -140,7 +264,8 @@ class SqlQueryBuilderTest {
 
     assertThatThrownBy(
             () ->
-                SQLQueryBuilder.select("r.id")
+                SQLQueryBuilder.newBuilder()
+                    .select("r.id")
                     .from("requests", "r")
                     .safeOrderBy("dropTable", whitelist)
                     .build())
@@ -153,12 +278,14 @@ class SqlQueryBuilderTest {
     SortWhitelist whitelist = SortWhitelist.create().allow("status", "r.status");
 
     BuiltQuery unprefixed =
-        SQLQueryBuilder.select("r.id")
+        SQLQueryBuilder.newBuilder()
+            .select("r.id")
             .from("requests", "r")
             .safeOrderBy("status", whitelist)
             .build();
     BuiltQuery plusPrefixed =
-        SQLQueryBuilder.select("r.id")
+        SQLQueryBuilder.newBuilder()
+            .select("r.id")
             .from("requests", "r")
             .safeOrderBy("+status", whitelist)
             .build();
@@ -170,7 +297,8 @@ class SqlQueryBuilderTest {
   @Test
   void rawWhereIncludesFragmentAndMergesParamsCollisionSafely() {
     BuiltQuery query =
-        SQLQueryBuilder.select("r.id")
+        SQLQueryBuilder.newBuilder()
+            .select("r.id")
             .from("requests", "r")
             .where("r.status", Operator.EQ, "IN_PROGRESS")
             .rawWhere(
@@ -186,7 +314,8 @@ class SqlQueryBuilderTest {
   void rawWhereRejectsStatementDelimitersAndComments() {
     assertThatThrownBy(
             () ->
-                SQLQueryBuilder.select("r.id")
+                SQLQueryBuilder.newBuilder()
+                    .select("r.id")
                     .from("requests", "r")
                     .rawWhere(
                         "r.status = :status; DELETE FROM requests", Map.of("status", "IN_PROGRESS"))
@@ -196,9 +325,26 @@ class SqlQueryBuilderTest {
   }
 
   @Test
+  void whereOrRawRejectsStatementDelimitersAndComments() {
+    assertThatThrownBy(
+            () ->
+                SQLQueryBuilder.newBuilder()
+                    .select("r.id")
+                    .from("requests", "r")
+                    .whereOr(
+                        WhereClause.raw(
+                            "r.status = :status; DELETE FROM requests",
+                            Map.of("status", "IN_PROGRESS")))
+                    .build())
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("raw");
+  }
+
+  @Test
   void joinAddsJoinClauseAndSupportsFilteringByJoinedTable() {
     BuiltQuery query =
-        SQLQueryBuilder.select("r.id")
+        SQLQueryBuilder.newBuilder()
+            .select("r.id")
             .from("requests", "r")
             .join(JoinType.INNER, "requests", "r2", "r2.id = r.id")
             .where("r2.status", Operator.EQ, "IN_PROGRESS")
@@ -212,7 +358,8 @@ class SqlQueryBuilderTest {
   void joinRejectsBlankAlias() {
     assertThatThrownBy(
             () ->
-                SQLQueryBuilder.select("r.id")
+                SQLQueryBuilder.newBuilder()
+                    .select("r.id")
                     .from("requests", "r")
                     .join(JoinType.LEFT, "requests", " ", "r.id = r.id")
                     .build())
@@ -223,7 +370,8 @@ class SqlQueryBuilderTest {
   @Test
   void groupByOrderByLimitAndOffsetAreComposedInSql() {
     BuiltQuery query =
-        SQLQueryBuilder.select("r.status", "count(*) as cnt")
+        SQLQueryBuilder.newBuilder()
+            .select("r.status", "count(*) as cnt")
             .from("requests", "r")
             .groupBy("r.status")
             .orderBy("r.status")
@@ -240,7 +388,8 @@ class SqlQueryBuilderTest {
   @Test
   void postgresDialectUsesLimitAndOffsetSyntax() {
     BuiltQuery query =
-        SQLQueryBuilder.select("r.id")
+        SQLQueryBuilder.newBuilder()
+            .select("r.id")
             .from("requests", "r")
             .dialect(SqlDialect.POSTGRES)
             .limit(2)
@@ -253,11 +402,23 @@ class SqlQueryBuilderTest {
   @Test
   void orderBySupportsSignedTokens() {
     BuiltQuery descending =
-        SQLQueryBuilder.select("r.id").from("requests", "r").orderBy("-r.created_at").build();
+        SQLQueryBuilder.newBuilder()
+            .select("r.id")
+            .from("requests", "r")
+            .orderBy("-r.created_at")
+            .build();
     BuiltQuery explicitAscending =
-        SQLQueryBuilder.select("r.id").from("requests", "r").orderBy("+r.created_at").build();
+        SQLQueryBuilder.newBuilder()
+            .select("r.id")
+            .from("requests", "r")
+            .orderBy("+r.created_at")
+            .build();
     BuiltQuery defaultAscending =
-        SQLQueryBuilder.select("r.id").from("requests", "r").orderBy("r.created_at").build();
+        SQLQueryBuilder.newBuilder()
+            .select("r.id")
+            .from("requests", "r")
+            .orderBy("r.created_at")
+            .build();
 
     assertThat(descending.sql()).contains("ORDER BY r.created_at DESC");
     assertThat(explicitAscending.sql()).contains("ORDER BY r.created_at ASC");
@@ -266,12 +427,19 @@ class SqlQueryBuilderTest {
 
   @Test
   void negativeLimitAndOffsetAreRejected() {
-    assertThatThrownBy(() -> SQLQueryBuilder.select("r.id").from("requests", "r").limit(-1).build())
+    assertThatThrownBy(
+            () ->
+                SQLQueryBuilder.newBuilder().select("r.id").from("requests", "r").limit(-1).build())
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("limit");
 
     assertThatThrownBy(
-            () -> SQLQueryBuilder.select("r.id").from("requests", "r").offset(-1).build())
+            () ->
+                SQLQueryBuilder.newBuilder()
+                    .select("r.id")
+                    .from("requests", "r")
+                    .offset(-1)
+                    .build())
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("offset");
   }
@@ -279,17 +447,20 @@ class SqlQueryBuilderTest {
   @Test
   void withSupportsMultipleCtesInDeclaredOrder() {
     SQLQueryBuilder baseCte =
-        SQLQueryBuilder.select("r.id", "r.status")
+        SQLQueryBuilder.newBuilder()
+            .select("r.id", "r.status")
             .from("requests", "r")
             .where("r.version", Operator.GT, 0L);
 
     SQLQueryBuilder inProgressCte =
-        SQLQueryBuilder.select("b.id")
+        SQLQueryBuilder.newBuilder()
+            .select("b.id")
             .from("base", "b")
             .where("b.status", Operator.EQ, "IN_PROGRESS");
 
     BuiltQuery query =
-        SQLQueryBuilder.select("ip.id")
+        SQLQueryBuilder.newBuilder()
+            .select("ip.id")
             .with("base", baseCte)
             .with("in_progress", inProgressCte)
             .from("in_progress", "ip")
@@ -301,11 +472,12 @@ class SqlQueryBuilderTest {
 
   @Test
   void withRejectsDuplicateCteNames() {
-    SQLQueryBuilder cte = SQLQueryBuilder.select("r.id").from("requests", "r");
+    SQLQueryBuilder cte = SQLQueryBuilder.newBuilder().select("r.id").from("requests", "r");
 
     assertThatThrownBy(
             () ->
-                SQLQueryBuilder.select("x.id")
+                SQLQueryBuilder.newBuilder()
+                    .select("x.id")
                     .with("dup", cte)
                     .with("dup", cte)
                     .from("dup", "x")
@@ -317,12 +489,14 @@ class SqlQueryBuilderTest {
   @Test
   void whereInSubqueryEmbedsSubquery() {
     SQLQueryBuilder subquery =
-        SQLQueryBuilder.select("r2.id")
+        SQLQueryBuilder.newBuilder()
+            .select("r2.id")
             .from("requests", "r2")
             .where("r2.status", Operator.EQ, "COMPLETED");
 
     BuiltQuery query =
-        SQLQueryBuilder.select("r.id")
+        SQLQueryBuilder.newBuilder()
+            .select("r.id")
             .from("requests", "r")
             .whereInSubquery("r.id", subquery)
             .build();
@@ -334,11 +508,12 @@ class SqlQueryBuilderTest {
 
   @Test
   void whereInSubqueryPropagatesInvalidSubqueryState() {
-    SQLQueryBuilder invalidSubquery = SQLQueryBuilder.select("x.id");
+    SQLQueryBuilder invalidSubquery = SQLQueryBuilder.newBuilder().select("x.id");
 
     assertThatThrownBy(
             () ->
-                SQLQueryBuilder.select("r.id")
+                SQLQueryBuilder.newBuilder()
+                    .select("r.id")
                     .from("requests", "r")
                     .whereInSubquery("r.id", invalidSubquery)
                     .build())
@@ -350,7 +525,8 @@ class SqlQueryBuilderTest {
   void whereRejectsBlankColumn() {
     assertThatThrownBy(
             () ->
-                SQLQueryBuilder.select("r.id")
+                SQLQueryBuilder.newBuilder()
+                    .select("r.id")
                     .from("requests", "r")
                     .where(" ", Operator.EQ, "IN_PROGRESS")
                     .build())
@@ -361,7 +537,8 @@ class SqlQueryBuilderTest {
   @Test
   void whereInWithEmptyCollectionIsOmitted() {
     BuiltQuery query =
-        SQLQueryBuilder.select("r.id")
+        SQLQueryBuilder.newBuilder()
+            .select("r.id")
             .from("requests", "r")
             .where("r.version", Operator.GT, 0L)
             .where("r.status", Operator.IN, Collections.emptyList())
@@ -376,7 +553,8 @@ class SqlQueryBuilderTest {
   void whereInWithCollectionUsesSingleNamedParameter() {
     List<String> statuses = List.of("IN_PROGRESS", "COMPLETED");
     BuiltQuery query =
-        SQLQueryBuilder.select("r.id")
+        SQLQueryBuilder.newBuilder()
+            .select("r.id")
             .from("requests", "r")
             .where("r.status", Operator.IN, statuses)
             .build();
@@ -388,7 +566,8 @@ class SqlQueryBuilderTest {
   @Test
   void whereMapsEnumToPersistedStringValue() {
     BuiltQuery query =
-        SQLQueryBuilder.select("r.id")
+        SQLQueryBuilder.newBuilder()
+            .select("r.id")
             .from("requests", "r")
             .where("r.status", Operator.EQ, LocalStatus.IN_PROGRESS)
             .build();
@@ -400,7 +579,8 @@ class SqlQueryBuilderTest {
   void whereInMapsEnumCollectionToPersistedStringValues() {
     List<LocalStatus> statuses = List.of(LocalStatus.IN_PROGRESS, LocalStatus.COMPLETED);
     BuiltQuery query =
-        SQLQueryBuilder.select("r.id")
+        SQLQueryBuilder.newBuilder()
+            .select("r.id")
             .from("requests", "r")
             .where("r.status", Operator.IN, statuses)
             .build();
@@ -422,7 +602,8 @@ class SqlQueryBuilderTest {
   @Test
   void buildCountGeneratesSimpleCountSql() {
     BuiltQuery query =
-        SQLQueryBuilder.select("r.id", "r.status")
+        SQLQueryBuilder.newBuilder()
+            .select("r.id", "r.status")
             .from("requests", "r")
             .where("r.status", Operator.EQ, "IN_PROGRESS")
             .buildCount();
@@ -434,7 +615,8 @@ class SqlQueryBuilderTest {
   @Test
   void buildCountWrapsDistinctQueriesInSubquery() {
     BuiltQuery query =
-        SQLQueryBuilder.select("DISTINCT r.status")
+        SQLQueryBuilder.newBuilder()
+            .select("DISTINCT r.status")
             .from("requests", "r")
             .orderBy("r.status")
             .page(0, 10)
@@ -447,7 +629,8 @@ class SqlQueryBuilderTest {
   @Test
   void buildCountWrapsGroupByQueriesInSubquery() {
     BuiltQuery query =
-        SQLQueryBuilder.select("r.status", "count(*)")
+        SQLQueryBuilder.newBuilder()
+            .select("r.status", "count(*)")
             .from("requests", "r")
             .groupBy("r.status")
             .buildCount();
@@ -460,7 +643,8 @@ class SqlQueryBuilderTest {
   @Test
   void buildWithTotalCountWindowAddsWindowCountColumn() {
     BuiltQuery query =
-        SQLQueryBuilder.select("r.id")
+        SQLQueryBuilder.newBuilder()
+            .select("r.id")
             .from("requests", "r")
             .orderBy("r.id")
             .page(0, 2)
@@ -474,7 +658,8 @@ class SqlQueryBuilderTest {
   void buildWithTotalCountWindowRejectsDistinctSelect() {
     assertThatThrownBy(
             () ->
-                SQLQueryBuilder.select("DISTINCT r.status")
+                SQLQueryBuilder.newBuilder()
+                    .select("DISTINCT r.status")
                     .from("requests", "r")
                     .buildWithTotalCountWindow("__total_count"))
         .isInstanceOf(IllegalStateException.class)
@@ -484,7 +669,8 @@ class SqlQueryBuilderTest {
   @Test
   void buildCountStripsOrderByAndPagination() {
     BuiltQuery query =
-        SQLQueryBuilder.select("r.id")
+        SQLQueryBuilder.newBuilder()
+            .select("r.id")
             .from("requests", "r")
             .orderBy("r.id")
             .page(1, 1)
@@ -498,7 +684,8 @@ class SqlQueryBuilderTest {
     rawParams.put("namePattern", "%REQUEST%");
     rawParams.put("p1", "IN_PROGRESS");
 
-    return SQLQueryBuilder.select("r.id")
+    return SQLQueryBuilder.newBuilder()
+        .select("r.id")
         .from("requests", "r")
         .where("r.version", Operator.GT, 0L)
         .whereOr(

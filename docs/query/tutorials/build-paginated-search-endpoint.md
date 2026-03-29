@@ -42,7 +42,7 @@ SortWhitelist whitelist =
         .allow("status", "r.status");
 
 SQLQueryBuilder builder =
-    SQLQueryBuilder.select("r.id", "r.status", "r.created_at AS createdAt")
+    SQLQueryBuilder.newBuilder().select("r.id", "r.status", "r.created_at AS createdAt")
         .from("requests", "r")
         .where("r.status", Operator.IN, criteria.getStatuses())
         .safeOrderBy(criteria.getSort(), whitelist);

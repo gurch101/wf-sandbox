@@ -93,7 +93,8 @@ public class DefaultTenantService implements TenantApi {
   @Transactional(readOnly = true)
   public PagedResponse<TenantSearchResponse> search(TenantSearchCriteria criteria) {
     SQLQueryBuilder builder =
-        SQLQueryBuilder.select(
+        SQLQueryBuilder.newBuilder()
+            .select(
                 "t.id, t.name, t.active, t.created_at AS createdAt, "
                     + "t.updated_at AS updatedAt, t.version")
             .from("tenants", "t")
