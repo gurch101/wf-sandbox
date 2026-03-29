@@ -46,30 +46,3 @@ if [[ "$header" =~ \.$ ]]; then
   echo "ERROR: Commit subject must not end with a period."
   exit 1
 fi
-
-if [[ "$commit_type" == "wip" ]]; then
-  echo "Skipping Gradle checks for wip commit type."
-  exit 0
-fi
-
-if ! git -C "$repo_root" diff --cached --name-only -- backend | grep -q .; then
-  echo "Skipping Gradle checks (no staged changes in backend/)."
-  exit 0
-fi
-
-if [[ -x "$repo_root/backend/gradlew" ]]; then
-  echo "Running Gradle checks from backend/..."
-  (
-    cd "$repo_root/backend"
-    GRADLE_USER_HOME=/tmp/gradle-cache ./gradlew --no-daemon check
-  )
-elif [[ -x "$repo_root/gradlew" ]]; then
-  echo "Running Gradle checks..."
-  (
-    cd "$repo_root"
-    GRADLE_USER_HOME=/tmp/gradle-cache ./gradlew --no-daemon check
-  )
-else
-  echo "ERROR: No executable Gradle wrapper found."
-  exit 1
-fi

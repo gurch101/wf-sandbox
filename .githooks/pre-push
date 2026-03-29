@@ -9,6 +9,27 @@ remote="$1"
 url="$2"
 
 z40=0000000000000000000000000000000000000000
+repo_root="$(git rev-parse --show-toplevel)"
+run_gradle_check=false
+
+has_backend_changes() {
+  local local_ref="$1"
+  local local_sha="$2"
+  local remote_sha="$3"
+
+  if [[ "$local_sha" == "$z40" ]]; then
+    return 1
+  fi
+
+  if [[ "$remote_sha" != "$z40" ]]; then
+    git -C "$repo_root" diff --name-only "$remote_sha" "$local_sha" -- backend | grep -q .
+    return
+  fi
+
+  git -C "$repo_root" rev-list "$local_sha" --not --remotes="$remote" \
+    | git -C "$repo_root" diff-tree --stdin --no-commit-id --name-only -r --root -- backend \
+    | grep -q .
+}
 
 while read local_ref local_sha remote_ref remote_sha
 do
@@ -16,6 +37,31 @@ do
     echo "ERROR: Direct pushes to '$remote_ref' are not allowed."
     exit 1
   fi
+  if [[ "$local_ref" =~ ^refs/heads/ ]] && has_backend_changes "$local_ref" "$local_sha" "$remote_sha"; then
+    run_gradle_check=true
+  fi
 done
+
+if [[ "$run_gradle_check" == false ]]; then
+  echo "Skipping Gradle checks (no pushed changes in backend/)."
+  exit 0
+fi
+
+if [[ -x "$repo_root/backend/gradlew" ]]; then
+  echo "Running Gradle checks from backend/..."
+  (
+    cd "$repo_root/backend"
+    ./gradlew check
+  )
+elif [[ -x "$repo_root/gradlew" ]]; then
+  echo "Running Gradle checks..."
+  (
+    cd "$repo_root"
+    ./gradlew check
+  )
+else
+  echo "ERROR: No executable Gradle wrapper found."
+  exit 1
+fi
 
 exit 0
