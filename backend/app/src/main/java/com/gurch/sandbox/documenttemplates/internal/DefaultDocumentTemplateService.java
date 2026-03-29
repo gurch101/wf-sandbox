@@ -230,7 +230,8 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
   @Override
   public PagedResponse<DocumentTemplateResponse> search(DocumentTemplateSearchCriteria criteria) {
     SQLQueryBuilder builder =
-        SQLQueryBuilder.select("f.*")
+        SQLQueryBuilder.newBuilder()
+            .select("f.*")
             .from("document_templates", "f")
             .whereOr(
                 WhereClause.create("upper(f.en_name)", Operator.LIKE, criteria.getNamePattern()),

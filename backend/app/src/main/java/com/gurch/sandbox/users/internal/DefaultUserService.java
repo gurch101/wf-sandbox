@@ -92,7 +92,8 @@ public class DefaultUserService implements UserApi {
   @Transactional(readOnly = true)
   public PagedResponse<UserSearchResponse> search(UserSearchCriteria criteria) {
     SQLQueryBuilder builder =
-        SQLQueryBuilder.select(
+        SQLQueryBuilder.newBuilder()
+            .select(
                 "u.id, u.username, u.email, u.active, u.tenant_id AS tenantId, "
                     + "u.created_at AS createdAt, u.updated_at AS updatedAt, u.version")
             .from("users", "u")

@@ -9,6 +9,7 @@ public enum Operator {
   LT("<"),
   LTE("<="),
   LIKE("LIKE"),
+  STARTS_WITH("LIKE"),
   IN("IN"),
   BETWEEN("BETWEEN");
 

@@ -171,7 +171,8 @@ public class DefaultRequestTypeService implements RequestTypeApi {
   @Transactional(readOnly = true)
   public PagedResponse<RequestTypeSearchResponse> search(RequestTypeSearchCriteria criteria) {
     SQLQueryBuilder builder =
-        SQLQueryBuilder.select(
+        SQLQueryBuilder.newBuilder()
+            .select(
                 "rt.type_key, rt.name, rt.description, rt.active, "
                     + "rtv.type_version AS active_version, rtv.payload_handler_id, "
                     + "rtv.process_definition_key")

@@ -14,7 +14,7 @@ Build a parameterized SQL query using `SQLQueryBuilder` and inspect the generate
 
 ```java
 BuiltQuery query =
-    SQLQueryBuilder.select("r.id", "r.status")
+    SQLQueryBuilder.newBuilder().select("r.id", "r.status")
         .from("requests", "r")
         .where("r.status", Operator.EQ, "IN_PROGRESS")
         .orderBy("-r.created_at")
@@ -45,7 +45,7 @@ SortWhitelist whitelist =
         .allow("status", "r.status");
 
 BuiltQuery sorted =
-    SQLQueryBuilder.select("r.id", "r.status")
+    SQLQueryBuilder.newBuilder().select("r.id", "r.status")
         .from("requests", "r")
         .safeOrderBy("-createdAt", whitelist)
         .build();

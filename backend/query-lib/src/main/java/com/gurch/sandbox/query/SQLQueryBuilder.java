@@ -17,8 +17,8 @@ import java.util.StringJoiner;
  * A fluent builder for constructing SQL queries with named parameters. Supports CTEs, joins, where
  * clauses, grouping, ordering, and pagination.
  */
-public final class SQLQueryBuilder {
-  private final String selectClause;
+public class SQLQueryBuilder {
+  private final List<String> selectClauses = new ArrayList<>();
   private String fromTable;
   private String fromAlias;
   private final List<String> joinClauses = new ArrayList<>();
@@ -31,30 +31,39 @@ public final class SQLQueryBuilder {
   private Integer limit;
   private Integer offset;
 
-  private SQLQueryBuilder(String selectClause) {
-    this.selectClause = selectClause;
+  protected SQLQueryBuilder() {}
+
+  /**
+   * Starts a new query builder with no clauses configured yet.
+   *
+   * @return a new builder instance
+   */
+  public static SQLQueryBuilder newBuilder() {
+    return new SQLQueryBuilder();
   }
 
   /**
-   * Starts a new query with the specified SELECT clause.
+   * Appends a raw SELECT fragment to the query.
    *
    * @param selectClause the raw SELECT fragment (e.g., "*", "id, name")
-   * @return a new builder instance
+   * @return this builder
    */
-  public static SQLQueryBuilder select(String selectClause) {
-    return new SQLQueryBuilder(selectClause);
+  public SQLQueryBuilder select(CharSequence selectClause) {
+    appendSelectClause(validateSelectClause(selectClause));
+    return this;
   }
 
   /**
-   * Starts a new query with the specified columns.
+   * Appends the specified columns to the query.
    *
    * @param columns the columns to select
-   * @return a new builder instance
+   * @return this builder
    */
-  public static SQLQueryBuilder select(String... columns) {
+  public SQLQueryBuilder select(String... columns) {
     StringJoiner joiner = new StringJoiner(", ");
     Arrays.stream(columns).forEach(joiner::add);
-    return new SQLQueryBuilder(joiner.toString());
+    appendSelectClause(joiner.toString());
+    return this;
   }
 
   /**
@@ -123,7 +132,7 @@ public final class SQLQueryBuilder {
     if (column == null || column.isBlank()) {
       throw new IllegalArgumentException("where column must not be blank");
     }
-    Object normalizedValue = normalizeParameterValue(value);
+    Object normalizedValue = normalizeParameterValue(operator, value);
     if (normalizedValue == null) {
       return this;
     }
@@ -145,7 +154,11 @@ public final class SQLQueryBuilder {
   public SQLQueryBuilder whereOr(WhereClause... clauses) {
     List<String> orPredicates = new ArrayList<>();
     for (WhereClause clause : clauses) {
-      Object normalizedValue = normalizeParameterValue(clause.value());
+      if (clause.isRaw()) {
+        orPredicates.add(rewriteRawWhereFragment(clause.rawFragment(), clause.rawParams()));
+        continue;
+      }
+      Object normalizedValue = normalizeParameterValue(clause.operator(), clause.value());
       if (normalizedValue == null) {
         continue;
       }
@@ -309,10 +322,7 @@ public final class SQLQueryBuilder {
    * @return this builder
    */
   public SQLQueryBuilder rawWhere(String fragment, Map<String, Object> rawParams) {
-    if (fragment.contains(";") || fragment.contains("--") || fragment.contains("/*")) {
-      throw new IllegalArgumentException("Invalid raw where fragment");
-    }
-    whereClauses.add(ParameterRewriter.rewrite(fragment, rawParams, params));
+    whereClauses.add(rewriteRawWhereFragment(fragment, rawParams));
     return this;
   }
 
@@ -323,12 +333,13 @@ public final class SQLQueryBuilder {
    * @throws IllegalStateException if FROM clause is missing
    */
   public BuiltQuery build() {
+    validateSelectClausePresence();
     validateFromClause();
     Map<String, Object> finalParams = new LinkedHashMap<>(params);
     StringBuilder sqlBuilder = new StringBuilder();
     appendCtes(sqlBuilder, finalParams);
 
-    sqlBuilder.append(buildSelectSql(selectClause));
+    sqlBuilder.append(buildSelectSql(renderSelectClause()));
     return new BuiltQuery(sqlBuilder.toString(), finalParams);
   }
 
@@ -339,6 +350,7 @@ public final class SQLQueryBuilder {
    * @return the built query containing SQL and parameters
    */
   public BuiltQuery buildWithTotalCountWindow(String totalAlias) {
+    validateSelectClausePresence();
     validateFromClause();
     if (!supportsWindowCount()) {
       throw new IllegalStateException("Window total count is not supported for this query");
@@ -354,7 +366,7 @@ public final class SQLQueryBuilder {
     StringBuilder sqlBuilder = new StringBuilder();
     appendCtes(sqlBuilder, finalParams);
 
-    sqlBuilder.append(buildSelectSql(selectClause + ", COUNT(*) OVER() AS " + totalAlias));
+    sqlBuilder.append(buildSelectSql(renderSelectClause() + ", COUNT(*) OVER() AS " + totalAlias));
     return new BuiltQuery(sqlBuilder.toString(), finalParams);
   }
 
@@ -364,7 +376,7 @@ public final class SQLQueryBuilder {
    * @return true when the current query can safely use window total count
    */
   public boolean supportsWindowCount() {
-    return !selectClause.trim().toUpperCase(Locale.ROOT).startsWith("DISTINCT");
+    return !renderSelectClause().trim().toUpperCase(Locale.ROOT).startsWith("DISTINCT");
   }
 
   /**
@@ -375,12 +387,14 @@ public final class SQLQueryBuilder {
    * @throws IllegalStateException if FROM clause is missing
    */
   public BuiltQuery buildCount() {
+    validateSelectClausePresence();
     validateFromClause();
     Map<String, Object> finalParams = new LinkedHashMap<>(params);
     StringBuilder sqlBuilder = new StringBuilder();
     appendCtes(sqlBuilder, finalParams);
 
     // If original query has DISTINCT or GROUP BY, we wrap it in a subquery to get accurate count
+    String selectClause = renderSelectClause();
     if (selectClause.trim().toUpperCase(Locale.ROOT).startsWith("DISTINCT")
         || !groupByClauses.isEmpty()) {
       String innerSql = buildBaseSql(selectClause, true);
@@ -395,6 +409,12 @@ public final class SQLQueryBuilder {
   private void validateFromClause() {
     if (fromTable == null || fromAlias == null) {
       throw new IllegalStateException("FROM clause is required");
+    }
+  }
+
+  private void validateSelectClausePresence() {
+    if (selectClauses.isEmpty()) {
+      throw new IllegalStateException("SELECT clause is required");
     }
   }
 
@@ -435,6 +455,31 @@ public final class SQLQueryBuilder {
     return queryBuilder.toString();
   }
 
+  private String renderSelectClause() {
+    return String.join(", ", selectClauses);
+  }
+
+  private String rewriteRawWhereFragment(String fragment, Map<String, Object> rawParams) {
+    if (fragment == null || fragment.isBlank()) {
+      throw new IllegalArgumentException("Invalid raw where fragment");
+    }
+    if (fragment.contains(";") || fragment.contains("--") || fragment.contains("/*")) {
+      throw new IllegalArgumentException("Invalid raw where fragment");
+    }
+    return ParameterRewriter.rewrite(fragment, rawParams, params);
+  }
+
+  protected final void appendSelectClause(String selectClause) {
+    selectClauses.add(validateSelectClause(selectClause));
+  }
+
+  private static String validateSelectClause(CharSequence selectClause) {
+    if (selectClause == null || selectClause.toString().isBlank()) {
+      throw new IllegalArgumentException("selectClause must not be blank");
+    }
+    return selectClause.toString();
+  }
+
   private SortInfo parseSortToken(String token) {
     if (token == null || token.isBlank()) {
       throw new IllegalArgumentException("Sort token must not be blank");
@@ -464,9 +509,15 @@ public final class SQLQueryBuilder {
     return column + " " + operator.token() + " :" + paramName;
   }
 
-  private static Object normalizeParameterValue(Object value) {
+  private static Object normalizeParameterValue(Operator operator, Object value) {
     if (value == null) {
       return null;
+    }
+    if (operator == Operator.STARTS_WITH) {
+      if (!(value instanceof String stringValue)) {
+        throw new IllegalArgumentException("STARTS_WITH requires a non-null String value");
+      }
+      return stringValue + "%";
     }
     if (value instanceof Enum<?> enumValue) {
       return enumValue.name();
@@ -475,7 +526,7 @@ public final class SQLQueryBuilder {
       return Timestamp.from(instant);
     }
     if (value instanceof Collection<?> collection) {
-      return collection.stream().map(SQLQueryBuilder::normalizeParameterValue).toList();
+      return collection.stream().map(item -> normalizeParameterValue(null, item)).toList();
     }
     return value;
   }

@@ -23,6 +23,7 @@ through `SearchExecutor` and `SearchCriteria`.
 
 ## SQLQueryBuilder Key Methods
 
+- `newBuilder()`
 - `select(String... columns)` / `select(String selectClause)`
 - `from(String table, String alias)`
 - `join(JoinType type, String table, String alias, String onClause)`
@@ -81,7 +82,7 @@ Execution strategy:
 ## Validation and Errors
 
 - Missing/blank aliases in `from(...)` or `join(...)` -> `IllegalArgumentException`
-- Missing `FROM` at build time -> `IllegalStateException`
+- Missing `SELECT` or `FROM` at build time -> `IllegalStateException`
 - Negative limit/offset or invalid page/size -> `IllegalArgumentException`
 - Unsafe `rawWhere(...)` fragments (e.g., delimiters/comments) -> `IllegalArgumentException`
 - Unknown `safeOrderBy(...)` field -> `IllegalArgumentException`

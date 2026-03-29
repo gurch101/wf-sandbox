@@ -26,7 +26,7 @@ SortWhitelist whitelist =
         .allow("status", "r.status");
 
 BuiltQuery query =
-    SQLQueryBuilder.select("r.id", "r.status", "r.created_at")
+    SQLQueryBuilder.newBuilder().select("r.id", "r.status", "r.created_at")
         .from("requests", "r")
         .where("r.status", Operator.IN, statuses)
         .safeOrderBy(sortToken, whitelist)
@@ -41,7 +41,7 @@ public class RequestSearchCriteria extends SearchCriteria {
 
 PagedResponse<RequestSearchRow> pageResult =
     searchExecutor.execute(
-        SQLQueryBuilder.select("r.id", "r.status", "r.created_at")
+        SQLQueryBuilder.newBuilder().select("r.id", "r.status", "r.created_at")
             .from("requests", "r")
             .where("r.status", Operator.IN, statuses)
             .safeOrderBy(sortToken, whitelist),
