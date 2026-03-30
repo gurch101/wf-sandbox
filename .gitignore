@@ -47,5 +47,6 @@ docusign-key
 /backend/app/uploads/
 /frontend/dist/
 /frontend/node_modules/
+*.tsbuildinfo
 
 CHANGELOG.md

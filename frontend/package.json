@@ -1,0 +1,28 @@
+{
+  "name": "wf-sandbox-frontend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "generate:api": "orval --config orval.config.ts"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.90.5",
+    "@tanstack/react-router": "^1.131.28",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "@tailwindcss/vite": "^4.1.12",
+    "@vitejs/plugin-react": "^4.4.1",
+    "orval": "^7.8.0",
+    "tailwindcss": "^4.1.12",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5"
+  }
+}
