@@ -12,8 +12,6 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 class DefaultAuditLogService implements AuditLogApi {
 
-  private static final int SYSTEM_USER_ID = 1;
-
   private final AuditLogEventRepository repository;
   private final ObjectMapper objectMapper;
   private final CurrentUserProvider currentUserProvider;
@@ -66,15 +64,20 @@ class DefaultAuditLogService implements AuditLogApi {
       Object beforeState,
       Object afterState,
       String correlationId) {
-    Integer actorUserId = currentUserProvider.currentUserId().orElse(null);
-    Integer effectiveUserId = actorUserId != null ? actorUserId : SYSTEM_USER_ID;
+    Integer actorUserId =
+        currentUserProvider
+            .currentUserId()
+            .orElseThrow(
+                () ->
+                    new IllegalStateException(
+                        "Audit logging requires an authenticated user context"));
     repository.save(
         AuditLogEventEntity.builder()
             .resourceType(resourceType)
             .resourceId(resourceId.toString())
             .action(action)
             .actorUserId(actorUserId)
-            .createdBy(effectiveUserId)
+            .createdBy(actorUserId)
             .tenantId(currentUserProvider.currentTenantId().orElse(null))
             .correlationId(correlationIdResolver.resolve(correlationId))
             .beforeState(toJsonNode(beforeState))

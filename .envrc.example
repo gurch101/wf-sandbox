@@ -9,3 +9,10 @@ export POSTGRES_USER=sandbox
 export POSTGRES_PASSWORD=changeme
 export POSTGRES_DB=sandboxdb
 export ADMINER_PORT=8085
+
+export DOCUSIGN_ACCOUNT_ID=
+export DOCUSIGN_INTEGRATION_KEY=
+export DOCUSIGN_USER_ID=
+export DOCUSIGN_PRIVATE_KEY_PATH=./docusign-key
+export DOCUSIGN_WEBHOOK_HMAC_SECRET=itsasecret
+export DOCUSIGN_RETURN_URL="http://localhost:5173/esign/return"

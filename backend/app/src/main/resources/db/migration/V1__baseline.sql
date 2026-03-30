@@ -250,3 +250,65 @@ CREATE INDEX idx_request_activity_events_request_time
     ON request_activity_events(request_id, created_at DESC);
 CREATE INDEX idx_request_activity_events_event_type
     ON request_activity_events(event_type);
+
+CREATE TABLE esign_envelopes (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  external_envelope_id VARCHAR(128) UNIQUE,
+  subject VARCHAR(255) NOT NULL,
+  message TEXT,
+  delivery_mode VARCHAR(32) NOT NULL,
+  status VARCHAR(32) NOT NULL,
+  tenant_id INTEGER,
+  source_storage_object_id BIGINT NOT NULL,
+  signed_storage_object_id BIGINT,
+  certificate_storage_object_id BIGINT,
+  reminders_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+  reminder_interval_hours INTEGER,
+  voided_reason TEXT,
+  completed_at TIMESTAMPTZ,
+  last_provider_update_at TIMESTAMPTZ,
+  created_by INTEGER NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_by INTEGER NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
+  version BIGINT NOT NULL DEFAULT 0,
+  CONSTRAINT fk_esign_envelopes_created_by FOREIGN KEY (created_by) REFERENCES users(id),
+  CONSTRAINT fk_esign_envelopes_updated_by FOREIGN KEY (updated_by) REFERENCES users(id),
+  CONSTRAINT fk_esign_envelopes_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants(id),
+  CONSTRAINT fk_esign_envelopes_source_storage_object_id FOREIGN KEY (source_storage_object_id) REFERENCES storage_objects(id),
+  CONSTRAINT fk_esign_envelopes_signed_storage_object_id FOREIGN KEY (signed_storage_object_id) REFERENCES storage_objects(id),
+  CONSTRAINT fk_esign_envelopes_certificate_storage_object_id FOREIGN KEY (certificate_storage_object_id) REFERENCES storage_objects(id)
+);
+
+CREATE TABLE esign_signers (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  envelope_id BIGINT NOT NULL,
+  role_key VARCHAR(32) NOT NULL,
+  signature_anchor_text VARCHAR(32) NOT NULL,
+  date_anchor_text VARCHAR(32),
+  routing_order INTEGER NOT NULL,
+  full_name VARCHAR(255) NOT NULL,
+  email VARCHAR(255),
+  delivery_method VARCHAR(16),
+  auth_method VARCHAR(32) NOT NULL,
+  sms_number VARCHAR(50),
+  provider_recipient_id VARCHAR(64),
+  status VARCHAR(32) NOT NULL,
+  viewed_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  last_status_at TIMESTAMPTZ,
+  created_by INTEGER NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_by INTEGER NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
+  version BIGINT NOT NULL DEFAULT 0,
+  CONSTRAINT fk_esign_signers_envelope_id FOREIGN KEY (envelope_id) REFERENCES esign_envelopes(id),
+  CONSTRAINT fk_esign_signers_created_by FOREIGN KEY (created_by) REFERENCES users(id),
+  CONSTRAINT fk_esign_signers_updated_by FOREIGN KEY (updated_by) REFERENCES users(id),
+  CONSTRAINT uk_esign_signers_envelope_role UNIQUE (envelope_id, role_key)
+);
+
+CREATE INDEX idx_esign_envelopes_status ON esign_envelopes(status);
+CREATE INDEX idx_esign_envelopes_tenant_id ON esign_envelopes(tenant_id);
+CREATE INDEX idx_esign_signers_envelope_id ON esign_signers(envelope_id);
+CREATE INDEX idx_esign_signers_status ON esign_signers(status);

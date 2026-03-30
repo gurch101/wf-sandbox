@@ -1,5 +1,6 @@
 package com.gurch.sandbox;
 
+import com.gurch.sandbox.esign.internal.DocuSignGateway;
 import com.gurch.sandbox.security.CurrentUserProvider;
 import java.util.List;
 import java.util.Optional;
@@ -11,17 +12,20 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
 @AutoConfigureMockMvc
+@TestPropertySource(properties = "docusign.webhook-hmac-secret=test-webhook-secret")
 @WithMockUser(username = "1")
 public abstract class AbstractJdbcIntegrationTest {
   // Shared Spring Boot + Testcontainers context for integration tests.
 
   @Autowired private JdbcTemplate jdbcTemplate;
   @MockitoBean protected CurrentUserProvider currentUserProvider;
+  @MockitoBean protected DocuSignGateway docuSignGateway;
 
   @BeforeEach
   void initDefaultCurrentUserContext() {
