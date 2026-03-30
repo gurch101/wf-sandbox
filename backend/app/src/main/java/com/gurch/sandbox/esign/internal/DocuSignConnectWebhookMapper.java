@@ -2,7 +2,7 @@ package com.gurch.sandbox.esign.internal;
 
 import com.gurch.sandbox.esign.EsignEnvelopeStatus;
 import com.gurch.sandbox.esign.EsignSignerStatus;
-import com.gurch.sandbox.esign.EsignWebhookRequest;
+import com.gurch.sandbox.esign.dto.EsignWebhookRequest;
 import java.time.Instant;
 import java.util.List;
 import org.apache.commons.lang3.StringUtils;

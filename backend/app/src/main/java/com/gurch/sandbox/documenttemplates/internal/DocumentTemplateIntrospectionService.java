@@ -1,10 +1,10 @@
 package com.gurch.sandbox.documenttemplates.internal;
 
-import com.gurch.sandbox.documenttemplates.DocumentTemplateEsignAnchorMetadata;
-import com.gurch.sandbox.documenttemplates.DocumentTemplateFormField;
-import com.gurch.sandbox.documenttemplates.DocumentTemplateFormFieldType;
-import com.gurch.sandbox.documenttemplates.DocumentTemplateFormMap;
 import com.gurch.sandbox.documenttemplates.DocumentTemplateSharedErrorCode;
+import com.gurch.sandbox.documenttemplates.dto.DocumentTemplateEsignAnchorMetadata;
+import com.gurch.sandbox.documenttemplates.dto.DocumentTemplateFormField;
+import com.gurch.sandbox.documenttemplates.dto.DocumentTemplateFormFieldType;
+import com.gurch.sandbox.documenttemplates.dto.DocumentTemplateFormMap;
 import com.gurch.sandbox.pdfutils.PdfAnchorParseResult;
 import com.gurch.sandbox.pdfutils.PdfAnchorParser;
 import com.gurch.sandbox.web.ValidationErrorException;

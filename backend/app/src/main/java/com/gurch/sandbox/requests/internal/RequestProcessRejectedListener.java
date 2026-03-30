@@ -3,6 +3,7 @@ package com.gurch.sandbox.requests.internal;
 import com.gurch.sandbox.audit.AuditLogApi;
 import com.gurch.sandbox.requests.RequestStatus;
 import com.gurch.sandbox.requests.activity.RequestActivityApi;
+import com.gurch.sandbox.requests.internal.models.RequestEntity;
 import lombok.RequiredArgsConstructor;
 import org.finos.fluxnova.bpm.engine.delegate.DelegateExecution;
 import org.finos.fluxnova.bpm.engine.delegate.ExecutionListener;

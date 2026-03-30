@@ -1,5 +1,9 @@
 package com.gurch.sandbox.esign;
 
+import com.gurch.sandbox.esign.dto.EsignCreateEnvelopeCommand;
+import com.gurch.sandbox.esign.dto.EsignDocumentDownload;
+import com.gurch.sandbox.esign.dto.EsignEmbeddedViewResponse;
+import com.gurch.sandbox.esign.dto.EsignEnvelopeResponse;
 import java.util.Optional;
 
 /** Public API for creating and managing e-sign envelopes. */

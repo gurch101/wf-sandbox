@@ -13,6 +13,7 @@ import com.gurch.sandbox.requests.activity.dto.RequestActivitySearchCriteria;
 import com.gurch.sandbox.requests.activity.dto.RequestStatusChangedActivityPayload;
 import com.gurch.sandbox.requests.activity.dto.RequestTaskAssignedActivityPayload;
 import com.gurch.sandbox.requests.activity.dto.RequestTaskCompletedActivityPayload;
+import com.gurch.sandbox.requests.activity.internal.models.RequestActivityEventEntity;
 import com.gurch.sandbox.search.SearchExecutor;
 import com.gurch.sandbox.web.CorrelationIdResolver;
 import java.time.Instant;

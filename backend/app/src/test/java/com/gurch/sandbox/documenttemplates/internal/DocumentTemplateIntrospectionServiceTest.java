@@ -2,8 +2,8 @@ package com.gurch.sandbox.documenttemplates.internal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.gurch.sandbox.documenttemplates.DocumentTemplateFormField;
-import com.gurch.sandbox.documenttemplates.DocumentTemplateFormFieldType;
+import com.gurch.sandbox.documenttemplates.dto.DocumentTemplateFormField;
+import com.gurch.sandbox.documenttemplates.dto.DocumentTemplateFormFieldType;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;

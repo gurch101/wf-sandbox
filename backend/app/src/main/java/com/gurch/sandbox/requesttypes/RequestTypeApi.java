@@ -1,6 +1,10 @@
 package com.gurch.sandbox.requesttypes;
 
 import com.gurch.sandbox.dto.PagedResponse;
+import com.gurch.sandbox.requesttypes.dto.RequestTypeCommand;
+import com.gurch.sandbox.requesttypes.dto.RequestTypeSearchCriteria;
+import com.gurch.sandbox.requesttypes.dto.RequestTypeSearchResponse;
+import com.gurch.sandbox.requesttypes.dto.ResolvedRequestTypeVersion;
 
 /** Public API for request type and version management. */
 public interface RequestTypeApi {

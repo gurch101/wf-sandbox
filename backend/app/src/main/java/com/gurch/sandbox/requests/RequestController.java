@@ -4,6 +4,11 @@ import com.gurch.sandbox.dto.CreateResponse;
 import com.gurch.sandbox.dto.PagedResponse;
 import com.gurch.sandbox.requests.activity.dto.RequestActivityEventResponse;
 import com.gurch.sandbox.requests.activity.dto.RequestActivitySearchCriteria;
+import com.gurch.sandbox.requests.dto.CreateRequestCommand;
+import com.gurch.sandbox.requests.dto.RequestDtos;
+import com.gurch.sandbox.requests.dto.RequestResponse;
+import com.gurch.sandbox.requests.dto.RequestSearchCriteria;
+import com.gurch.sandbox.requests.dto.RequestSearchResponse;
 import com.gurch.sandbox.requesttypes.RequestTypeResolutionErrorCode;
 import com.gurch.sandbox.web.ApiErrorEnum;
 import com.gurch.sandbox.web.NotFoundException;
@@ -33,41 +38,30 @@ public class RequestController {
   public CreateResponse createDraft(@Valid @RequestBody RequestDtos.CreateRequest request) {
     return new CreateResponse(
         requestApi.createDraft(
-            CreateRequestCommand.builder()
-                .requestTypeKey(request.getRequestTypeKey())
-                .payload(request.getPayload())
-                .build()));
+            CreateRequestCommand.builder().requestTypeKey(request.getRequestTypeKey()).build()));
   }
 
   @PutMapping("/{id}")
   @ApiErrorEnum({RequestDraftErrorCode.class})
   public CreateResponse updateDraft(
       @PathVariable Long id, @Valid @RequestBody RequestDtos.UpdateDraftRequest request) {
-    return new CreateResponse(
-        requestApi.updateDraft(id, request.getPayload(), request.getVersion()));
+    return new CreateResponse(requestApi.updateDraft(id, request.getVersion()));
   }
 
   @PostMapping("/{id}/submit")
-  @ApiErrorEnum({
-    RequestDraftErrorCode.class,
-    RequestSubmissionErrorCode.class,
-    RequestTypeResolutionErrorCode.class
-  })
+  @ApiErrorEnum({RequestDraftErrorCode.class, RequestTypeResolutionErrorCode.class})
   public RequestResponse submitDraft(@PathVariable Long id) {
     return requestApi.submitDraft(id);
   }
 
   @PostMapping
-  @ApiErrorEnum({RequestSubmissionErrorCode.class, RequestTypeResolutionErrorCode.class})
+  @ApiErrorEnum({RequestTypeResolutionErrorCode.class})
   @ResponseStatus(HttpStatus.CREATED)
   public CreateResponse create(@Valid @RequestBody RequestDtos.CreateRequest request) {
     return new CreateResponse(
         requestApi
             .createAndSubmit(
-                CreateRequestCommand.builder()
-                    .requestTypeKey(request.getRequestTypeKey())
-                    .payload(request.getPayload())
-                    .build())
+                CreateRequestCommand.builder().requestTypeKey(request.getRequestTypeKey()).build())
             .getId());
   }
 

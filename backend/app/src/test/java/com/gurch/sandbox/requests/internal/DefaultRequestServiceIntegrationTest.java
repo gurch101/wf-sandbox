@@ -3,25 +3,23 @@ package com.gurch.sandbox.requests.internal;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gurch.sandbox.AbstractJdbcIntegrationTest;
 import com.gurch.sandbox.dto.PagedResponse;
-import com.gurch.sandbox.requests.CreateRequestCommand;
 import com.gurch.sandbox.requests.RequestApi;
-import com.gurch.sandbox.requests.RequestResponse;
-import com.gurch.sandbox.requests.RequestSearchCriteria;
-import com.gurch.sandbox.requests.RequestSearchResponse;
 import com.gurch.sandbox.requests.RequestStatus;
+import com.gurch.sandbox.requests.dto.CreateRequestCommand;
+import com.gurch.sandbox.requests.dto.RequestResponse;
+import com.gurch.sandbox.requests.dto.RequestSearchCriteria;
+import com.gurch.sandbox.requests.dto.RequestSearchResponse;
+import com.gurch.sandbox.requests.internal.models.RequestEntity;
 import com.gurch.sandbox.requests.tasks.dto.TaskAction;
-import com.gurch.sandbox.requests.tasks.internal.RequestTaskEntity;
 import com.gurch.sandbox.requests.tasks.internal.RequestTaskRepository;
 import com.gurch.sandbox.requests.tasks.internal.RequestTaskStatus;
+import com.gurch.sandbox.requests.tasks.internal.models.RequestTaskEntity;
 import com.gurch.sandbox.requesttypes.RequestTypeApi;
-import com.gurch.sandbox.requesttypes.RequestTypeCommand;
+import com.gurch.sandbox.requesttypes.dto.RequestTypeCommand;
 import com.gurch.sandbox.requesttypes.internal.RequestTypeRepository;
 import com.gurch.sandbox.web.NotFoundException;
-import com.gurch.sandbox.web.ValidationErrorException;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
@@ -37,7 +35,6 @@ class DefaultRequestServiceIntegrationTest extends AbstractJdbcIntegrationTest {
   @Autowired private RequestTaskRepository requestTaskRepository;
   @Autowired private RequestTypeApi requestTypeApi;
   @Autowired private RequestTypeRepository requestTypeRepository;
-  @Autowired private ObjectMapper objectMapper;
   @Autowired private JdbcTemplate jdbcTemplate;
 
   @BeforeEach
@@ -50,7 +47,6 @@ class DefaultRequestServiceIntegrationTest extends AbstractJdbcIntegrationTest {
             .typeKey("loan")
             .name("Loan")
             .description("desc")
-            .payloadHandlerId("amount-positive")
             .processDefinitionKey("requestTypeV1Process")
             .build());
   }
@@ -63,11 +59,7 @@ class DefaultRequestServiceIntegrationTest extends AbstractJdbcIntegrationTest {
   @Test
   void shouldCreateSubmittedRequestWithResolvedTypeVersion() {
     var created =
-        requestApi.createAndSubmit(
-            CreateRequestCommand.builder()
-                .requestTypeKey("loan")
-                .payload(objectMapper.valueToTree(Map.of("amount", 10)))
-                .build());
+        requestApi.createAndSubmit(CreateRequestCommand.builder().requestTypeKey("loan").build());
 
     assertThat(created.getRequestTypeKey()).isEqualTo("loan");
     assertThat(created.getRequestTypeVersion()).isEqualTo(1);
@@ -79,11 +71,7 @@ class DefaultRequestServiceIntegrationTest extends AbstractJdbcIntegrationTest {
 
   @Test
   void shouldSearchByRequestTypeKeys() {
-    requestApi.createAndSubmit(
-        CreateRequestCommand.builder()
-            .requestTypeKey("loan")
-            .payload(objectMapper.valueToTree(Map.of("amount", 15)))
-            .build());
+    requestApi.createAndSubmit(CreateRequestCommand.builder().requestTypeKey("loan").build());
 
     PagedResponse<RequestSearchResponse> results =
         requestApi.search(RequestSearchCriteria.builder().requestTypeKeys(List.of("loan")).build());
@@ -96,11 +84,7 @@ class DefaultRequestServiceIntegrationTest extends AbstractJdbcIntegrationTest {
   @Test
   void shouldAutoResolveLatestActiveVersionAndPinExistingRequests() {
     RequestResponse first =
-        requestApi.createAndSubmit(
-            CreateRequestCommand.builder()
-                .requestTypeKey("loan")
-                .payload(objectMapper.valueToTree(Map.of("amount", 100)))
-                .build());
+        requestApi.createAndSubmit(CreateRequestCommand.builder().requestTypeKey("loan").build());
 
     requestTypeApi.changeType(
         "loan",
@@ -108,16 +92,11 @@ class DefaultRequestServiceIntegrationTest extends AbstractJdbcIntegrationTest {
             .typeKey("loan")
             .name("Loan V2")
             .description("desc")
-            .payloadHandlerId("amount-positive")
             .processDefinitionKey("requestTypeV2Process")
             .build());
 
     RequestResponse second =
-        requestApi.createAndSubmit(
-            CreateRequestCommand.builder()
-                .requestTypeKey("loan")
-                .payload(objectMapper.valueToTree(Map.of("amount", 250)))
-                .build());
+        requestApi.createAndSubmit(CreateRequestCommand.builder().requestTypeKey("loan").build());
 
     assertThat(requestRepository.findById(first.getId()).orElseThrow().getRequestTypeVersion())
         .isEqualTo(1);
@@ -128,11 +107,7 @@ class DefaultRequestServiceIntegrationTest extends AbstractJdbcIntegrationTest {
   @Test
   void shouldKeepDraftUnvalidatedUntilSubmit() {
     Long draftId =
-        requestApi.createDraft(
-            CreateRequestCommand.builder()
-                .requestTypeKey("loan")
-                .payload(objectMapper.valueToTree(Map.of("amount", 0)))
-                .build());
+        requestApi.createDraft(CreateRequestCommand.builder().requestTypeKey("loan").build());
 
     RequestEntity draft = requestRepository.findById(draftId).orElseThrow();
     assertThat(draft.getStatus()).isEqualTo(RequestStatus.DRAFT);
@@ -140,16 +115,6 @@ class DefaultRequestServiceIntegrationTest extends AbstractJdbcIntegrationTest {
     assertThat(draft.getProcessInstanceId()).isNull();
     assertThat(auditActionsFor("requests", draftId.toString())).containsExactly("CREATE");
     assertThat(latestAuditActorForRequest(draftId)).isEqualTo(1);
-
-    assertThatThrownBy(() -> requestApi.submitDraft(draftId))
-        .isInstanceOf(ValidationErrorException.class)
-        .satisfies(
-            throwable -> {
-              ValidationErrorException exception = (ValidationErrorException) throwable;
-              assertThat(exception.getErrors()).hasSize(1);
-              assertThat(exception.getErrors().getFirst().name()).isEqualTo("amount");
-              assertThat(exception.getErrors().getFirst().code()).isEqualTo("Positive");
-            });
 
     RequestEntity stillDraft = requestRepository.findById(draftId).orElseThrow();
     assertThat(stillDraft.getStatus()).isEqualTo(RequestStatus.DRAFT);
@@ -160,11 +125,7 @@ class DefaultRequestServiceIntegrationTest extends AbstractJdbcIntegrationTest {
   @Test
   void shouldSubmitDraftWithVersionCapturedAtDraftCreationTime() {
     Long draftId =
-        requestApi.createDraft(
-            CreateRequestCommand.builder()
-                .requestTypeKey("loan")
-                .payload(objectMapper.valueToTree(Map.of("amount", 50)))
-                .build());
+        requestApi.createDraft(CreateRequestCommand.builder().requestTypeKey("loan").build());
     assertThat(requestRepository.findById(draftId).orElseThrow().getRequestTypeVersion())
         .isEqualTo(1);
 
@@ -174,7 +135,6 @@ class DefaultRequestServiceIntegrationTest extends AbstractJdbcIntegrationTest {
             .typeKey("loan")
             .name("Loan V2")
             .description("desc")
-            .payloadHandlerId("amount-positive")
             .processDefinitionKey("requestTypeV2Process")
             .build());
 
@@ -185,22 +145,19 @@ class DefaultRequestServiceIntegrationTest extends AbstractJdbcIntegrationTest {
   }
 
   @Test
-  void shouldUpdateAndSubmitDraft() throws Exception {
+  void shouldUpdateAndSubmitDraft() {
     Long draftId =
-        requestApi.createDraft(
-            CreateRequestCommand.builder()
-                .requestTypeKey("loan")
-                .payload(objectMapper.valueToTree(Map.of("amount", 0)))
-                .build());
+        requestApi.createDraft(CreateRequestCommand.builder().requestTypeKey("loan").build());
 
-    requestApi.updateDraft(draftId, objectMapper.valueToTree(Map.of("amount", 25)), 0L);
+    requestApi.updateDraft(draftId, 0L);
     Map<String, Object> updateAuditRow = updateAuditDiffRow(draftId);
-    JsonNode beforeState = objectMapper.readTree((String) updateAuditRow.get("before_state"));
-    JsonNode afterState = objectMapper.readTree((String) updateAuditRow.get("after_state"));
-    assertThat(beforeState.path("payloadJson").path("amount").asInt()).isEqualTo(0);
-    assertThat(afterState.path("payloadJson").path("amount").asInt()).isEqualTo(25);
-    assertThat(beforeState.has("requestTypeKey")).isFalse();
-    assertThat(afterState.has("requestTypeKey")).isFalse();
+    assertThat((String) updateAuditRow.get("before_state"))
+        .contains("\"updatedAt\"")
+        .doesNotContain("\"status\":\"DRAFT\"");
+    assertThat((String) updateAuditRow.get("after_state"))
+        .contains("\"updatedAt\"")
+        .contains("\"version\":")
+        .doesNotContain("\"status\":\"DRAFT\"");
 
     RequestResponse submitted = requestApi.submitDraft(draftId);
 
@@ -216,16 +173,11 @@ class DefaultRequestServiceIntegrationTest extends AbstractJdbcIntegrationTest {
             .typeKey("manual")
             .name("Manual")
             .description("desc")
-            .payloadHandlerId("noop")
             .processDefinitionKey("simpleUserTaskProcess")
             .build());
 
     var created =
-        requestApi.createAndSubmit(
-            CreateRequestCommand.builder()
-                .requestTypeKey("manual")
-                .payload(objectMapper.valueToTree(Map.of("value", "x")))
-                .build());
+        requestApi.createAndSubmit(CreateRequestCommand.builder().requestTypeKey("manual").build());
 
     RequestTaskEntity task = requestTaskRepository.findByRequestId(created.getId()).getFirst();
     requestApi.completeTask(created.getId(), task.getId(), TaskAction.APPROVED, "approved");
@@ -238,11 +190,7 @@ class DefaultRequestServiceIntegrationTest extends AbstractJdbcIntegrationTest {
   @Test
   void shouldDeleteDraft() {
     Long draftId =
-        requestApi.createDraft(
-            CreateRequestCommand.builder()
-                .requestTypeKey("loan")
-                .payload(objectMapper.valueToTree(Map.of("amount", 42)))
-                .build());
+        requestApi.createDraft(CreateRequestCommand.builder().requestTypeKey("loan").build());
 
     requestApi.deleteById(draftId);
 

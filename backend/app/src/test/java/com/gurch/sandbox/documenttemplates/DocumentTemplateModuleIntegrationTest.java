@@ -12,10 +12,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gurch.sandbox.AbstractJdbcIntegrationTest;
+import com.gurch.sandbox.documenttemplates.dto.DocumentTemplateDownload;
+import com.gurch.sandbox.documenttemplates.dto.DocumentTemplateGenerateRequest;
+import com.gurch.sandbox.documenttemplates.dto.DocumentTemplateUpdateRequest;
+import com.gurch.sandbox.documenttemplates.dto.DocumentTemplateUploadRequest;
 import com.gurch.sandbox.documenttemplates.internal.DocumentTemplateRepository;
 import com.gurch.sandbox.dto.CreateResponse;
 import com.gurch.sandbox.tenants.TenantApi;
-import com.gurch.sandbox.tenants.TenantCommand;
+import com.gurch.sandbox.tenants.dto.TenantCommand;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;

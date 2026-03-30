@@ -12,10 +12,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gurch.sandbox.AbstractJdbcIntegrationTest;
 import com.gurch.sandbox.dto.CreateResponse;
-import com.gurch.sandbox.requests.RequestDtos;
+import com.gurch.sandbox.requests.dto.RequestDtos;
 import com.gurch.sandbox.requests.internal.RequestRepository;
+import com.gurch.sandbox.requesttypes.dto.RequestTypeDtos;
 import com.gurch.sandbox.requesttypes.internal.RequestTypeRepository;
-import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,8 +41,8 @@ class RequestTypeModuleIntegrationTest extends AbstractJdbcIntegrationTest {
 
   @Test
   void shouldSearchRequestTypes() throws Exception {
-    createType("loan", "Loan", "amount-positive", "requestTypeV1Process");
-    createType("mortgage", "Mortgage", "noop", "requestTypeV2Process");
+    createType("loan", "Loan", "requestTypeV1Process");
+    createType("mortgage", "Mortgage", "requestTypeV2Process");
 
     mockMvc
         .perform(get("/api/internal/request-types/search").param("typeKeyContains", "loa"))
@@ -52,31 +52,10 @@ class RequestTypeModuleIntegrationTest extends AbstractJdbcIntegrationTest {
   }
 
   @Test
-  void shouldReturnModelerCapabilitiesForRequestTypeVersion() throws Exception {
-    createType("loan", "Loan", "amount-positive", "requestTypeV1Process");
-
-    mockMvc
-        .perform(
-            get(
-                "/api/internal/request-types/{typeKey}/versions/{version}/modeler-capabilities",
-                "loan",
-                1))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.typeKey").value("loan"))
-        .andExpect(jsonPath("$.version").value(1))
-        .andExpect(jsonPath("$.inputs.payloadFields[0].key").value("request.amount"))
-        .andExpect(jsonPath("$.inputs.payloadFields[0].type").value("NUMBER"))
-        .andExpect(
-            jsonPath("$.inputs.workflowFields[0].key").value("workflow.lastCompletedTaskKey"))
-        .andExpect(jsonPath("$.assignmentModes[0]").value("CANDIDATE_USERS"))
-        .andExpect(jsonPath("$.availableEscalationHandlers[0]").value("OPS_REROUTE"));
-  }
-
-  @Test
   void shouldDeleteUnusedRequestTypeAndRejectDeleteWhenInUse() throws Exception {
-    createType("unused", "Unused", "noop", "requestTypeV2Process");
-    createType("loan", "Loan", "amount-positive", "requestTypeV1Process");
-    createRequest("loan", Map.of("amount", 10));
+    createType("unused", "Unused", "requestTypeV2Process");
+    createType("loan", "Loan", "requestTypeV1Process");
+    createRequest("loan");
 
     mockMvc
         .perform(
@@ -110,30 +89,14 @@ class RequestTypeModuleIntegrationTest extends AbstractJdbcIntegrationTest {
                 .content(
                     objectMapper.writeValueAsString(
                         new RequestTypeDtos.CreateTypeRequest(
-                            "bad", "Bad", "desc", "noop", "missing-process-definition-key"))))
+                            "bad", "Bad", "desc", "missing-process-definition-key"))))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.errors[0].code").value("INVALID_PROCESS_DEFINITION_KEY"));
   }
 
   @Test
-  void shouldRejectCreateTypeWithInvalidPayloadHandlerId() throws Exception {
-    mockMvc
-        .perform(
-            post("/api/internal/request-types")
-                .with(csrf())
-                .header("Idempotency-Key", UUID.randomUUID().toString())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(
-                    objectMapper.writeValueAsString(
-                        new RequestTypeDtos.CreateTypeRequest(
-                            "bad", "Bad", "desc", "unknown-handler", "requestTypeV1Process"))))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.errors[0].code").value("INVALID_PAYLOAD_HANDLER_ID"));
-  }
-
-  @Test
   void shouldRejectUpdateTypeWithInvalidProcessDefinitionKey() throws Exception {
-    createType("loan", "Loan", "amount-positive", "requestTypeV1Process");
+    createType("loan", "Loan", "requestTypeV1Process");
 
     mockMvc
         .perform(
@@ -144,14 +107,14 @@ class RequestTypeModuleIntegrationTest extends AbstractJdbcIntegrationTest {
                 .content(
                     objectMapper.writeValueAsString(
                         new RequestTypeDtos.ChangeTypeRequest(
-                            "Loan", "desc", "amount-positive", "missing-process-definition-key"))))
+                            "Loan", "desc", "missing-process-definition-key"))))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.errors[0].code").value("INVALID_PROCESS_DEFINITION_KEY"));
   }
 
   @Test
   void shouldWriteAuditEventsForCreateChangeAndDeleteRequestType() throws Exception {
-    createType("audit-type", "Audit Type", "noop", "requestTypeV2Process");
+    createType("audit-type", "Audit Type", "requestTypeV2Process");
 
     Long typeId =
         jdbcTemplate.queryForObject(
@@ -166,7 +129,7 @@ class RequestTypeModuleIntegrationTest extends AbstractJdbcIntegrationTest {
                 .content(
                     objectMapper.writeValueAsString(
                         new RequestTypeDtos.ChangeTypeRequest(
-                            "Audit Type Updated", "desc", "noop", "requestTypeV1Process"))))
+                            "Audit Type Updated", "desc", "requestTypeV1Process"))))
         .andExpect(status().isOk());
 
     mockMvc
@@ -180,8 +143,7 @@ class RequestTypeModuleIntegrationTest extends AbstractJdbcIntegrationTest {
         .containsExactly("DELETE", "UPDATE", "CREATE");
   }
 
-  private void createType(
-      String typeKey, String name, String payloadHandlerId, String processDefinitionKey)
+  private void createType(String typeKey, String name, String processDefinitionKey)
       throws Exception {
     mockMvc
         .perform(
@@ -192,11 +154,11 @@ class RequestTypeModuleIntegrationTest extends AbstractJdbcIntegrationTest {
                 .content(
                     objectMapper.writeValueAsString(
                         new RequestTypeDtos.CreateTypeRequest(
-                            typeKey, name, "desc", payloadHandlerId, processDefinitionKey))))
+                            typeKey, name, "desc", processDefinitionKey))))
         .andExpect(status().isCreated());
   }
 
-  private Long createRequest(String typeKey, Map<String, Object> payload) throws Exception {
+  private Long createRequest(String typeKey) throws Exception {
     MvcResult result =
         mockMvc
             .perform(
@@ -205,9 +167,7 @@ class RequestTypeModuleIntegrationTest extends AbstractJdbcIntegrationTest {
                     .header("Idempotency-Key", UUID.randomUUID().toString())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(
-                        objectMapper.writeValueAsString(
-                            new RequestDtos.CreateRequest(
-                                typeKey, objectMapper.valueToTree(payload)))))
+                        objectMapper.writeValueAsString(new RequestDtos.CreateRequest(typeKey))))
             .andExpect(status().isCreated())
             .andReturn();
     return objectMapper

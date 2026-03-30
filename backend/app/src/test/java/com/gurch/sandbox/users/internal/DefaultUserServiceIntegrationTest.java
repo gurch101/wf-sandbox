@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.gurch.sandbox.AbstractJdbcIntegrationTest;
 import com.gurch.sandbox.users.UserApi;
-import com.gurch.sandbox.users.UserCommand;
+import com.gurch.sandbox.users.dto.UserCommand;
 import com.gurch.sandbox.web.ValidationErrorException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

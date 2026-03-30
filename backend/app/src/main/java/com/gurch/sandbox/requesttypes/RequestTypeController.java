@@ -1,6 +1,11 @@
 package com.gurch.sandbox.requesttypes;
 
 import com.gurch.sandbox.dto.PagedResponse;
+import com.gurch.sandbox.requesttypes.dto.RequestTypeCommand;
+import com.gurch.sandbox.requesttypes.dto.RequestTypeDtos;
+import com.gurch.sandbox.requesttypes.dto.RequestTypeSearchCriteria;
+import com.gurch.sandbox.requesttypes.dto.RequestTypeSearchResponse;
+import com.gurch.sandbox.requesttypes.dto.ResolvedRequestTypeVersion;
 import com.gurch.sandbox.web.ApiErrorEnum;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -32,7 +37,6 @@ public class RequestTypeController {
             .typeKey(req.getTypeKey())
             .name(req.getName())
             .description(req.getDescription())
-            .payloadHandlerId(req.getPayloadHandlerId())
             .processDefinitionKey(req.getProcessDefinitionKey())
             .build());
   }
@@ -47,7 +51,6 @@ public class RequestTypeController {
             .typeKey(typeKey)
             .name(req.getName())
             .description(req.getDescription())
-            .payloadHandlerId(req.getPayloadHandlerId())
             .processDefinitionKey(req.getProcessDefinitionKey())
             .build());
   }

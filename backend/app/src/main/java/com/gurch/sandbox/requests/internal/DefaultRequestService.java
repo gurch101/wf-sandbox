@@ -1,26 +1,26 @@
 package com.gurch.sandbox.requests.internal;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.gurch.sandbox.audit.AuditLogApi;
 import com.gurch.sandbox.dto.PagedResponse;
 import com.gurch.sandbox.query.JoinType;
 import com.gurch.sandbox.query.Operator;
 import com.gurch.sandbox.query.SQLQueryBuilder;
-import com.gurch.sandbox.requests.CreateRequestCommand;
 import com.gurch.sandbox.requests.RequestApi;
 import com.gurch.sandbox.requests.RequestDraftErrorCode;
-import com.gurch.sandbox.requests.RequestResponse;
-import com.gurch.sandbox.requests.RequestSearchCriteria;
-import com.gurch.sandbox.requests.RequestSearchResponse;
 import com.gurch.sandbox.requests.RequestStatus;
 import com.gurch.sandbox.requests.activity.RequestActivityApi;
 import com.gurch.sandbox.requests.activity.dto.RequestActivityEventResponse;
 import com.gurch.sandbox.requests.activity.dto.RequestActivitySearchCriteria;
+import com.gurch.sandbox.requests.dto.CreateRequestCommand;
+import com.gurch.sandbox.requests.dto.RequestResponse;
+import com.gurch.sandbox.requests.dto.RequestSearchCriteria;
+import com.gurch.sandbox.requests.dto.RequestSearchResponse;
+import com.gurch.sandbox.requests.internal.models.RequestEntity;
 import com.gurch.sandbox.requests.tasks.RequestTaskApi;
 import com.gurch.sandbox.requests.tasks.dto.RequestTaskResponse;
 import com.gurch.sandbox.requests.tasks.dto.TaskAction;
 import com.gurch.sandbox.requesttypes.RequestTypeApi;
-import com.gurch.sandbox.requesttypes.ResolvedRequestTypeVersion;
+import com.gurch.sandbox.requesttypes.dto.ResolvedRequestTypeVersion;
 import com.gurch.sandbox.search.SearchExecutor;
 import com.gurch.sandbox.web.CorrelationIdResolver;
 import com.gurch.sandbox.web.NotFoundException;
@@ -44,9 +44,7 @@ public class DefaultRequestService implements RequestApi {
   private final RequestRepository repository;
   private final RequestTaskApi requestTaskApi;
   private final RuntimeService runtimeService;
-
   private final RequestTypeApi requestTypeApi;
-  private final RequestPayloadHandlerRegistry payloadHandlerRegistry;
   private final SearchExecutor searchExecutor;
   private final AuditLogApi auditLogApi;
   private final RequestActivityApi requestActivityApi;
@@ -54,8 +52,7 @@ public class DefaultRequestService implements RequestApi {
 
   @Override
   public Optional<RequestResponse> findById(Long id) {
-
-    return repository.findById(id).map(entity -> toResponse(entity, true, true));
+    return repository.findById(id).map(entity -> toResponse(entity, true));
   }
 
   @Override
@@ -69,7 +66,6 @@ public class DefaultRequestService implements RequestApi {
             RequestEntity.builder()
                 .requestTypeKey(command.getRequestTypeKey())
                 .requestTypeVersion(resolved.getVersion())
-                .payloadJson(command.getPayload())
                 .status(RequestStatus.DRAFT)
                 .build());
     String correlationId = correlationIdResolver.resolve(null);
@@ -81,7 +77,7 @@ public class DefaultRequestService implements RequestApi {
 
   @Override
   @Transactional
-  public Long updateDraft(Long id, JsonNode payload, Long version) {
+  public Long updateDraft(Long id, Long version) {
     RequestEntity draft =
         repository
             .findById(id)
@@ -91,8 +87,7 @@ public class DefaultRequestService implements RequestApi {
     }
 
     RequestEntity beforeState = draft;
-    RequestEntity updated =
-        repository.save(draft.toBuilder().payloadJson(payload).version(version).build());
+    RequestEntity updated = repository.save(draft.toBuilder().version(version).build());
     auditLogApi.recordUpdate(
         REQUESTS_RESOURCE_TYPE,
         updated.getId(),
@@ -119,7 +114,7 @@ public class DefaultRequestService implements RequestApi {
             ? requestTypeApi.resolveLatestActive(draft.getRequestTypeKey())
             : requestTypeApi.resolveVersion(
                 draft.getRequestTypeKey(), draft.getRequestTypeVersion());
-    return submitPersistedRequest(draft, resolved, draft.getPayloadJson());
+    return submitPersistedRequest(draft, resolved);
   }
 
   @Override
@@ -133,7 +128,6 @@ public class DefaultRequestService implements RequestApi {
             RequestEntity.builder()
                 .requestTypeKey(command.getRequestTypeKey())
                 .requestTypeVersion(resolved.getVersion())
-                .payloadJson(command.getPayload())
                 .status(RequestStatus.DRAFT)
                 .build());
     String correlationId = correlationIdResolver.resolve(null);
@@ -141,7 +135,7 @@ public class DefaultRequestService implements RequestApi {
     requestActivityApi.recordStatusChanged(
         draft.getId(), null, draft.getStatus(), null, draft.getProcessInstanceId(), correlationId);
 
-    return submitPersistedRequest(draft, resolved, command.getPayload());
+    return submitPersistedRequest(draft, resolved);
   }
 
   @Override
@@ -190,14 +184,12 @@ public class DefaultRequestService implements RequestApi {
     return searchExecutor.execute(builder, criteria, RequestSearchResponse.class);
   }
 
-  private RequestResponse toResponse(
-      RequestEntity entity, boolean includeUserTasks, boolean includePayload) {
+  private RequestResponse toResponse(RequestEntity entity, boolean includeUserTasks) {
     return RequestResponse.builder()
         .id(entity.getId())
         .requestTypeKey(entity.getRequestTypeKey())
         .requestTypeVersion(entity.getRequestTypeVersion())
         .status(entity.getStatus())
-        .payload(includePayload ? entity.getPayloadJson() : null)
         .createdAt(entity.getCreatedAt())
         .updatedAt(entity.getUpdatedAt())
         .version(entity.getVersion())
@@ -210,8 +202,7 @@ public class DefaultRequestService implements RequestApi {
   }
 
   private RequestResponse submitPersistedRequest(
-      RequestEntity baseEntity, ResolvedRequestTypeVersion resolved, JsonNode payload) {
-    payloadHandlerRegistry.validate(resolved.getPayloadHandlerId(), payload);
+      RequestEntity baseEntity, ResolvedRequestTypeVersion resolved) {
     String correlationId = correlationIdResolver.resolve(null);
 
     RequestEntity beforeSubmittedState = baseEntity;
@@ -220,7 +211,6 @@ public class DefaultRequestService implements RequestApi {
             baseEntity.toBuilder()
                 .requestTypeKey(resolved.getTypeKey())
                 .requestTypeVersion(resolved.getVersion())
-                .payloadJson(payload)
                 .status(RequestStatus.SUBMITTED)
                 .build());
     auditLogApi.recordUpdate(
@@ -260,6 +250,6 @@ public class DefaultRequestService implements RequestApi {
         inProgress.getProcessInstanceId(),
         inProgressCorrelation);
 
-    return toResponse(inProgress, false, false);
+    return toResponse(inProgress, false);
   }
 }

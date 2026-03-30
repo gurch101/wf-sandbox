@@ -1,6 +1,10 @@
 package com.gurch.sandbox.users;
 
 import com.gurch.sandbox.dto.PagedResponse;
+import com.gurch.sandbox.users.dto.UserCommand;
+import com.gurch.sandbox.users.dto.UserResponse;
+import com.gurch.sandbox.users.dto.UserSearchCriteria;
+import com.gurch.sandbox.users.dto.UserSearchResponse;
 import java.util.Optional;
 
 /** Public API for admin user CRUD and search operations. */

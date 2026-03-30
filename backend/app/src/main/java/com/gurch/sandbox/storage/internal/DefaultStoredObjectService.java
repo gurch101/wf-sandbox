@@ -1,8 +1,9 @@
 package com.gurch.sandbox.storage.internal;
 
-import com.gurch.sandbox.storage.StoreObjectRequest;
-import com.gurch.sandbox.storage.StoredObject;
 import com.gurch.sandbox.storage.StoredObjectApi;
+import com.gurch.sandbox.storage.dto.StoreObjectRequest;
+import com.gurch.sandbox.storage.dto.StoredObject;
+import com.gurch.sandbox.storage.internal.models.StorageObjectEntity;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Optional;

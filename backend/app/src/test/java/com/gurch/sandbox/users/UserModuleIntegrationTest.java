@@ -12,8 +12,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gurch.sandbox.AbstractJdbcIntegrationTest;
 import com.gurch.sandbox.dto.CreateResponse;
-import com.gurch.sandbox.users.internal.UserEntity;
+import com.gurch.sandbox.users.dto.UserDtos;
 import com.gurch.sandbox.users.internal.UserRepository;
+import com.gurch.sandbox.users.internal.models.UserEntity;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -92,6 +93,35 @@ class UserModuleIntegrationTest extends AbstractJdbcIntegrationTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.items.length()").value(1))
         .andExpect(jsonPath("$.items[0].username").value("alice"));
+  }
+
+  @Test
+  void shouldRejectUserUpdateWithStaleVersion() throws Exception {
+    Integer userId = createUser("alice", "alice@example.com", true);
+
+    mockMvc
+        .perform(
+            put("/api/admin/users/{id}", userId)
+                .with(csrf())
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        new UserDtos.UpdateUserRequest(
+                            "alice.updated@example.com", false, null, 0L))))
+        .andExpect(status().isOk());
+
+    mockMvc
+        .perform(
+            put("/api/admin/users/{id}", userId)
+                .with(csrf())
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        new UserDtos.UpdateUserRequest("alice.stale@example.com", true, null, 0L))))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.title").value("Optimistic Locking Failure"));
   }
 
   private Integer createUser(String username, String email, boolean active) throws Exception {

@@ -3,6 +3,7 @@ package com.gurch.sandbox.requests.tasks.internal;
 import com.gurch.sandbox.requests.tasks.RequestTaskApi;
 import com.gurch.sandbox.requests.tasks.dto.RequestTaskResponse;
 import com.gurch.sandbox.requests.tasks.dto.TaskAction;
+import com.gurch.sandbox.requests.tasks.internal.models.RequestTaskEntity;
 import com.gurch.sandbox.web.NotFoundException;
 import java.util.List;
 import java.util.Map;

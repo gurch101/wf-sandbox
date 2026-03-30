@@ -1,5 +1,7 @@
 package com.gurch.sandbox.storage;
 
+import com.gurch.sandbox.storage.dto.StoreObjectRequest;
+import com.gurch.sandbox.storage.dto.StoredObject;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Optional;
