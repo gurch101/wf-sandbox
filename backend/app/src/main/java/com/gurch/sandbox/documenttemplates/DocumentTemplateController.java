@@ -45,7 +45,7 @@ public class DocumentTemplateController {
   @NotIdempotent
   @ApiErrorEnum({DocumentTemplateSharedErrorCode.class, DocumentTemplateUploadErrorCode.class})
   @ResponseStatus(HttpStatus.CREATED)
-  @Operation(summary = "Upload a document template")
+  @Operation(summary = "Upload a document template", operationId = "uploadDocumentTemplate")
   public CreateResponse upload(
       @RequestPart("file") MultipartFile file,
       @Valid @RequestPart("request") DocumentTemplateUploadRequest request) {
@@ -73,7 +73,7 @@ public class DocumentTemplateController {
   @PatchMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   @NotIdempotent
   @ApiErrorEnum({DocumentTemplateSharedErrorCode.class, DocumentTemplateUpdateErrorCode.class})
-  @Operation(summary = "Patch a document template")
+  @Operation(summary = "Patch a document template", operationId = "updateDocumentTemplate")
   public DocumentTemplateResponse update(
       @PathVariable Long id,
       @RequestPart(value = "file", required = false) MultipartFile file,
@@ -97,7 +97,7 @@ public class DocumentTemplateController {
   }
 
   @GetMapping("/{id}")
-  @Operation(summary = "Get a document template by id")
+  @Operation(summary = "Get a document template by id", operationId = "getDocumentTemplateById")
   public DocumentTemplateResponse getById(@PathVariable Long id) {
     return documentTemplateApi
         .findById(id)
@@ -105,7 +105,9 @@ public class DocumentTemplateController {
   }
 
   @GetMapping("/{id}/download")
-  @Operation(summary = "Download a document template file")
+  @Operation(
+      summary = "Download a document template file",
+      operationId = "downloadDocumentTemplate")
   public ResponseEntity<InputStreamResource> download(@PathVariable Long id) {
     DocumentTemplateDownload download = documentTemplateApi.download(id);
     return toDownloadResponse(download);
@@ -114,7 +116,9 @@ public class DocumentTemplateController {
   @PostMapping("/generate")
   @NotIdempotent
   @ApiErrorEnum({DocumentTemplateSharedErrorCode.class, DocumentTemplateGenerateErrorCode.class})
-  @Operation(summary = "Generate a merged PDF from document templates")
+  @Operation(
+      summary = "Generate a merged PDF from document templates",
+      operationId = "generateDocumentTemplate")
   public ResponseEntity<InputStreamResource> generate(
       @Valid @RequestBody DocumentTemplateGenerateRequest request) {
     DocumentTemplateDownload download = documentTemplateApi.generate(request);
@@ -140,7 +144,7 @@ public class DocumentTemplateController {
   }
 
   @GetMapping("/search")
-  @Operation(summary = "Search document templates")
+  @Operation(summary = "Search document templates", operationId = "searchDocumentTemplates")
   public PagedResponse<DocumentTemplateResponse> search(
       @ParameterObject DocumentTemplateSearchCriteria criteria) {
     return documentTemplateApi.search(criteria);
@@ -148,7 +152,7 @@ public class DocumentTemplateController {
 
   @DeleteMapping("/{id}")
   @ResponseStatus(HttpStatus.NO_CONTENT)
-  @Operation(summary = "Delete a document template")
+  @Operation(summary = "Delete a document template", operationId = "deleteDocumentTemplate")
   public void delete(@PathVariable Long id) {
     documentTemplateApi.deleteById(id);
   }

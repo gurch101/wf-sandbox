@@ -50,3 +50,17 @@ logging:
 
 storage:
   local-root: ${FORMS_STORAGE_LOCAL_ROOT:./uploads}
+
+docusign:
+  account-id: ${DOCUSIGN_ACCOUNT_ID:}
+  oauth-base-path: ${DOCUSIGN_OAUTH_BASE_PATH:account-d.docusign.com}
+  integration-key: ${DOCUSIGN_INTEGRATION_KEY:}
+  user-id: ${DOCUSIGN_USER_ID:}
+  # Provide one of DOCUSIGN_PRIVATE_KEY or DOCUSIGN_PRIVATE_KEY_PATH.
+  private-key: ${DOCUSIGN_PRIVATE_KEY:}
+  private-key-path: ${DOCUSIGN_PRIVATE_KEY_PATH:}
+  jwt-token-lifetime-seconds: ${DOCUSIGN_JWT_TOKEN_LIFETIME_SECONDS:3600}
+  webhook-hmac-secret: ${DOCUSIGN_WEBHOOK_HMAC_SECRET:}
+  return-url: ${DOCUSIGN_RETURN_URL:}
+  host-email: ${DOCUSIGN_HOST_EMAIL:}
+  host-name: ${DOCUSIGN_HOST_NAME:}

@@ -3,14 +3,22 @@ package com.gurch.sandbox.config.internal;
 import com.gurch.sandbox.idempotency.NotIdempotent;
 import com.gurch.sandbox.web.ApiErrorCode;
 import com.gurch.sandbox.web.ApiErrorEnum;
+import io.swagger.v3.oas.models.Components;
+import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.media.ArraySchema;
+import io.swagger.v3.oas.models.media.Content;
+import io.swagger.v3.oas.models.media.Encoding;
+import io.swagger.v3.oas.models.media.MediaType;
 import io.swagger.v3.oas.models.media.ObjectSchema;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.media.StringSchema;
 import io.swagger.v3.oas.models.parameters.HeaderParameter;
+import io.swagger.v3.oas.models.parameters.Parameter;
 import io.swagger.v3.oas.models.responses.ApiResponse;
 import io.swagger.v3.oas.models.responses.ApiResponses;
+import io.swagger.v3.oas.models.security.SecurityRequirement;
+import io.swagger.v3.oas.models.security.SecurityScheme;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -30,17 +38,99 @@ import org.springframework.web.method.HandlerMethod;
 @Configuration
 public class OpenApiConfig {
 
+  private static final String BASIC_AUTH_SCHEME = "basicAuth";
+  private static final String APPLICATION_JSON = "application/json";
+  private static final String IDEMPOTENCY_KEY_PARAMETER = "IdempotencyKey";
+
+  @Bean
+  public OpenAPI openApi() {
+    return new OpenAPI()
+        .components(
+            new Components()
+                .addSecuritySchemes(
+                    BASIC_AUTH_SCHEME,
+                    new SecurityScheme()
+                        .type(SecurityScheme.Type.HTTP)
+                        .scheme("basic")
+                        .description("HTTP Basic authentication"))
+                .addParameters(
+                    IDEMPOTENCY_KEY_PARAMETER,
+                    new HeaderParameter()
+                        .name("Idempotency-Key")
+                        .description("Unique key to ensure request idempotency")
+                        .required(true)
+                        .schema(new StringSchema())));
+  }
+
   @Bean
   public OperationCustomizer idempotencyKeyHeaderCustomizer() {
     return (operation, handlerMethod) -> {
-      if (isIdempotentMethod(handlerMethod)) {
-        operation.addParametersItem(
-            new HeaderParameter()
-                .name("Idempotency-Key")
-                .description("Unique key to ensure request idempotency")
-                .required(true)
-                .schema(new StringSchema()));
+      if (!isIdempotentMethod(handlerMethod)) {
+        return operation;
       }
+      if (operation.getParameters() == null) {
+        operation.setParameters(new ArrayList<>());
+      }
+      boolean alreadyPresent =
+          operation.getParameters().stream()
+              .anyMatch(
+                  parameter ->
+                      "Idempotency-Key".equals(parameter.getName())
+                          || ("#/components/parameters/" + IDEMPOTENCY_KEY_PARAMETER)
+                              .equals(parameter.get$ref()));
+      if (!alreadyPresent) {
+        operation.addParametersItem(
+            new Parameter().$ref("#/components/parameters/" + IDEMPOTENCY_KEY_PARAMETER));
+      }
+      return operation;
+    };
+  }
+
+  @Bean
+  public OperationCustomizer basicAuthCustomizer() {
+    return (operation, handlerMethod) -> {
+      if (isAnonymousOperation(handlerMethod)) {
+        operation.setSecurity(List.of());
+        return operation;
+      }
+      if (operation.getSecurity() == null) {
+        operation.setSecurity(new ArrayList<>());
+      }
+      boolean alreadyPresent =
+          operation.getSecurity().stream()
+              .anyMatch(requirement -> requirement.containsKey(BASIC_AUTH_SCHEME));
+      if (!alreadyPresent) {
+        operation.addSecurityItem(new SecurityRequirement().addList(BASIC_AUTH_SCHEME));
+      }
+      return operation;
+    };
+  }
+
+  @Bean
+  public OperationCustomizer multipartJsonRequestPartCustomizer() {
+    return (operation, handlerMethod) -> {
+      if (operation.getRequestBody() == null
+          || operation.getRequestBody().getContent() == null
+          || operation.getRequestBody().getContent().get("multipart/form-data") == null) {
+        return operation;
+      }
+
+      MediaType multipartMediaType =
+          operation.getRequestBody().getContent().get("multipart/form-data");
+      Schema<?> schema = multipartMediaType.getSchema();
+      if (schema == null
+          || schema.getProperties() == null
+          || !schema.getProperties().containsKey("request")) {
+        return operation;
+      }
+
+      if (multipartMediaType.getEncoding() == null) {
+        multipartMediaType.setEncoding(new LinkedHashMap<>());
+      }
+      multipartMediaType
+          .getEncoding()
+          .computeIfAbsent("request", ignored -> new Encoding())
+          .setContentType(APPLICATION_JSON);
       return operation;
     };
   }
@@ -67,6 +157,11 @@ public class OpenApiConfig {
 
       return operation;
     };
+  }
+
+  private boolean isAnonymousOperation(HandlerMethod handlerMethod) {
+    return handlerMethod.getBeanType().getName().equals("com.gurch.sandbox.esign.EsignController")
+        && handlerMethod.getMethod().getName().equals("webhook");
   }
 
   private boolean isIdempotentMethod(HandlerMethod handlerMethod) {
@@ -146,9 +241,8 @@ public class OpenApiConfig {
             .toList();
     response.addExtension("x-error-codes", errorCodeDetails);
 
-    io.swagger.v3.oas.models.media.MediaType mediaType =
-        new io.swagger.v3.oas.models.media.MediaType().schema(validationProblemSchema());
-    io.swagger.v3.oas.models.media.Content content = new io.swagger.v3.oas.models.media.Content();
+    MediaType mediaType = new MediaType().schema(validationProblemSchema());
+    Content content = new Content();
     content.addMediaType("application/problem+json", mediaType);
     response.setContent(content);
 
@@ -162,9 +256,17 @@ public class OpenApiConfig {
     schema.addProperty("status", new Schema<>().type("integer").format("int32"));
     schema.addProperty("detail", new StringSchema());
     schema.addProperty("instance", new StringSchema());
+    schema.addProperty("errors", new ArraySchema().items(validationErrorSchema()));
+    return schema;
+  }
+
+  private static Schema<?> validationErrorSchema() {
+    ObjectSchema schema = new ObjectSchema();
+    schema.description("Validation error details");
+    schema.addProperty("name", new StringSchema().description("Name of the invalid field"));
+    schema.addProperty("code", new StringSchema().description("Validation error code"));
     schema.addProperty(
-        "errors",
-        new ArraySchema().items(new Schema<>().$ref("#/components/schemas/ValidationError")));
+        "message", new StringSchema().description("Reason for the validation failure"));
     return schema;
   }
 }

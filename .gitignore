@@ -39,10 +39,13 @@ out/
 
 .env
 .envrc
+docusign-key
 
 # Local uploaded form files
 /uploads/
 /backend/uploads/
 /backend/app/uploads/
+/frontend/dist/
+/frontend/node_modules/
 
 CHANGELOG.md
