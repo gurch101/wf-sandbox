@@ -2,6 +2,11 @@ package com.gurch.sandbox.tenants;
 
 import com.gurch.sandbox.dto.CreateResponse;
 import com.gurch.sandbox.dto.PagedResponse;
+import com.gurch.sandbox.tenants.dto.TenantCommand;
+import com.gurch.sandbox.tenants.dto.TenantDtos;
+import com.gurch.sandbox.tenants.dto.TenantResponse;
+import com.gurch.sandbox.tenants.dto.TenantSearchCriteria;
+import com.gurch.sandbox.tenants.dto.TenantSearchResponse;
 import com.gurch.sandbox.web.ApiErrorEnum;
 import com.gurch.sandbox.web.NotFoundException;
 import jakarta.validation.Valid;

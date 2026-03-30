@@ -1,10 +1,12 @@
 package com.gurch.sandbox.esign.internal;
 
 import com.gurch.sandbox.audit.AuditLogApi;
+import com.gurch.sandbox.esign.internal.models.EsignEnvelopeEntity;
+import com.gurch.sandbox.esign.internal.models.EsignSignerEntity;
 import com.gurch.sandbox.security.CurrentUserProvider;
-import com.gurch.sandbox.storage.StoreObjectRequest;
-import com.gurch.sandbox.storage.StoredObject;
 import com.gurch.sandbox.storage.StoredObjectApi;
+import com.gurch.sandbox.storage.dto.StoreObjectRequest;
+import com.gurch.sandbox.storage.dto.StoredObject;
 import com.gurch.sandbox.web.NotFoundException;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;

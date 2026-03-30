@@ -13,8 +13,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gurch.sandbox.AbstractJdbcIntegrationTest;
 import com.gurch.sandbox.documenttemplates.internal.DocumentTemplateRepository;
 import com.gurch.sandbox.dto.CreateResponse;
-import com.gurch.sandbox.tenants.internal.TenantEntity;
+import com.gurch.sandbox.tenants.dto.TenantDtos;
 import com.gurch.sandbox.tenants.internal.TenantRepository;
+import com.gurch.sandbox.tenants.internal.models.TenantEntity;
 import com.gurch.sandbox.users.internal.UserRepository;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -95,6 +96,34 @@ class TenantModuleIntegrationTest extends AbstractJdbcIntegrationTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.items.length()").value(1))
         .andExpect(jsonPath("$.items[0].name").value("acme"));
+  }
+
+  @Test
+  void shouldRejectTenantUpdateWithStaleVersion() throws Exception {
+    Integer tenantId = createTenant("acme", true);
+
+    mockMvc
+        .perform(
+            put("/api/admin/tenants/{id}", tenantId)
+                .with(csrf())
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        new TenantDtos.UpdateTenantRequest("acme-updated", false, 0L))))
+        .andExpect(status().isOk());
+
+    mockMvc
+        .perform(
+            put("/api/admin/tenants/{id}", tenantId)
+                .with(csrf())
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        new TenantDtos.UpdateTenantRequest("acme-stale", true, 0L))))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.title").value("Optimistic Locking Failure"));
   }
 
   private Integer createTenant(String name, boolean active) throws Exception {

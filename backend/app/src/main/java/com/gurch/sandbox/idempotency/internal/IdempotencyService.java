@@ -1,5 +1,6 @@
 package com.gurch.sandbox.idempotency.internal;
 
+import com.gurch.sandbox.idempotency.internal.models.IdempotencyRecordEntity;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

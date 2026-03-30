@@ -1,6 +1,7 @@
 package com.gurch.sandbox.esign.internal;
 
 import com.gurch.sandbox.esign.EsignEnvelopeStatus;
+import com.gurch.sandbox.esign.internal.models.EsignEnvelopeEntity;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;

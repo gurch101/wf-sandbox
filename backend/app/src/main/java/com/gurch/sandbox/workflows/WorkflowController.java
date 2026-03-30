@@ -1,6 +1,8 @@
 package com.gurch.sandbox.workflows;
 
 import com.gurch.sandbox.dto.PagedResponse;
+import com.gurch.sandbox.workflows.dto.WorkflowDefinitionResponse;
+import com.gurch.sandbox.workflows.dto.WorkflowSearchCriteria;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;

@@ -2,8 +2,8 @@ package com.gurch.sandbox.workflows.internal;
 
 import com.gurch.sandbox.dto.PagedResponse;
 import com.gurch.sandbox.workflows.WorkflowApi;
-import com.gurch.sandbox.workflows.WorkflowDefinitionResponse;
-import com.gurch.sandbox.workflows.WorkflowSearchCriteria;
+import com.gurch.sandbox.workflows.dto.WorkflowDefinitionResponse;
+import com.gurch.sandbox.workflows.dto.WorkflowSearchCriteria;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.finos.fluxnova.bpm.engine.RepositoryService;

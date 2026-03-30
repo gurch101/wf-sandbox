@@ -9,7 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.gurch.sandbox.esign.EsignEnvelopeStatus;
 import com.gurch.sandbox.esign.EsignSignerStatus;
-import com.gurch.sandbox.esign.EsignWebhookRequest;
+import com.gurch.sandbox.esign.dto.EsignWebhookRequest;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.time.Instant;

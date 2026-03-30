@@ -1,6 +1,10 @@
 package com.gurch.sandbox.tenants;
 
 import com.gurch.sandbox.dto.PagedResponse;
+import com.gurch.sandbox.tenants.dto.TenantCommand;
+import com.gurch.sandbox.tenants.dto.TenantResponse;
+import com.gurch.sandbox.tenants.dto.TenantSearchCriteria;
+import com.gurch.sandbox.tenants.dto.TenantSearchResponse;
 import java.util.Optional;
 
 /** Public API for admin tenant CRUD and search operations. */

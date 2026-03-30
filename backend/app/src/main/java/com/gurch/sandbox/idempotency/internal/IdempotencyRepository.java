@@ -1,5 +1,6 @@
 package com.gurch.sandbox.idempotency.internal;
 
+import com.gurch.sandbox.idempotency.internal.models.IdempotencyRecordEntity;
 import java.time.Instant;
 import java.util.Optional;
 import org.springframework.data.repository.ListCrudRepository;

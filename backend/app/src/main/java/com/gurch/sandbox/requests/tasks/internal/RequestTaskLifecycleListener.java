@@ -1,6 +1,7 @@
 package com.gurch.sandbox.requests.tasks.internal;
 
 import com.gurch.sandbox.requests.activity.RequestActivityApi;
+import com.gurch.sandbox.requests.tasks.internal.models.RequestTaskEntity;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.finos.fluxnova.bpm.engine.delegate.DelegateTask;

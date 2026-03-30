@@ -1,9 +1,12 @@
 package com.gurch.sandbox.requests;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.gurch.sandbox.dto.PagedResponse;
 import com.gurch.sandbox.requests.activity.dto.RequestActivityEventResponse;
 import com.gurch.sandbox.requests.activity.dto.RequestActivitySearchCriteria;
+import com.gurch.sandbox.requests.dto.CreateRequestCommand;
+import com.gurch.sandbox.requests.dto.RequestResponse;
+import com.gurch.sandbox.requests.dto.RequestSearchCriteria;
+import com.gurch.sandbox.requests.dto.RequestSearchResponse;
 import com.gurch.sandbox.requests.tasks.dto.TaskAction;
 import java.util.Optional;
 
@@ -30,11 +33,10 @@ public interface RequestApi {
    * Updates an existing draft request.
    *
    * @param id request id
-   * @param payload updated draft payload
    * @param version optimistic lock version
    * @return updated draft id
    */
-  Long updateDraft(Long id, JsonNode payload, Long version);
+  Long updateDraft(Long id, Long version);
 
   /**
    * Submits an existing draft request; validation/workflow happen here.

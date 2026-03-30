@@ -3,6 +3,7 @@ package com.gurch.sandbox.audit.internal;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gurch.sandbox.audit.AuditLogApi;
+import com.gurch.sandbox.audit.internal.models.AuditLogEventEntity;
 import com.gurch.sandbox.security.CurrentUserProvider;
 import com.gurch.sandbox.web.CorrelationIdResolver;
 import lombok.RequiredArgsConstructor;

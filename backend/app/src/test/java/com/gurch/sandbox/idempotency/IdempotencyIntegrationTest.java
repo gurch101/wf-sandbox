@@ -8,12 +8,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gurch.sandbox.AbstractJdbcIntegrationTest;
 import com.gurch.sandbox.idempotency.internal.IdempotencyCleanupTask;
-import com.gurch.sandbox.idempotency.internal.IdempotencyRecordEntity;
 import com.gurch.sandbox.idempotency.internal.IdempotencyRepository;
 import com.gurch.sandbox.idempotency.internal.IdempotencyStatus;
-import com.gurch.sandbox.requests.RequestDtos;
+import com.gurch.sandbox.idempotency.internal.models.IdempotencyRecordEntity;
+import com.gurch.sandbox.requests.dto.RequestDtos;
 import com.gurch.sandbox.requesttypes.RequestTypeApi;
-import com.gurch.sandbox.requesttypes.RequestTypeCommand;
+import com.gurch.sandbox.requesttypes.dto.RequestTypeCommand;
 import com.gurch.sandbox.requesttypes.internal.RequestTypeRepository;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -44,7 +44,6 @@ class IdempotencyIntegrationTest extends AbstractJdbcIntegrationTest {
             .typeKey("loan")
             .name("Loan")
             .description("desc")
-            .payloadHandlerId("amount-positive")
             .processDefinitionKey("requestTypeV1Process")
             .build());
   }
@@ -82,8 +81,7 @@ class IdempotencyIntegrationTest extends AbstractJdbcIntegrationTest {
   @Test
   void shouldReturnSameResponseForSameIdempotencyKey() throws Exception {
     String idempotencyKey = UUID.randomUUID().toString();
-    RequestDtos.CreateRequest request =
-        new RequestDtos.CreateRequest("loan", objectMapper.readTree("{\"amount\":99}"));
+    RequestDtos.CreateRequest request = new RequestDtos.CreateRequest("loan");
 
     MvcResult firstResult =
         mockMvc
@@ -119,8 +117,7 @@ class IdempotencyIntegrationTest extends AbstractJdbcIntegrationTest {
   void shouldReturnConflictForSameIdempotencyKeyWithDifferentPayload() throws Exception {
     String idempotencyKey = UUID.randomUUID().toString();
 
-    RequestDtos.CreateRequest request1 =
-        new RequestDtos.CreateRequest("loan", objectMapper.readTree("{\"amount\":10}"));
+    RequestDtos.CreateRequest request1 = new RequestDtos.CreateRequest("loan");
 
     mockMvc
         .perform(
@@ -131,8 +128,7 @@ class IdempotencyIntegrationTest extends AbstractJdbcIntegrationTest {
                 .content(objectMapper.writeValueAsString(request1)))
         .andExpect(status().isCreated());
 
-    RequestDtos.CreateRequest request2 =
-        new RequestDtos.CreateRequest("loan", objectMapper.readTree("{\"amount\":20}"));
+    RequestDtos.CreateRequest request2 = new RequestDtos.CreateRequest("mortgage");
 
     mockMvc
         .perform(
@@ -149,8 +145,7 @@ class IdempotencyIntegrationTest extends AbstractJdbcIntegrationTest {
     String idempotencyKey = UUID.randomUUID().toString();
     String operation = "POST /api/requests/drafts";
 
-    RequestDtos.CreateRequest request =
-        new RequestDtos.CreateRequest("loan", objectMapper.readTree("{\"amount\":10}"));
+    RequestDtos.CreateRequest request = new RequestDtos.CreateRequest("loan");
 
     repository.save(
         IdempotencyRecordEntity.builder()

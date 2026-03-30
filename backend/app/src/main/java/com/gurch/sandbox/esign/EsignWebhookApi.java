@@ -1,5 +1,7 @@
 package com.gurch.sandbox.esign;
 
+import com.gurch.sandbox.esign.dto.EsignWebhookRequest;
+
 /** Applies inbound provider webhook updates to stored e-sign state. */
 public interface EsignWebhookApi {
 

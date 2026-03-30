@@ -1,6 +1,8 @@
 package com.gurch.sandbox.workflows;
 
 import com.gurch.sandbox.dto.PagedResponse;
+import com.gurch.sandbox.workflows.dto.WorkflowDefinitionResponse;
+import com.gurch.sandbox.workflows.dto.WorkflowSearchCriteria;
 
 /** API for workflow process-definition discovery and validation. */
 public interface WorkflowApi {

@@ -1,5 +1,6 @@
 package com.gurch.sandbox.requesttypes.internal;
 
+import com.gurch.sandbox.requesttypes.internal.models.RequestTypeEntity;
 import java.util.Optional;
 import org.springframework.data.repository.ListCrudRepository;
 import org.springframework.stereotype.Repository;

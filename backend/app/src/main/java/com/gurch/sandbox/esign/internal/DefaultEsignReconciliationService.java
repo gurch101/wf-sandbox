@@ -1,9 +1,11 @@
 package com.gurch.sandbox.esign.internal;
 
 import com.gurch.sandbox.esign.EsignEnvelopeStatus;
-import com.gurch.sandbox.esign.EsignReconcileResponse;
 import com.gurch.sandbox.esign.EsignReconciliationApi;
 import com.gurch.sandbox.esign.EsignSignerStatus;
+import com.gurch.sandbox.esign.dto.EsignReconcileResponse;
+import com.gurch.sandbox.esign.internal.models.EsignEnvelopeEntity;
+import com.gurch.sandbox.esign.internal.models.EsignSignerEntity;
 import com.gurch.sandbox.security.CurrentUserProvider;
 import java.time.Instant;
 import java.util.ArrayList;

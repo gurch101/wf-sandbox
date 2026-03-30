@@ -13,7 +13,7 @@ import com.gurch.sandbox.esign.internal.DocuSignWebhookVerifier;
 import com.gurch.sandbox.idempotency.NotIdempotent;
 import com.gurch.sandbox.requests.RequestApi;
 import com.gurch.sandbox.requests.RequestController;
-import com.gurch.sandbox.requests.RequestSubmissionErrorCode;
+import com.gurch.sandbox.requests.RequestDraftErrorCode;
 import com.gurch.sandbox.security.SystemAuthenticationScope;
 import com.gurch.sandbox.web.ApiErrorEnum;
 import io.swagger.v3.oas.models.Operation;
@@ -115,7 +115,7 @@ class OpenApiConfigTest {
 
     var response = customized.getResponses().get("400");
     assertThat(response).isNotNull();
-    assertThat(response.getDescription()).contains("INVALID_REQUEST_PAYLOAD");
+    assertThat(response.getDescription()).contains("INVALID_DRAFT_UPDATE_STATUS");
     var errorsSchema =
         response
             .getContent()
@@ -130,7 +130,7 @@ class OpenApiConfigTest {
         (List<Map<String, String>>) response.getExtensions().get("x-error-codes");
     assertThat(errorCodes)
         .extracting(map -> map.get("code"))
-        .contains("INVALID_REQUEST_PAYLOAD", "MISSING_PAYLOAD_HANDLER");
+        .contains("INVALID_DRAFT_UPDATE_STATUS", "INVALID_DRAFT_SUBMIT_STATUS");
   }
 
   @SuppressWarnings("UnusedMethod")
@@ -143,7 +143,7 @@ class OpenApiConfigTest {
     void notIdempotent() {}
 
     @PostMapping("/with-errors")
-    @ApiErrorEnum({RequestSubmissionErrorCode.class})
+    @ApiErrorEnum({RequestDraftErrorCode.class})
     void withErrors() {}
   }
 }

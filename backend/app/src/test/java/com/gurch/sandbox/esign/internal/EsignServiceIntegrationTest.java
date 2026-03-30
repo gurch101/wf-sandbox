@@ -10,12 +10,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.gurch.sandbox.esign.EsignAuthMethod;
-import com.gurch.sandbox.esign.EsignCreateEnvelopeRequest;
 import com.gurch.sandbox.esign.EsignDeliveryMode;
 import com.gurch.sandbox.esign.EsignEnvelopeStatus;
 import com.gurch.sandbox.esign.EsignSignerDeliveryMethod;
 import com.gurch.sandbox.esign.EsignSignerStatus;
-import com.gurch.sandbox.esign.EsignVoidRequest;
+import com.gurch.sandbox.esign.dto.EsignCreateEnvelopeRequest;
+import com.gurch.sandbox.esign.dto.EsignVoidRequest;
 import com.gurch.sandbox.web.NotFoundException;
 import java.nio.file.Files;
 import java.nio.file.Path;

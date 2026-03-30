@@ -5,14 +5,15 @@ import com.gurch.sandbox.dto.PagedResponse;
 import com.gurch.sandbox.query.JoinType;
 import com.gurch.sandbox.query.Operator;
 import com.gurch.sandbox.query.SQLQueryBuilder;
-import com.gurch.sandbox.requesttypes.PayloadHandlerCatalog;
 import com.gurch.sandbox.requesttypes.RequestTypeApi;
-import com.gurch.sandbox.requesttypes.RequestTypeCommand;
 import com.gurch.sandbox.requesttypes.RequestTypeErrorCode;
 import com.gurch.sandbox.requesttypes.RequestTypeResolutionErrorCode;
-import com.gurch.sandbox.requesttypes.RequestTypeSearchCriteria;
-import com.gurch.sandbox.requesttypes.RequestTypeSearchResponse;
-import com.gurch.sandbox.requesttypes.ResolvedRequestTypeVersion;
+import com.gurch.sandbox.requesttypes.dto.RequestTypeCommand;
+import com.gurch.sandbox.requesttypes.dto.RequestTypeSearchCriteria;
+import com.gurch.sandbox.requesttypes.dto.RequestTypeSearchResponse;
+import com.gurch.sandbox.requesttypes.dto.ResolvedRequestTypeVersion;
+import com.gurch.sandbox.requesttypes.internal.models.RequestTypeEntity;
+import com.gurch.sandbox.requesttypes.internal.models.RequestTypeVersionEntity;
 import com.gurch.sandbox.search.SearchExecutor;
 import com.gurch.sandbox.web.ValidationErrorException;
 import com.gurch.sandbox.workflows.WorkflowApi;
@@ -33,7 +34,6 @@ public class DefaultRequestTypeService implements RequestTypeApi {
   private final RequestTypeVersionRepository versionRepository;
   private final NamedParameterJdbcTemplate jdbcTemplate;
   private final WorkflowApi workflowApi;
-  private final PayloadHandlerCatalog payloadHandlerCatalog;
   private final SearchExecutor searchExecutor;
   private final AuditLogApi auditLogApi;
 
@@ -91,7 +91,6 @@ public class DefaultRequestTypeService implements RequestTypeApi {
   @Transactional
   public ResolvedRequestTypeVersion createType(RequestTypeCommand command) {
     validateProcessDefinitionKey(command.getProcessDefinitionKey());
-    validatePayloadHandlerId(command.getPayloadHandlerId());
 
     RequestTypeEntity type =
         requestTypeRepository.save(
@@ -107,7 +106,6 @@ public class DefaultRequestTypeService implements RequestTypeApi {
             RequestTypeVersionEntity.builder()
                 .requestTypeId(type.getId())
                 .typeVersion(1)
-                .payloadHandlerId(command.getPayloadHandlerId())
                 .processDefinitionKey(command.getProcessDefinitionKey())
                 .build());
 
@@ -123,7 +121,6 @@ public class DefaultRequestTypeService implements RequestTypeApi {
   @Transactional
   public ResolvedRequestTypeVersion changeType(String typeKey, RequestTypeCommand command) {
     validateProcessDefinitionKey(command.getProcessDefinitionKey());
-    validatePayloadHandlerId(command.getPayloadHandlerId());
 
     RequestTypeEntity type =
         requestTypeRepository
@@ -148,7 +145,6 @@ public class DefaultRequestTypeService implements RequestTypeApi {
             RequestTypeVersionEntity.builder()
                 .requestTypeId(type.getId())
                 .typeVersion(previous.getTypeVersion() + 1)
-                .payloadHandlerId(command.getPayloadHandlerId())
                 .processDefinitionKey(command.getProcessDefinitionKey())
                 .build());
     auditLogApi.recordCreate(REQUEST_TYPE_VERSIONS_RESOURCE_TYPE, newVersion.getId(), newVersion);
@@ -174,8 +170,7 @@ public class DefaultRequestTypeService implements RequestTypeApi {
         SQLQueryBuilder.newBuilder()
             .select(
                 "rt.type_key, rt.name, rt.description, rt.active, "
-                    + "rtv.type_version AS active_version, rtv.payload_handler_id, "
-                    + "rtv.process_definition_key")
+                    + "rtv.type_version AS active_version, rtv.process_definition_key")
             .from("request_types", "rt")
             .join(JoinType.INNER, "request_type_versions", "rtv", "rtv.id = rt.active_version_id")
             .where("upper(rt.type_key)", Operator.LIKE, criteria.getTypeKeyPattern())
@@ -212,17 +207,10 @@ public class DefaultRequestTypeService implements RequestTypeApi {
     }
   }
 
-  private void validatePayloadHandlerId(String payloadHandlerId) {
-    if (!payloadHandlerCatalog.exists(payloadHandlerId)) {
-      throw ValidationErrorException.of(RequestTypeErrorCode.INVALID_PAYLOAD_HANDLER_ID);
-    }
-  }
-
   private ResolvedRequestTypeVersion toResolved(String typeKey, RequestTypeVersionEntity version) {
     return ResolvedRequestTypeVersion.builder()
         .typeKey(typeKey)
         .version(version.getTypeVersion())
-        .payloadHandlerId(version.getPayloadHandlerId())
         .processDefinitionKey(version.getProcessDefinitionKey())
         .build();
   }
