@@ -1,6 +1,6 @@
 package com.gurch.sandbox.documenttemplates.internal;
 
-import com.gurch.sandbox.documenttemplates.DocumentTemplateSharedErrorCode;
+import com.gurch.sandbox.documenttemplates.DocumentTemplateSharedValidationErrorCode;
 import com.gurch.sandbox.web.ValidationErrorException;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -36,7 +36,8 @@ public class DocumentTemplateGenerationService {
       case DocumentTemplateMimeTypes.PDF -> pdfGenerationService.renderAsPdf(sourceBytes, fields);
       case DocumentTemplateMimeTypes.DOCX -> docxGenerationService.renderAsPdf(sourceBytes, fields);
       default ->
-          throw ValidationErrorException.of(DocumentTemplateSharedErrorCode.UNSUPPORTED_FILE_TYPE);
+          throw ValidationErrorException.of(
+              DocumentTemplateSharedValidationErrorCode.UNSUPPORTED_FILE_TYPE);
     };
   }
 

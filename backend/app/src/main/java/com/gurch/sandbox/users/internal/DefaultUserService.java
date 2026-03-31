@@ -7,7 +7,7 @@ import com.gurch.sandbox.query.Operator;
 import com.gurch.sandbox.query.SQLQueryBuilder;
 import com.gurch.sandbox.search.SearchExecutor;
 import com.gurch.sandbox.users.UserApi;
-import com.gurch.sandbox.users.UserErrorCode;
+import com.gurch.sandbox.users.UserValidationErrorCode;
 import com.gurch.sandbox.users.dto.UserCommand;
 import com.gurch.sandbox.users.dto.UserResponse;
 import com.gurch.sandbox.users.dto.UserSearchCriteria;
@@ -109,13 +109,13 @@ public class DefaultUserService implements UserApi {
   private static RuntimeException mapPersistenceFailure(RuntimeException ex) {
     String details = PersistenceExceptionUtils.fullMessage(ex).toLowerCase(Locale.ROOT);
     if (details.contains("users_username_key")) {
-      return ValidationErrorException.of(UserErrorCode.USERNAME_ALREADY_EXISTS);
+      return ValidationErrorException.of(UserValidationErrorCode.USERNAME_ALREADY_EXISTS);
     }
     if (details.contains("users_email_key")) {
-      return ValidationErrorException.of(UserErrorCode.EMAIL_ALREADY_EXISTS);
+      return ValidationErrorException.of(UserValidationErrorCode.EMAIL_ALREADY_EXISTS);
     }
     if (details.contains("fk_users_tenant_id")) {
-      return ValidationErrorException.of(UserErrorCode.TENANT_NOT_FOUND);
+      return ValidationErrorException.of(UserValidationErrorCode.TENANT_NOT_FOUND);
     }
     return ex;
   }

@@ -113,6 +113,44 @@ class RequestTypeModuleIntegrationTest extends AbstractJdbcIntegrationTest {
   }
 
   @Test
+  void shouldAllowDeleteDocumentationToFocusOnDeleteValidationOnly() throws Exception {
+    createType("loan", "Loan", "requestTypeV1Process");
+    createRequest("loan");
+
+    mockMvc
+        .perform(
+            delete("/api/internal/request-types/{typeKey}", "loan")
+                .with(csrf())
+                .header("Idempotency-Key", UUID.randomUUID().toString()))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.errors[0].code").value("REQUEST_TYPE_IN_USE"));
+  }
+
+  @Test
+  void shouldReturnNotFoundWhenUpdatingOrDeletingMissingRequestType() throws Exception {
+    mockMvc
+        .perform(
+            put("/api/internal/request-types/{typeKey}", "missing")
+                .with(csrf())
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        new RequestTypeDtos.ChangeTypeRequest(
+                            "Loan", "desc", "requestTypeV1Process"))))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.detail").value("Request type not found with typeKey: missing"));
+
+    mockMvc
+        .perform(
+            delete("/api/internal/request-types/{typeKey}", "missing")
+                .with(csrf())
+                .header("Idempotency-Key", UUID.randomUUID().toString()))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.detail").value("Request type not found with typeKey: missing"));
+  }
+
+  @Test
   void shouldWriteAuditEventsForCreateChangeAndDeleteRequestType() throws Exception {
     createType("audit-type", "Audit Type", "requestTypeV2Process");
 

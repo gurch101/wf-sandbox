@@ -6,7 +6,7 @@ import com.gurch.sandbox.requesttypes.dto.RequestTypeDtos;
 import com.gurch.sandbox.requesttypes.dto.RequestTypeSearchCriteria;
 import com.gurch.sandbox.requesttypes.dto.RequestTypeSearchResponse;
 import com.gurch.sandbox.requesttypes.dto.ResolvedRequestTypeVersion;
-import com.gurch.sandbox.web.ApiErrorEnum;
+import com.gurch.sandbox.web.ValidationErrorEnum;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -28,7 +28,7 @@ public class RequestTypeController {
   private final RequestTypeApi requestTypeApi;
 
   @PostMapping
-  @ApiErrorEnum({RequestTypeErrorCode.class})
+  @ValidationErrorEnum({RequestTypeCommandValidationErrorCode.class})
   @ResponseStatus(HttpStatus.CREATED)
   public ResolvedRequestTypeVersion create(
       @Valid @RequestBody RequestTypeDtos.CreateTypeRequest req) {
@@ -42,7 +42,7 @@ public class RequestTypeController {
   }
 
   @PutMapping("/{typeKey}")
-  @ApiErrorEnum({RequestTypeErrorCode.class})
+  @ValidationErrorEnum({RequestTypeCommandValidationErrorCode.class})
   public ResolvedRequestTypeVersion change(
       @PathVariable String typeKey, @Valid @RequestBody RequestTypeDtos.ChangeTypeRequest req) {
     return requestTypeApi.changeType(
@@ -62,7 +62,7 @@ public class RequestTypeController {
 
   @DeleteMapping("/{typeKey}")
   @ResponseStatus(HttpStatus.NO_CONTENT)
-  @ApiErrorEnum({RequestTypeErrorCode.class})
+  @ValidationErrorEnum({RequestTypeDeleteValidationErrorCode.class})
   public void delete(@PathVariable String typeKey) {
     requestTypeApi.deleteType(typeKey);
   }

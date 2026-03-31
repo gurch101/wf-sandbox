@@ -3,15 +3,11 @@ package com.gurch.sandbox.esign.internal;
 import com.gurch.sandbox.audit.AuditLogApi;
 import com.gurch.sandbox.esign.EsignApi;
 import com.gurch.sandbox.esign.EsignAuthMethod;
-import com.gurch.sandbox.esign.EsignCreateErrorCode;
+import com.gurch.sandbox.esign.EsignCreateValidationErrorCode;
 import com.gurch.sandbox.esign.EsignDeliveryMode;
-import com.gurch.sandbox.esign.EsignDownloadErrorCode;
-import com.gurch.sandbox.esign.EsignEmbeddedViewErrorCode;
 import com.gurch.sandbox.esign.EsignEnvelopeStatus;
-import com.gurch.sandbox.esign.EsignResendErrorCode;
 import com.gurch.sandbox.esign.EsignSignerDeliveryMethod;
 import com.gurch.sandbox.esign.EsignSignerStatus;
-import com.gurch.sandbox.esign.EsignVoidErrorCode;
 import com.gurch.sandbox.esign.dto.EsignCreateEnvelopeCommand;
 import com.gurch.sandbox.esign.dto.EsignCreateEnvelopeRequest;
 import com.gurch.sandbox.esign.dto.EsignDocumentDownload;
@@ -26,6 +22,7 @@ import com.gurch.sandbox.security.CurrentUserProvider;
 import com.gurch.sandbox.storage.StoredObjectApi;
 import com.gurch.sandbox.storage.dto.StoreObjectRequest;
 import com.gurch.sandbox.storage.dto.StoredObject;
+import com.gurch.sandbox.web.ConflictException;
 import com.gurch.sandbox.web.NotFoundException;
 import com.gurch.sandbox.web.ValidationErrorException;
 import java.io.ByteArrayInputStream;
@@ -159,12 +156,9 @@ public class DefaultEsignService implements EsignApi {
 
   @Override
   public EsignEnvelopeResponse voidEnvelope(Long id, String reason) {
-    if (StringUtils.isBlank(reason)) {
-      throw ValidationErrorException.of(EsignVoidErrorCode.VOID_REASON_REQUIRED);
-    }
     EsignEnvelopeEntity existing = envelopeSupport.loadAccessibleEnvelope(id);
     if (existing.getStatus() == EsignEnvelopeStatus.VOIDED) {
-      throw ValidationErrorException.of(EsignVoidErrorCode.ENVELOPE_ALREADY_VOIDED);
+      throw new ConflictException("Envelope is already voided");
     }
     List<EsignSignerEntity> existingSigners = envelopeSupport.loadSigners(existing.getId());
     String trimmedReason = reason.trim();
@@ -219,7 +213,7 @@ public class DefaultEsignService implements EsignApi {
             .orElseThrow(
                 () -> new NotFoundException("E-sign signer not found with roleKey: " + roleKey));
     if (!isActionableSigner(signer)) {
-      throw ValidationErrorException.of(EsignResendErrorCode.SIGNER_NOT_ACTIONABLE);
+      throw new ConflictException("Signer cannot be resent in its current status");
     }
     docuSignGateway.resendRecipients(
         envelope.getExternalEnvelopeId(), List.of(toResendSigner(signer)));
@@ -231,7 +225,8 @@ public class DefaultEsignService implements EsignApi {
       Long id, String roleKey, String locale) {
     EsignEnvelopeEntity envelope = envelopeSupport.loadAccessibleEnvelope(id);
     if (envelope.getDeliveryMode() != EsignDeliveryMode.IN_PERSON) {
-      throw ValidationErrorException.of(EsignEmbeddedViewErrorCode.EMBEDDED_VIEW_IN_PERSON_ONLY);
+      throw new ConflictException(
+          "Embedded signing views are only available for in-person envelopes");
     }
     String normalizedRoleKey = normalizeAnchorKey(roleKey);
     EsignSignerEntity signer =
@@ -285,7 +280,8 @@ public class DefaultEsignService implements EsignApi {
     EsignEnvelopeEntity existing = envelopeSupport.loadAccessibleEnvelope(envelopeId);
     Long storageObjectId = storageObjectIdExtractor.apply(existing);
     if (existing.getStatus() != EsignEnvelopeStatus.COMPLETED || storageObjectId == null) {
-      throw ValidationErrorException.of(EsignDownloadErrorCode.FILE_NOT_READY);
+      throw new ConflictException(
+          "Requested file is not available until the envelope is completed");
     }
     StoredObject signedDocument = requireStoredObject(storageObjectId, envelopeId);
     try {
@@ -350,19 +346,19 @@ public class DefaultEsignService implements EsignApi {
     List<EsignSignerEntity> actionableSigners =
         signers.stream().filter(this::isActionableSigner).toList();
     if (actionableSigners.isEmpty()) {
-      throw ValidationErrorException.of(EsignResendErrorCode.NO_ACTIONABLE_SIGNERS);
+      throw new ConflictException("Envelope has no actionable signers to resend");
     }
     return actionableSigners;
   }
 
   private void validateResendableEnvelope(EsignEnvelopeEntity envelope) {
     if (envelope.getDeliveryMode() != EsignDeliveryMode.REMOTE) {
-      throw ValidationErrorException.of(EsignResendErrorCode.RESEND_REMOTE_ONLY);
+      throw new ConflictException("Resend is only available for remote envelopes");
     }
     if (envelope.getStatus() == EsignEnvelopeStatus.COMPLETED
         || envelope.getStatus() == EsignEnvelopeStatus.DECLINED
         || envelope.getStatus() == EsignEnvelopeStatus.VOIDED) {
-      throw ValidationErrorException.of(EsignResendErrorCode.ENVELOPE_NOT_ACTIONABLE);
+      throw new ConflictException("Envelope cannot be resent in its current status");
     }
   }
 
@@ -457,23 +453,24 @@ public class DefaultEsignService implements EsignApi {
 
   private void validateCreateCommand(EsignCreateEnvelopeCommand command) {
     if (command == null || command.getContentStream() == null) {
-      throw ValidationErrorException.of(EsignCreateErrorCode.FILE_REQUIRED);
+      throw ValidationErrorException.of(EsignCreateValidationErrorCode.FILE_REQUIRED);
     }
     if (StringUtils.isBlank(command.getOriginalFilename())) {
-      throw ValidationErrorException.of(EsignCreateErrorCode.FILE_REQUIRED);
+      throw ValidationErrorException.of(EsignCreateValidationErrorCode.FILE_REQUIRED);
     }
     if (StringUtils.isBlank(command.getSubject())) {
-      throw ValidationErrorException.of(EsignCreateErrorCode.SUBJECT_REQUIRED);
+      throw ValidationErrorException.of(EsignCreateValidationErrorCode.SUBJECT_REQUIRED);
     }
     if (command.getSigners() == null || command.getSigners().isEmpty()) {
-      throw ValidationErrorException.of(EsignCreateErrorCode.SIGNERS_REQUIRED);
+      throw ValidationErrorException.of(EsignCreateValidationErrorCode.SIGNERS_REQUIRED);
     }
     if (command.getDeliveryMode() == EsignDeliveryMode.REMOTE) {
       if (command.isRemindersEnabled() && command.getReminderIntervalHours() == null) {
-        throw ValidationErrorException.of(EsignCreateErrorCode.REMINDER_INTERVAL_REQUIRED);
+        throw ValidationErrorException.of(
+            EsignCreateValidationErrorCode.REMINDER_INTERVAL_REQUIRED);
       }
     } else if (command.isRemindersEnabled()) {
-      throw ValidationErrorException.of(EsignCreateErrorCode.REMINDERS_REMOTE_ONLY);
+      throw ValidationErrorException.of(EsignCreateValidationErrorCode.REMINDERS_REMOTE_ONLY);
     }
   }
 
@@ -484,13 +481,13 @@ public class DefaultEsignService implements EsignApi {
     for (EsignCreateEnvelopeRequest.SignerInput signer : signers) {
       String anchorKey = normalizeAnchorKey(signer.anchorKey());
       if (anchorKey == null) {
-        throw ValidationErrorException.of(EsignCreateErrorCode.INVALID_ANCHOR_KEY);
+        throw ValidationErrorException.of(EsignCreateValidationErrorCode.INVALID_ANCHOR_KEY);
       }
       if (!seenAnchorKeys.add(anchorKey)) {
-        throw ValidationErrorException.of(EsignCreateErrorCode.DUPLICATE_ANCHOR_KEY);
+        throw ValidationErrorException.of(EsignCreateValidationErrorCode.DUPLICATE_ANCHOR_KEY);
       }
       if (!anchorParseResult.signatureAnchorKeys().contains(anchorKey)) {
-        throw ValidationErrorException.of(EsignCreateErrorCode.MISSING_SIGNATURE_ANCHOR);
+        throw ValidationErrorException.of(EsignCreateValidationErrorCode.MISSING_SIGNATURE_ANCHOR);
       }
     }
   }
@@ -552,25 +549,26 @@ public class DefaultEsignService implements EsignApi {
           resolveDeliveryMethod(deliveryMode, signer);
       if (resolvedDeliveryMethod == EsignSignerDeliveryMethod.EMAIL
           && StringUtils.isBlank(signer.email())) {
-        throw ValidationErrorException.of(EsignCreateErrorCode.REMOTE_EMAIL_REQUIRED);
+        throw ValidationErrorException.of(EsignCreateValidationErrorCode.REMOTE_EMAIL_REQUIRED);
       }
       if (signer.authMethod() == EsignAuthMethod.PASSCODE
           && StringUtils.isBlank(signer.passcode())) {
-        throw ValidationErrorException.of(EsignCreateErrorCode.PASSCODE_REQUIRED);
+        throw ValidationErrorException.of(EsignCreateValidationErrorCode.PASSCODE_REQUIRED);
       }
       if ((signer.authMethod() == EsignAuthMethod.SMS
               || resolvedDeliveryMethod == EsignSignerDeliveryMethod.SMS)
           && StringUtils.isBlank(signer.smsNumber())) {
-        throw ValidationErrorException.of(EsignCreateErrorCode.SMS_NUMBER_REQUIRED);
+        throw ValidationErrorException.of(EsignCreateValidationErrorCode.SMS_NUMBER_REQUIRED);
       }
       if (resolvedDeliveryMethod == EsignSignerDeliveryMethod.SMS
           && signer.authMethod() == EsignAuthMethod.SMS) {
-        throw ValidationErrorException.of(EsignCreateErrorCode.SMS_DELIVERY_SMS_AUTH_NOT_SUPPORTED);
+        throw ValidationErrorException.of(
+            EsignCreateValidationErrorCode.SMS_DELIVERY_SMS_AUTH_NOT_SUPPORTED);
       }
       return;
     }
     if (signer.authMethod() != EsignAuthMethod.NONE) {
-      throw ValidationErrorException.of(EsignCreateErrorCode.IN_PERSON_AUTH_NOT_ALLOWED);
+      throw ValidationErrorException.of(EsignCreateValidationErrorCode.IN_PERSON_AUTH_NOT_ALLOWED);
     }
   }
 
@@ -604,7 +602,7 @@ public class DefaultEsignService implements EsignApi {
       if (digits.matches("^\\+[1-9]\\d{7,14}$")) {
         return digits;
       }
-      throw ValidationErrorException.of(EsignCreateErrorCode.SMS_NUMBER_INVALID);
+      throw ValidationErrorException.of(EsignCreateValidationErrorCode.SMS_NUMBER_INVALID);
     }
 
     String digits = value.replaceAll("\\D", "");
@@ -614,14 +612,14 @@ public class DefaultEsignService implements EsignApi {
     if (digits.length() == 11 && digits.startsWith(DEFAULT_SMS_COUNTRY_CODE)) {
       return "+" + digits;
     }
-    throw ValidationErrorException.of(EsignCreateErrorCode.SMS_NUMBER_INVALID);
+    throw ValidationErrorException.of(EsignCreateValidationErrorCode.SMS_NUMBER_INVALID);
   }
 
   private byte[] readAllBytes(InputStream inputStream) {
     try (InputStream source = inputStream) {
       return source.readAllBytes();
     } catch (IOException e) {
-      throw ValidationErrorException.of(EsignCreateErrorCode.FILE_READ_FAILED);
+      throw ValidationErrorException.of(EsignCreateValidationErrorCode.FILE_READ_FAILED);
     }
   }
 

@@ -9,9 +9,9 @@ import com.gurch.sandbox.requests.dto.RequestDtos;
 import com.gurch.sandbox.requests.dto.RequestResponse;
 import com.gurch.sandbox.requests.dto.RequestSearchCriteria;
 import com.gurch.sandbox.requests.dto.RequestSearchResponse;
-import com.gurch.sandbox.requesttypes.RequestTypeResolutionErrorCode;
-import com.gurch.sandbox.web.ApiErrorEnum;
+import com.gurch.sandbox.requesttypes.RequestTypeResolutionValidationErrorCode;
 import com.gurch.sandbox.web.NotFoundException;
+import com.gurch.sandbox.web.ValidationErrorEnum;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -33,7 +33,7 @@ public class RequestController {
   private final RequestApi requestApi;
 
   @PostMapping("/drafts")
-  @ApiErrorEnum({RequestTypeResolutionErrorCode.class})
+  @ValidationErrorEnum({RequestTypeResolutionValidationErrorCode.class})
   @ResponseStatus(HttpStatus.CREATED)
   public CreateResponse createDraft(@Valid @RequestBody RequestDtos.CreateRequest request) {
     return new CreateResponse(
@@ -42,20 +42,23 @@ public class RequestController {
   }
 
   @PutMapping("/{id}")
-  @ApiErrorEnum({RequestDraftErrorCode.class})
+  @ValidationErrorEnum({RequestDraftValidationErrorCode.class})
   public CreateResponse updateDraft(
       @PathVariable Long id, @Valid @RequestBody RequestDtos.UpdateDraftRequest request) {
     return new CreateResponse(requestApi.updateDraft(id, request.getVersion()));
   }
 
   @PostMapping("/{id}/submit")
-  @ApiErrorEnum({RequestDraftErrorCode.class, RequestTypeResolutionErrorCode.class})
+  @ValidationErrorEnum({
+    RequestDraftValidationErrorCode.class,
+    RequestTypeResolutionValidationErrorCode.class
+  })
   public RequestResponse submitDraft(@PathVariable Long id) {
     return requestApi.submitDraft(id);
   }
 
   @PostMapping
-  @ApiErrorEnum({RequestTypeResolutionErrorCode.class})
+  @ValidationErrorEnum({RequestTypeResolutionValidationErrorCode.class})
   @ResponseStatus(HttpStatus.CREATED)
   public CreateResponse create(@Valid @RequestBody RequestDtos.CreateRequest request) {
     return new CreateResponse(

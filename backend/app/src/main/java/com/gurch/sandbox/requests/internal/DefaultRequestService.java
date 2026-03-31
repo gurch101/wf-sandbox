@@ -6,7 +6,7 @@ import com.gurch.sandbox.query.JoinType;
 import com.gurch.sandbox.query.Operator;
 import com.gurch.sandbox.query.SQLQueryBuilder;
 import com.gurch.sandbox.requests.RequestApi;
-import com.gurch.sandbox.requests.RequestDraftErrorCode;
+import com.gurch.sandbox.requests.RequestDraftValidationErrorCode;
 import com.gurch.sandbox.requests.RequestStatus;
 import com.gurch.sandbox.requests.activity.RequestActivityApi;
 import com.gurch.sandbox.requests.activity.dto.RequestActivityEventResponse;
@@ -83,7 +83,8 @@ public class DefaultRequestService implements RequestApi {
             .findById(id)
             .orElseThrow(() -> new NotFoundException("Request not found with id: " + id));
     if (draft.getStatus() != RequestStatus.DRAFT) {
-      throw ValidationErrorException.of(RequestDraftErrorCode.INVALID_DRAFT_UPDATE_STATUS);
+      throw ValidationErrorException.of(
+          RequestDraftValidationErrorCode.INVALID_DRAFT_UPDATE_STATUS);
     }
 
     RequestEntity beforeState = draft;
@@ -106,7 +107,8 @@ public class DefaultRequestService implements RequestApi {
             .findById(id)
             .orElseThrow(() -> new NotFoundException("Request not found with id: " + id));
     if (draft.getStatus() != RequestStatus.DRAFT) {
-      throw ValidationErrorException.of(RequestDraftErrorCode.INVALID_DRAFT_SUBMIT_STATUS);
+      throw ValidationErrorException.of(
+          RequestDraftValidationErrorCode.INVALID_DRAFT_SUBMIT_STATUS);
     }
 
     ResolvedRequestTypeVersion resolved =

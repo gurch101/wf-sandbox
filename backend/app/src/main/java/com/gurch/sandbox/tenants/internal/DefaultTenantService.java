@@ -7,7 +7,7 @@ import com.gurch.sandbox.query.Operator;
 import com.gurch.sandbox.query.SQLQueryBuilder;
 import com.gurch.sandbox.search.SearchExecutor;
 import com.gurch.sandbox.tenants.TenantApi;
-import com.gurch.sandbox.tenants.TenantErrorCode;
+import com.gurch.sandbox.tenants.TenantValidationErrorCode;
 import com.gurch.sandbox.tenants.dto.TenantCommand;
 import com.gurch.sandbox.tenants.dto.TenantResponse;
 import com.gurch.sandbox.tenants.dto.TenantSearchCriteria;
@@ -108,10 +108,10 @@ public class DefaultTenantService implements TenantApi {
   private static RuntimeException mapPersistenceFailure(RuntimeException ex) {
     String details = PersistenceExceptionUtils.fullMessage(ex).toLowerCase(Locale.ROOT);
     if (details.contains("tenants_name_key")) {
-      return ValidationErrorException.of(TenantErrorCode.TENANT_NAME_ALREADY_EXISTS);
+      return ValidationErrorException.of(TenantValidationErrorCode.TENANT_NAME_ALREADY_EXISTS);
     }
     if (details.contains("fk_users_tenant_id")) {
-      return ValidationErrorException.of(TenantErrorCode.TENANT_IN_USE);
+      return ValidationErrorException.of(TenantValidationErrorCode.TENANT_IN_USE);
     }
     return ex;
   }

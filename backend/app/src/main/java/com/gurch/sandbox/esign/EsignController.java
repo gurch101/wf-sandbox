@@ -14,8 +14,8 @@ import com.gurch.sandbox.esign.internal.DocuSignConnectWebhookPayload;
 import com.gurch.sandbox.esign.internal.DocuSignWebhookVerifier;
 import com.gurch.sandbox.idempotency.NotIdempotent;
 import com.gurch.sandbox.security.SystemAuthenticationScope;
-import com.gurch.sandbox.web.ApiErrorEnum;
 import com.gurch.sandbox.web.NotFoundException;
+import com.gurch.sandbox.web.ValidationErrorEnum;
 import com.gurch.sandbox.web.ValidationErrorException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -59,7 +59,7 @@ public class EsignController {
 
   @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   @NotIdempotent
-  @ApiErrorEnum({EsignCreateErrorCode.class})
+  @ValidationErrorEnum({EsignCreateValidationErrorCode.class})
   @ResponseStatus(HttpStatus.CREATED)
   @Operation(
       summary = "Create an e-sign envelope from an uploaded PDF",
@@ -81,7 +81,7 @@ public class EsignController {
               .signers(request.signers())
               .build());
     } catch (IOException e) {
-      throw ValidationErrorException.of(EsignCreateErrorCode.FILE_READ_FAILED);
+      throw ValidationErrorException.of(EsignCreateValidationErrorCode.FILE_READ_FAILED);
     }
   }
 
@@ -94,7 +94,6 @@ public class EsignController {
   }
 
   @PostMapping("/{id}/void")
-  @ApiErrorEnum({EsignVoidErrorCode.class})
   @Operation(summary = "Void an active e-sign envelope", operationId = "voidEsignEnvelope")
   public EsignEnvelopeResponse voidEnvelope(
       @PathVariable Long id, @Valid @RequestBody EsignVoidRequest request) {
@@ -102,7 +101,6 @@ public class EsignController {
   }
 
   @PostMapping("/{id}/resend")
-  @ApiErrorEnum({EsignResendErrorCode.class})
   @Operation(
       summary = "Resend notification emails for actionable remote signers",
       operationId = "resendEsignEnvelope")
@@ -111,7 +109,6 @@ public class EsignController {
   }
 
   @PostMapping("/{id}/signers/{roleKey}/resend")
-  @ApiErrorEnum({EsignResendErrorCode.class})
   @Operation(
       summary = "Resend the notification email for one actionable remote signer",
       operationId = "resendEsignSigner")
@@ -128,7 +125,6 @@ public class EsignController {
   }
 
   @PostMapping("/{id}/signers/{roleKey}/embedded-view")
-  @ApiErrorEnum({EsignEmbeddedViewErrorCode.class})
   @Operation(
       summary = "Create an embedded signing view for one in-person signer",
       operationId = "createEsignEmbeddedView")
@@ -140,7 +136,6 @@ public class EsignController {
   }
 
   @GetMapping("/{id}/certificate")
-  @ApiErrorEnum({EsignDownloadErrorCode.class})
   @Operation(
       summary = "Download a stored signing certificate",
       operationId = "downloadEsignCertificate")
@@ -154,7 +149,6 @@ public class EsignController {
   }
 
   @GetMapping("/{id}/signed-document")
-  @ApiErrorEnum({EsignDownloadErrorCode.class})
   @Operation(
       summary = "Download a stored signed document",
       operationId = "downloadEsignSignedDocument")

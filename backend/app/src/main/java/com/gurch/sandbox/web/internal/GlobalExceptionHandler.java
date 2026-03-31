@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import com.gurch.sandbox.dto.ValidationError;
 import com.gurch.sandbox.idempotency.IdempotencyConflictException;
 import com.gurch.sandbox.idempotency.MissingIdempotencyKeyException;
+import com.gurch.sandbox.web.ConflictException;
 import com.gurch.sandbox.web.NotFoundException;
 import com.gurch.sandbox.web.PayloadTooLargeException;
 import com.gurch.sandbox.web.ValidationErrorException;
@@ -44,6 +45,14 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     problemDetail.setType(URI.create("https://example.com/probs/validation-failed"));
     problemDetail.setInstance(URI.create(request.getDescription(false).replace("uri=", "")));
     problemDetail.setProperty("errors", e.getErrors());
+    return problemDetail;
+  }
+
+  @ExceptionHandler(ConflictException.class)
+  public ProblemDetail handleConflictException(ConflictException e) {
+    ProblemDetail problemDetail =
+        ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, e.getMessage());
+    problemDetail.setTitle("Conflict");
     return problemDetail;
   }
 
