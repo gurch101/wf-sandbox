@@ -9,8 +9,9 @@ import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import com.gurch.sandbox.dto.ValidationError;
 import com.gurch.sandbox.idempotency.IdempotencyConflictException;
 import com.gurch.sandbox.idempotency.MissingIdempotencyKeyException;
-import com.gurch.sandbox.requests.RequestDraftErrorCode;
+import com.gurch.sandbox.requests.RequestDraftValidationErrorCode;
 import com.gurch.sandbox.requests.RequestStatus;
+import com.gurch.sandbox.web.ConflictException;
 import com.gurch.sandbox.web.NotFoundException;
 import com.gurch.sandbox.web.ValidationErrorException;
 import java.lang.reflect.Method;
@@ -59,6 +60,9 @@ class GlobalExceptionHandlerTest {
                     new OptimisticLockingFailureException("stale"))
                 .getStatus())
         .isEqualTo(HttpStatus.CONFLICT.value());
+
+    assertThat(handler.handleConflictException(new ConflictException("conflict")).getStatus())
+        .isEqualTo(HttpStatus.CONFLICT.value());
   }
 
   @Test
@@ -67,7 +71,8 @@ class GlobalExceptionHandlerTest {
         new ServletWebRequest(new MockHttpServletRequest("GET", "/api/test"));
     var problem =
         handler.handleValidationErrorException(
-            ValidationErrorException.of(RequestDraftErrorCode.INVALID_DRAFT_UPDATE_STATUS),
+            ValidationErrorException.of(
+                RequestDraftValidationErrorCode.INVALID_DRAFT_UPDATE_STATUS),
             request);
 
     assertThat(problem.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());

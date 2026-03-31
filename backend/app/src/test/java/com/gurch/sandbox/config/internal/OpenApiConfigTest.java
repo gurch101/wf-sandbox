@@ -13,9 +13,10 @@ import com.gurch.sandbox.esign.internal.DocuSignWebhookVerifier;
 import com.gurch.sandbox.idempotency.NotIdempotent;
 import com.gurch.sandbox.requests.RequestApi;
 import com.gurch.sandbox.requests.RequestController;
-import com.gurch.sandbox.requests.RequestDraftErrorCode;
+import com.gurch.sandbox.requests.RequestDraftValidationErrorCode;
+import com.gurch.sandbox.requesttypes.RequestTypeCommandValidationErrorCode;
 import com.gurch.sandbox.security.SystemAuthenticationScope;
-import com.gurch.sandbox.web.ApiErrorEnum;
+import com.gurch.sandbox.web.ValidationErrorEnum;
 import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.media.ArraySchema;
 import java.lang.reflect.Method;
@@ -28,14 +29,15 @@ import org.springframework.web.method.HandlerMethod;
 class OpenApiConfigTest {
 
   @Test
-  void shouldLeaveOperationUnchangedWhenApiErrorEnumIsMissing() throws Exception {
+  void shouldLeaveOperationUnchangedWhenValidationErrorEnumIsMissing() throws Exception {
     OpenApiConfig config = new OpenApiConfig();
     RequestController controller = new RequestController(mock(RequestApi.class));
     Method method = RequestController.class.getMethod("getById", Long.class);
     HandlerMethod handlerMethod = new HandlerMethod(controller, method);
 
     Operation operation = new Operation();
-    Operation customized = config.apiErrorEnumCustomizer().customize(operation, handlerMethod);
+    Operation customized =
+        config.validationErrorEnumCustomizer().customize(operation, handlerMethod);
 
     assertThat(customized.getResponses()).isNull();
   }
@@ -104,14 +106,14 @@ class OpenApiConfigTest {
 
   @Test
   @SuppressWarnings("unchecked")
-  void shouldDocumentApiErrorEnumCodes() throws Exception {
+  void shouldDocumentValidationErrorEnumCodes() throws Exception {
     OpenApiConfig config = new OpenApiConfig();
     HandlerMethod handlerMethod =
         new HandlerMethod(
             new DummyController(), DummyController.class.getDeclaredMethod("withErrors"));
 
     Operation customized =
-        config.apiErrorEnumCustomizer().customize(new Operation(), handlerMethod);
+        config.validationErrorEnumCustomizer().customize(new Operation(), handlerMethod);
 
     var response = customized.getResponses().get("400");
     assertThat(response).isNotNull();
@@ -133,6 +135,25 @@ class OpenApiConfigTest {
         .contains("INVALID_DRAFT_UPDATE_STATUS", "INVALID_DRAFT_SUBMIT_STATUS");
   }
 
+  @Test
+  @SuppressWarnings("unchecked")
+  void shouldDocumentOnlyDeclaredValidationCodes() throws Exception {
+    OpenApiConfig config = new OpenApiConfig();
+    HandlerMethod handlerMethod =
+        new HandlerMethod(
+            new DummyController(), DummyController.class.getDeclaredMethod("withRequestTypeError"));
+
+    Operation customized =
+        config.validationErrorEnumCustomizer().customize(new Operation(), handlerMethod);
+
+    List<Map<String, String>> errorCodes =
+        (List<Map<String, String>>)
+            customized.getResponses().get("400").getExtensions().get("x-error-codes");
+    assertThat(errorCodes)
+        .extracting(map -> map.get("code"))
+        .containsExactly("INVALID_PROCESS_DEFINITION_KEY");
+  }
+
   @SuppressWarnings("UnusedMethod")
   private static final class DummyController {
     @PostMapping("/idempotent")
@@ -143,7 +164,11 @@ class OpenApiConfigTest {
     void notIdempotent() {}
 
     @PostMapping("/with-errors")
-    @ApiErrorEnum({RequestDraftErrorCode.class})
+    @ValidationErrorEnum({RequestDraftValidationErrorCode.class})
     void withErrors() {}
+
+    @PostMapping("/with-request-type-error")
+    @ValidationErrorEnum({RequestTypeCommandValidationErrorCode.class})
+    void withRequestTypeError() {}
   }
 }

@@ -2,6 +2,7 @@ package com.gurch.sandbox.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 
@@ -20,32 +21,36 @@ class ValidationErrorExceptionTest {
     assertThat(exception.getErrors().get(1).code()).isEqualTo("STATUS_REQUIRED");
   }
 
-  private enum TestErrorCode implements ApiErrorCode {
-    NAME_REQUIRED("name", "name is required", HttpStatus.BAD_REQUEST),
-    STATUS_REQUIRED("status", "status is required", HttpStatus.BAD_REQUEST);
+  @Test
+  void shouldRejectEmptyInputs() {
+    IllegalArgumentException thrown = null;
+    try {
+      throw ValidationErrorException.from(List.of());
+    } catch (IllegalArgumentException e) {
+      thrown = e;
+    }
+    assertThat(thrown).hasMessageContaining("at least one error");
+  }
+
+  private enum TestErrorCode implements ValidationErrorCode {
+    NAME_REQUIRED("name", "name is required"),
+    STATUS_REQUIRED("status", "status is required");
     private final String fieldName;
     private final String message;
-    private final HttpStatus status;
 
-    TestErrorCode(String fieldName, String message, HttpStatus status) {
+    TestErrorCode(String fieldName, String message) {
       this.fieldName = fieldName;
       this.message = message;
-      this.status = status;
     }
 
     @Override
-    public String fieldName() {
+    public String getFieldName() {
       return fieldName;
     }
 
     @Override
-    public String message() {
+    public String getMessage() {
       return message;
-    }
-
-    @Override
-    public HttpStatus status() {
-      return status;
     }
   }
 }

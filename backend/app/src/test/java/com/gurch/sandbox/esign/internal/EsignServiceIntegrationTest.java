@@ -316,7 +316,8 @@ class EsignServiceIntegrationTest extends AbstractEsignIntegrationTest {
             post("/api/esign/{id}/resend", id)
                 .header("Idempotency-Key", UUID.randomUUID().toString()))
         .andExpect(status().isConflict())
-        .andExpect(jsonPath("$.errors[0].code").value("RESEND_REMOTE_ONLY"));
+        .andExpect(jsonPath("$.title").value("Conflict"))
+        .andExpect(jsonPath("$.detail").value("Resend is only available for remote envelopes"));
   }
 
   @Test
@@ -330,7 +331,8 @@ class EsignServiceIntegrationTest extends AbstractEsignIntegrationTest {
             post("/api/esign/{id}/resend", id)
                 .header("Idempotency-Key", UUID.randomUUID().toString()))
         .andExpect(status().isConflict())
-        .andExpect(jsonPath("$.errors[0].code").value("ENVELOPE_NOT_ACTIONABLE"));
+        .andExpect(jsonPath("$.title").value("Conflict"))
+        .andExpect(jsonPath("$.detail").value("Envelope cannot be resent in its current status"));
   }
 
   @Test
@@ -344,7 +346,8 @@ class EsignServiceIntegrationTest extends AbstractEsignIntegrationTest {
             post("/api/esign/{id}/signers/{roleKey}/resend", id, "s1")
                 .header("Idempotency-Key", UUID.randomUUID().toString()))
         .andExpect(status().isConflict())
-        .andExpect(jsonPath("$.errors[0].code").value("SIGNER_NOT_ACTIONABLE"));
+        .andExpect(jsonPath("$.title").value("Conflict"))
+        .andExpect(jsonPath("$.detail").value("Signer cannot be resent in its current status"));
   }
 
   @Test
@@ -362,10 +365,9 @@ class EsignServiceIntegrationTest extends AbstractEsignIntegrationTest {
     mockMvc
         .perform(get("/api/esign/{id}/certificate", id))
         .andExpect(status().isConflict())
-        .andExpect(jsonPath("$.detail").value("Request has invalid fields"))
-        .andExpect(jsonPath("$.errors[0].name").value("id"))
+        .andExpect(jsonPath("$.title").value("Conflict"))
         .andExpect(
-            jsonPath("$.errors[0].message")
+            jsonPath("$.detail")
                 .value("Requested file is not available until the envelope is completed"));
 
     Mockito.verify(docuSignGateway, Mockito.never())
@@ -387,10 +389,9 @@ class EsignServiceIntegrationTest extends AbstractEsignIntegrationTest {
     mockMvc
         .perform(get("/api/esign/{id}/signed-document", id))
         .andExpect(status().isConflict())
-        .andExpect(jsonPath("$.detail").value("Request has invalid fields"))
-        .andExpect(jsonPath("$.errors[0].name").value("id"))
+        .andExpect(jsonPath("$.title").value("Conflict"))
         .andExpect(
-            jsonPath("$.errors[0].message")
+            jsonPath("$.detail")
                 .value("Requested file is not available until the envelope is completed"));
 
     Mockito.verify(docuSignGateway, Mockito.never())

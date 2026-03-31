@@ -7,8 +7,8 @@ import com.gurch.sandbox.users.dto.UserDtos;
 import com.gurch.sandbox.users.dto.UserResponse;
 import com.gurch.sandbox.users.dto.UserSearchCriteria;
 import com.gurch.sandbox.users.dto.UserSearchResponse;
-import com.gurch.sandbox.web.ApiErrorEnum;
 import com.gurch.sandbox.web.NotFoundException;
+import com.gurch.sandbox.web.ValidationErrorEnum;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -30,7 +30,7 @@ public class UserController {
   private final UserApi userApi;
 
   @PostMapping
-  @ApiErrorEnum({UserErrorCode.class})
+  @ValidationErrorEnum({UserValidationErrorCode.class})
   @ResponseStatus(HttpStatus.CREATED)
   public CreateResponse create(@Valid @RequestBody UserDtos.CreateUserRequest request) {
     return new CreateResponse(
@@ -51,7 +51,7 @@ public class UserController {
   }
 
   @PutMapping("/{id}")
-  @ApiErrorEnum({UserErrorCode.class})
+  @ValidationErrorEnum({UserValidationErrorCode.class})
   public CreateResponse update(
       @PathVariable Integer id, @Valid @RequestBody UserDtos.UpdateUserRequest request) {
     return new CreateResponse(

@@ -3,11 +3,11 @@ package com.gurch.sandbox.documenttemplates.internal;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gurch.sandbox.audit.AuditLogApi;
 import com.gurch.sandbox.documenttemplates.DocumentTemplateApi;
-import com.gurch.sandbox.documenttemplates.DocumentTemplateGenerateErrorCode;
+import com.gurch.sandbox.documenttemplates.DocumentTemplateGenerateValidationErrorCode;
 import com.gurch.sandbox.documenttemplates.DocumentTemplateLanguage;
-import com.gurch.sandbox.documenttemplates.DocumentTemplateSharedErrorCode;
-import com.gurch.sandbox.documenttemplates.DocumentTemplateUpdateErrorCode;
-import com.gurch.sandbox.documenttemplates.DocumentTemplateUploadErrorCode;
+import com.gurch.sandbox.documenttemplates.DocumentTemplateSharedValidationErrorCode;
+import com.gurch.sandbox.documenttemplates.DocumentTemplateUpdateValidationErrorCode;
+import com.gurch.sandbox.documenttemplates.DocumentTemplateUploadValidationErrorCode;
 import com.gurch.sandbox.documenttemplates.dto.DocumentTemplateDownload;
 import com.gurch.sandbox.documenttemplates.dto.DocumentTemplateEsignAnchorMetadata;
 import com.gurch.sandbox.documenttemplates.dto.DocumentTemplateFormMap;
@@ -136,13 +136,14 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
     TemplateIntrospectionResult introspection =
         introspectionService.introspect(replacementMimeType, payload);
     if (!Objects.equals(parseFormMapOrNull(existing.getFormMapJson()), introspection.formMap())) {
-      throw ValidationErrorException.of(DocumentTemplateUpdateErrorCode.TEMPLATE_FIELD_MAP_CHANGED);
+      throw ValidationErrorException.of(
+          DocumentTemplateUpdateValidationErrorCode.TEMPLATE_FIELD_MAP_CHANGED);
     }
     if (!Objects.equals(
         parseEsignAnchorMetadataOrNull(existing.getEsignAnchorMetadataJson()),
         introspection.esignAnchorMetadata())) {
       throw ValidationErrorException.of(
-          DocumentTemplateUpdateErrorCode.TEMPLATE_ESIGN_ANCHORS_CHANGED);
+          DocumentTemplateUpdateValidationErrorCode.TEMPLATE_ESIGN_ANCHORS_CHANGED);
     }
 
     StoredObject stored =
@@ -202,14 +203,14 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
   public DocumentTemplateDownload generate(DocumentTemplateGenerateRequest request) {
     if (request == null || CollectionUtils.isEmpty(request.getDocuments())) {
       throw ValidationErrorException.of(
-          DocumentTemplateGenerateErrorCode.GENERATE_DOCUMENTS_REQUIRED);
+          DocumentTemplateGenerateValidationErrorCode.GENERATE_DOCUMENTS_REQUIRED);
     }
 
     List<TemplateRenderSource> renderSources = new ArrayList<>();
     for (DocumentTemplateGenerateRequest.GenerateInput input : request.getDocuments()) {
       if (input == null || input.getDocumentTemplateId() == null) {
         throw ValidationErrorException.of(
-            DocumentTemplateGenerateErrorCode.GENERATE_TEMPLATE_ID_REQUIRED);
+            DocumentTemplateGenerateValidationErrorCode.GENERATE_TEMPLATE_ID_REQUIRED);
       }
       DocumentTemplateEntity entity = loadAccessibleTemplate(input.getDocumentTemplateId());
       StoredObject stored = requireStoredObject(entity.getStorageObjectId(), entity.getId());
@@ -273,10 +274,10 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
 
   private void validateUploadRequest(DocumentTemplateUploadCommand command) {
     if (command == null) {
-      throw ValidationErrorException.of(DocumentTemplateSharedErrorCode.FILE_REQUIRED);
+      throw ValidationErrorException.of(DocumentTemplateSharedValidationErrorCode.FILE_REQUIRED);
     }
     if (StringUtils.isBlank(command.getEnName())) {
-      throw ValidationErrorException.of(DocumentTemplateUploadErrorCode.EN_NAME_REQUIRED);
+      throw ValidationErrorException.of(DocumentTemplateUploadValidationErrorCode.EN_NAME_REQUIRED);
     }
     validateUploadTenantAccess(command.getTenantId());
     validateFilePart(
@@ -291,10 +292,11 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
   private void validateFilePart(
       Long contentSize, InputStream contentStream, String originalFilename) {
     if (contentSize == null || contentSize <= 0 || contentStream == null) {
-      throw ValidationErrorException.of(DocumentTemplateSharedErrorCode.FILE_REQUIRED);
+      throw ValidationErrorException.of(DocumentTemplateSharedValidationErrorCode.FILE_REQUIRED);
     }
     if (originalFilename == null || originalFilename.isBlank()) {
-      throw ValidationErrorException.of(DocumentTemplateSharedErrorCode.ORIGINAL_FILENAME_REQUIRED);
+      throw ValidationErrorException.of(
+          DocumentTemplateSharedValidationErrorCode.ORIGINAL_FILENAME_REQUIRED);
     }
     if (contentSize > maxUploadSizeBytes) {
       throw new PayloadTooLargeException(
@@ -315,7 +317,8 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
       if (fileName.endsWith(".docx")) {
         return DocumentTemplateMimeTypes.DOCX;
       }
-      throw ValidationErrorException.of(DocumentTemplateSharedErrorCode.UNSUPPORTED_FILE_TYPE);
+      throw ValidationErrorException.of(
+          DocumentTemplateSharedValidationErrorCode.UNSUPPORTED_FILE_TYPE);
     }
     if (fileName.endsWith(".pdf")) {
       return DocumentTemplateMimeTypes.PDF;
@@ -323,7 +326,8 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
     if (fileName.endsWith(".docx")) {
       return DocumentTemplateMimeTypes.DOCX;
     }
-    throw ValidationErrorException.of(DocumentTemplateSharedErrorCode.UNSUPPORTED_FILE_TYPE);
+    throw ValidationErrorException.of(
+        DocumentTemplateSharedValidationErrorCode.UNSUPPORTED_FILE_TYPE);
   }
 
   private static String coalesceTrimmedRequired(String nextValue, String existingValue) {
@@ -401,7 +405,8 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
 
   private void validateUploadTenantAccess(Integer requestTenantId) {
     if (!hasTenantScopeAccess(requestTenantId, false)) {
-      throw ValidationErrorException.of(DocumentTemplateUploadErrorCode.TENANT_SCOPE_MISMATCH);
+      throw ValidationErrorException.of(
+          DocumentTemplateUploadValidationErrorCode.TENANT_SCOPE_MISMATCH);
     }
   }
 
@@ -436,7 +441,7 @@ public class DefaultDocumentTemplateService implements DocumentTemplateApi {
     try {
       return contentStream.readAllBytes();
     } catch (IOException e) {
-      throw ValidationErrorException.of(DocumentTemplateSharedErrorCode.FILE_READ_FAILED);
+      throw ValidationErrorException.of(DocumentTemplateSharedValidationErrorCode.FILE_READ_FAILED);
     }
   }
 

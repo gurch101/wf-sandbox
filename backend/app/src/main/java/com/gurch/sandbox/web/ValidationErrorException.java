@@ -3,20 +3,16 @@ package com.gurch.sandbox.web;
 import com.gurch.sandbox.dto.ValidationError;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 
 /** Exception carrying one or more validation errors in the API error response format. */
 public final class ValidationErrorException extends RuntimeException {
 
-  private final HttpStatus status;
   private final List<ValidationError> errors;
 
-  private ValidationErrorException(
-      HttpStatus status, List<ValidationError> errors, String message) {
+  private ValidationErrorException(List<ValidationError> errors, String message) {
     super(message);
-    this.status = status;
     this.errors = List.copyOf(errors);
   }
 
@@ -26,21 +22,15 @@ public final class ValidationErrorException extends RuntimeException {
    * @param errorCodes error codes to include in the response payload
    * @return exception containing mapped {@link ValidationError} values
    */
-  public static ValidationErrorException from(List<? extends ApiErrorCode> errorCodes) {
+  public static ValidationErrorException from(List<? extends ValidationErrorCode> errorCodes) {
     validateInput(errorCodes);
-    Set<HttpStatus> statuses =
-        errorCodes.stream().map(ApiErrorCode::status).collect(Collectors.toSet());
-    if (statuses.size() != 1) {
-      throw new IllegalArgumentException(
-          "All validation errors in one exception must share the same HTTP status");
-    }
 
-    HttpStatus status = statuses.iterator().next();
     List<ValidationError> errors =
         errorCodes.stream()
-            .map(code -> new ValidationError(code.fieldName(), code.code(), code.message()))
+            .map(
+                code -> new ValidationError(code.getFieldName(), code.getCode(), code.getMessage()))
             .toList();
-    return new ValidationErrorException(status, errors, buildMessage(errorCodes));
+    return new ValidationErrorException(errors, buildMessage(errorCodes));
   }
 
   /**
@@ -49,27 +39,23 @@ public final class ValidationErrorException extends RuntimeException {
    * @param errorCodes one or more error codes
    * @return exception containing mapped {@link ValidationError} values
    */
-  public static ValidationErrorException of(ApiErrorCode... errorCodes) {
+  public static ValidationErrorException of(ValidationErrorCode... errorCodes) {
     return from(Arrays.asList(errorCodes));
   }
 
   /**
-   * Creates an exception from explicit validation errors using a single HTTP status.
+   * Creates an exception from explicit validation errors.
    *
-   * @param status status to return
    * @param errors mapped validation errors
    * @return exception containing provided validation errors
    */
-  public static ValidationErrorException of(HttpStatus status, List<ValidationError> errors) {
-    if (status == null) {
-      throw new IllegalArgumentException("ValidationErrorException requires a non-null status");
-    }
+  public static ValidationErrorException of(List<ValidationError> errors) {
     if (errors == null || errors.isEmpty()) {
       throw new IllegalArgumentException("ValidationErrorException requires at least one error");
     }
     String message =
         errors.stream().map(ValidationError::message).collect(Collectors.joining("; "));
-    return new ValidationErrorException(status, errors, message);
+    return new ValidationErrorException(errors, message);
   }
 
   /**
@@ -78,7 +64,7 @@ public final class ValidationErrorException extends RuntimeException {
    * @return HTTP status for the grouped validation errors
    */
   public HttpStatus getStatus() {
-    return status;
+    return HttpStatus.BAD_REQUEST;
   }
 
   /**
@@ -90,17 +76,19 @@ public final class ValidationErrorException extends RuntimeException {
     return List.copyOf(errors);
   }
 
-  private static void validateInput(List<? extends ApiErrorCode> errorCodes) {
+  private static void validateInput(List<? extends ValidationErrorCode> errorCodes) {
     if (errorCodes == null || errorCodes.isEmpty()) {
       throw new IllegalArgumentException("ValidationErrorException requires at least one error");
     }
   }
 
-  private static String buildMessage(List<? extends ApiErrorCode> errorCodes) {
+  private static String buildMessage(List<? extends ValidationErrorCode> errorCodes) {
     if (errorCodes == null || errorCodes.isEmpty()) {
       return "Validation failed";
     }
 
-    return errorCodes.stream().map(ApiErrorCode::message).collect(Collectors.joining("; "));
+    return errorCodes.stream()
+        .map(ValidationErrorCode::getMessage)
+        .collect(Collectors.joining("; "));
   }
 }

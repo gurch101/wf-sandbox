@@ -1,8 +1,8 @@
 package com.gurch.sandbox.config.internal;
 
 import com.gurch.sandbox.idempotency.NotIdempotent;
-import com.gurch.sandbox.web.ApiErrorCode;
-import com.gurch.sandbox.web.ApiErrorEnum;
+import com.gurch.sandbox.web.ValidationErrorCode;
+import com.gurch.sandbox.web.ValidationErrorEnum;
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Operation;
@@ -136,24 +136,14 @@ public class OpenApiConfig {
   }
 
   @Bean
-  public OperationCustomizer apiErrorEnumCustomizer() {
+  public OperationCustomizer validationErrorEnumCustomizer() {
     return (operation, handlerMethod) -> {
-      List<ApiErrorCode> errorCodes = resolveErrorCodes(handlerMethod);
+      List<ValidationErrorCode> errorCodes = resolveErrorCodes(handlerMethod);
       if (errorCodes.isEmpty()) {
         return operation;
       }
 
-      Map<String, List<ApiErrorCode>> groupedByStatus =
-          errorCodes.stream()
-              .collect(
-                  Collectors.groupingBy(
-                      code -> String.valueOf(code.status().value()),
-                      LinkedHashMap::new,
-                      Collectors.toList()));
-
-      groupedByStatus.forEach(
-          (statusCode, statusErrorCodes) ->
-              applyDocumentedErrors(operation, statusCode, statusErrorCodes));
+      applyDocumentedErrors(operation, errorCodes);
 
       return operation;
     };
@@ -174,12 +164,14 @@ public class OpenApiConfig {
         || handlerMethod.hasMethodAnnotation(DeleteMapping.class);
   }
 
-  private static List<ApiErrorCode> resolveErrorCodes(HandlerMethod handlerMethod) {
-    Set<Class<? extends ApiErrorCode>> errorEnumTypes = new LinkedHashSet<>();
-    ApiErrorEnum classAnnotation =
-        AnnotatedElementUtils.findMergedAnnotation(handlerMethod.getBeanType(), ApiErrorEnum.class);
-    ApiErrorEnum methodAnnotation =
-        AnnotatedElementUtils.findMergedAnnotation(handlerMethod.getMethod(), ApiErrorEnum.class);
+  private static List<ValidationErrorCode> resolveErrorCodes(HandlerMethod handlerMethod) {
+    Set<Class<? extends ValidationErrorCode>> errorEnumTypes = new LinkedHashSet<>();
+    ValidationErrorEnum classAnnotation =
+        AnnotatedElementUtils.findMergedAnnotation(
+            handlerMethod.getBeanType(), ValidationErrorEnum.class);
+    ValidationErrorEnum methodAnnotation =
+        AnnotatedElementUtils.findMergedAnnotation(
+            handlerMethod.getMethod(), ValidationErrorEnum.class);
 
     if (classAnnotation != null) {
       addErrorEnumTypes(errorEnumTypes, classAnnotation.value());
@@ -189,39 +181,43 @@ public class OpenApiConfig {
       addErrorEnumTypes(errorEnumTypes, methodAnnotation.value());
     }
 
-    List<ApiErrorCode> errorCodes = new ArrayList<>();
-    for (Class<? extends ApiErrorCode> errorEnumType : errorEnumTypes) {
+    List<ValidationErrorCode> errorCodes = new ArrayList<>();
+    for (Class<? extends ValidationErrorCode> errorEnumType : errorEnumTypes) {
       if (!errorEnumType.isEnum()) {
         continue;
       }
 
       Object[] constants = errorEnumType.getEnumConstants();
       for (Object constant : constants) {
-        errorCodes.add((ApiErrorCode) constant);
+        errorCodes.add((ValidationErrorCode) constant);
       }
     }
     return errorCodes;
   }
 
   private static void addErrorEnumTypes(
-      Set<Class<? extends ApiErrorCode>> collector, Class<? extends ApiErrorCode>[] types) {
+      Set<Class<? extends ValidationErrorCode>> collector,
+      Class<? extends ValidationErrorCode>[] types) {
     collector.addAll(List.of(types));
   }
 
   private static void applyDocumentedErrors(
-      Operation operation, String statusCode, List<ApiErrorCode> errorsForStatus) {
+      Operation operation, List<ValidationErrorCode> errorsForStatus) {
     ApiResponses responses =
         operation.getResponses() != null ? operation.getResponses() : new ApiResponses();
     operation.setResponses(responses);
 
-    ApiResponse existing = responses.get(statusCode);
+    ApiResponse existing = responses.get("400");
     ApiResponse response = existing != null ? existing : new ApiResponse();
 
     String summary =
         errorsForStatus.stream()
-            .map(error -> "%s (%s): %s".formatted(error.code(), error.fieldName(), error.message()))
+            .map(
+                error ->
+                    "%s (%s): %s"
+                        .formatted(error.getCode(), error.getFieldName(), error.getMessage()))
             .collect(Collectors.joining("; "));
-    String description = "Documented validation/business errors: " + summary;
+    String description = "Documented validation errors: " + summary;
     response.setDescription(
         response.getDescription() == null || response.getDescription().isBlank()
             ? description
@@ -233,11 +229,11 @@ public class OpenApiConfig {
                 error ->
                     Map.of(
                         "fieldName",
-                        error.fieldName(),
+                        error.getFieldName(),
                         "code",
-                        error.code(),
+                        error.getCode(),
                         "message",
-                        error.message()))
+                        error.getMessage()))
             .toList();
     response.addExtension("x-error-codes", errorCodeDetails);
 
@@ -246,7 +242,7 @@ public class OpenApiConfig {
     content.addMediaType("application/problem+json", mediaType);
     response.setContent(content);
 
-    responses.addApiResponse(statusCode, response);
+    responses.addApiResponse("400", response);
   }
 
   private static Schema<?> validationProblemSchema() {

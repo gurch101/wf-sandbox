@@ -1,6 +1,6 @@
 package com.gurch.sandbox.documenttemplates.internal;
 
-import com.gurch.sandbox.documenttemplates.DocumentTemplateSharedErrorCode;
+import com.gurch.sandbox.documenttemplates.DocumentTemplateSharedValidationErrorCode;
 import com.gurch.sandbox.documenttemplates.dto.DocumentTemplateEsignAnchorMetadata;
 import com.gurch.sandbox.documenttemplates.dto.DocumentTemplateFormField;
 import com.gurch.sandbox.documenttemplates.dto.DocumentTemplateFormFieldType;
@@ -49,7 +49,8 @@ public class DocumentTemplateIntrospectionService {
     if (DocumentTemplateMimeTypes.DOCX.equals(mimeType)) {
       return introspectWord(payload);
     }
-    throw ValidationErrorException.of(DocumentTemplateSharedErrorCode.UNSUPPORTED_FILE_TYPE);
+    throw ValidationErrorException.of(
+        DocumentTemplateSharedValidationErrorCode.UNSUPPORTED_FILE_TYPE);
   }
 
   private TemplateIntrospectionResult introspectPdf(byte[] payload) {

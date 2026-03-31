@@ -11,8 +11,8 @@ import com.gurch.sandbox.documenttemplates.dto.DocumentTemplateUploadRequest;
 import com.gurch.sandbox.dto.CreateResponse;
 import com.gurch.sandbox.dto.PagedResponse;
 import com.gurch.sandbox.idempotency.NotIdempotent;
-import com.gurch.sandbox.web.ApiErrorEnum;
 import com.gurch.sandbox.web.NotFoundException;
+import com.gurch.sandbox.web.ValidationErrorEnum;
 import com.gurch.sandbox.web.ValidationErrorException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -51,7 +51,10 @@ public class DocumentTemplateController {
   @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   // Multipart uploads are excluded from idempotency replay because the request body is streamed.
   @NotIdempotent
-  @ApiErrorEnum({DocumentTemplateSharedErrorCode.class, DocumentTemplateUploadErrorCode.class})
+  @ValidationErrorEnum({
+    DocumentTemplateSharedValidationErrorCode.class,
+    DocumentTemplateUploadValidationErrorCode.class
+  })
   @ResponseStatus(HttpStatus.CREATED)
   @Operation(summary = "Upload a document template", operationId = "uploadDocumentTemplate")
   public CreateResponse upload(
@@ -72,7 +75,7 @@ public class DocumentTemplateController {
               file.getSize(),
               file.getInputStream());
     } catch (IOException e) {
-      throw ValidationErrorException.of(DocumentTemplateSharedErrorCode.FILE_READ_FAILED);
+      throw ValidationErrorException.of(DocumentTemplateSharedValidationErrorCode.FILE_READ_FAILED);
     }
 
     return new CreateResponse(documentTemplateApi.upload(command).getId());
@@ -80,7 +83,10 @@ public class DocumentTemplateController {
 
   @PatchMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   @NotIdempotent
-  @ApiErrorEnum({DocumentTemplateSharedErrorCode.class, DocumentTemplateUpdateErrorCode.class})
+  @ValidationErrorEnum({
+    DocumentTemplateSharedValidationErrorCode.class,
+    DocumentTemplateUpdateValidationErrorCode.class
+  })
   @Operation(summary = "Patch a document template", operationId = "updateDocumentTemplate")
   public DocumentTemplateResponse update(
       @PathVariable Long id,
@@ -99,7 +105,7 @@ public class DocumentTemplateController {
               file == null ? null : file.getSize(),
               file == null ? null : file.getInputStream());
     } catch (IOException e) {
-      throw ValidationErrorException.of(DocumentTemplateSharedErrorCode.FILE_READ_FAILED);
+      throw ValidationErrorException.of(DocumentTemplateSharedValidationErrorCode.FILE_READ_FAILED);
     }
     return documentTemplateApi.update(id, command);
   }
@@ -123,7 +129,10 @@ public class DocumentTemplateController {
 
   @PostMapping("/generate")
   @NotIdempotent
-  @ApiErrorEnum({DocumentTemplateSharedErrorCode.class, DocumentTemplateGenerateErrorCode.class})
+  @ValidationErrorEnum({
+    DocumentTemplateSharedValidationErrorCode.class,
+    DocumentTemplateGenerateValidationErrorCode.class
+  })
   @Operation(
       summary = "Generate a merged PDF from document templates",
       operationId = "generateDocumentTemplate")

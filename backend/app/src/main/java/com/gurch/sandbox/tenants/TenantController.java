@@ -7,8 +7,8 @@ import com.gurch.sandbox.tenants.dto.TenantDtos;
 import com.gurch.sandbox.tenants.dto.TenantResponse;
 import com.gurch.sandbox.tenants.dto.TenantSearchCriteria;
 import com.gurch.sandbox.tenants.dto.TenantSearchResponse;
-import com.gurch.sandbox.web.ApiErrorEnum;
 import com.gurch.sandbox.web.NotFoundException;
+import com.gurch.sandbox.web.ValidationErrorEnum;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -30,7 +30,7 @@ public class TenantController {
   private final TenantApi tenantApi;
 
   @PostMapping
-  @ApiErrorEnum({TenantErrorCode.class})
+  @ValidationErrorEnum({TenantValidationErrorCode.class})
   @ResponseStatus(HttpStatus.CREATED)
   public CreateResponse create(@Valid @RequestBody TenantDtos.CreateTenantRequest request) {
     return new CreateResponse(
@@ -46,7 +46,7 @@ public class TenantController {
   }
 
   @PutMapping("/{id}")
-  @ApiErrorEnum({TenantErrorCode.class})
+  @ValidationErrorEnum({TenantValidationErrorCode.class})
   public CreateResponse update(
       @PathVariable Integer id, @Valid @RequestBody TenantDtos.UpdateTenantRequest request) {
     return new CreateResponse(
@@ -59,7 +59,7 @@ public class TenantController {
   }
 
   @DeleteMapping("/{id}")
-  @ApiErrorEnum({TenantErrorCode.class})
+  @ValidationErrorEnum({TenantValidationErrorCode.class})
   @ResponseStatus(HttpStatus.NO_CONTENT)
   public void delete(@PathVariable Integer id) {
     tenantApi.deleteById(id);
